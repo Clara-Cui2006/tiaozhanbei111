@@ -816,7 +816,7 @@ type QuantityRange = {
 const buildQuantityRanges = (maxValue: number): QuantityRange[] => {
   const normalizedMax = Math.max(0, Math.floor(Number(maxValue) || 0))
   if (normalizedMax === 0) {
-    return [{ min: 0, max: 0, color: QUANTITY_COLORS[0], label: '0 件' }]
+    return [{ min: 0, max: 0, color: QUANTITY_COLORS[0] ?? '#dbeafe', label: '0 件' }]
   }
 
   const starts = [
@@ -829,11 +829,12 @@ const buildQuantityRanges = (maxValue: number): QuantityRange[] => {
 
   return starts
     .map((min, index) => {
-      const max = index === starts.length - 1 ? normalizedMax : Math.min(normalizedMax, starts[index + 1] - 1)
+      const nextStart = starts[index + 1] ?? normalizedMax
+      const max = index === starts.length - 1 ? normalizedMax : Math.min(normalizedMax, nextStart - 1)
       return {
         min,
         max,
-        color: QUANTITY_COLORS[index],
+        color: QUANTITY_COLORS[index] ?? QUANTITY_COLORS[0] ?? '#dbeafe',
         label: min === max ? `${min} 件` : `${min}–${max} 件`
       }
     })
@@ -842,8 +843,7 @@ const buildQuantityRanges = (maxValue: number): QuantityRange[] => {
 
 const getQuantityColor = (value: number, maxValue: number) => {
   const normalizedValue = Math.max(0, Math.floor(Number(value) || 0))
-  return buildQuantityRanges(maxValue).find((item) => normalizedValue >= item.min && normalizedValue <= item.max)?.color
-    || QUANTITY_COLORS[0]
+  return buildQuantityRanges(maxValue).find((item) => normalizedValue >= item.min && normalizedValue <= item.max)?.color ?? QUANTITY_COLORS[0] ?? '#dbeafe'
 }
 
 const quantityLegendItems = computed(() => buildQuantityRanges(getMaxCaseCount()))

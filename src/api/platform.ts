@@ -38,7 +38,8 @@ import type {
   PoliticalOverview
 } from '../types/platform'
 
-const useMock = import.meta.env.VITE_USE_MOCK !== 'false'
+// Mock 仅允许在开发构建中显式开启；生产环境接口失败时不得回退演示数据。
+const useMock = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === 'true'
 
 export function getRiskLevelByScore(score: number): '高' | '中' | '低' {
   if (score >= 80) return '高'
@@ -546,9 +547,7 @@ const mockEffectStats: CommunityEffectStat[] = [
 
 const mockSettings: SystemSettings = {
   name: '社区法治智能平台',
-  threshold: 80,
-  sms: true,
-  wechat: true
+  dataScopeNotice: '演示环境数据，仅供界面联调'
 }
 
 /* ---------- 真实数据：公告动态（news.json 8 条 — 注意：原始数据新闻正文字段实为日期，发布日期字段实为正文内容） ---------- */
@@ -1797,17 +1796,15 @@ export const POLITICAL_POLYGONS_DATA = [
  * 获取政治安全态势大盘核心研判数据
  */
 export const fetchPoliticalOverview = async (): Promise<PoliticalOverview> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        totalSignalsThisYear: 142,
-        highIncidenceTypes: '意识形态渗透、涉密风险', // 适当缩短以适应卡片布局
-        riskAlertPushCount: 3, // 严格等于 alert-push 页面里政治安全的条数 (共3条)
-        procuratorateSuggestions: 18,
-        majorEventCoupling: '高度耦合(异动提升45%)' // 适当缩短以适应卡片布局
-      })
-    }, 450)
+  if (useMock) return Promise.resolve({
+    totalSignalsThisYear: 142,
+    highIncidenceTypes: '意识形态渗透、涉密风险',
+    riskAlertPushCount: 3,
+    procuratorateSuggestions: 18,
+    majorEventCoupling: '高度耦合(异动提升45%)'
   })
+  const { data } = await http.get<PoliticalOverview>('/political/overview')
+  return data
 }
 
 // ========== 新增普法方案模拟接口 ==========
@@ -1815,6 +1812,10 @@ export const fetchPoliticalOverview = async (): Promise<PoliticalOverview> => {
 export const memoryLegalPlans: any[] = []
 
 export const createLegalRecommendation = async (data: any): Promise<any> => {
+  if (!useMock) {
+    const response = await http.post('/legal-recommend/v2/recommendations', data)
+    return response.data
+  }
   return new Promise((resolve) => {
     setTimeout(() => {
       const newId = Math.floor(Math.random() * 10000)
@@ -1853,6 +1854,10 @@ export const createLegalRecommendation = async (data: any): Promise<any> => {
 
 // 新增：删除接口
 export const deleteLegalRecommendation = async (id: number): Promise<void> => {
+  if (!useMock) {
+    await http.delete(`/legal-recommend/v2/recommendations/${id}`)
+    return
+  }
   return new Promise((resolve) => {
     setTimeout(() => {
       const idx = memoryLegalPlans.findIndex(p => p.id === id || p.planId === id)
@@ -1869,16 +1874,15 @@ export async function fetchLegalRecommendationsV2(): Promise<LegalRecommendation
     return Promise.resolve([...memoryLegalPlans, ...mockLegalRecommendationsV2])
   }
   const { data } = await http.get<LegalRecommendationV2[]>('/legal-recommend/v2/recommendations')
-  // 【修改点】：即使调用真实接口，也把内存里刚刚新增的拼在最前面
-  return [...memoryLegalPlans, ...data]
+  return data
 }
 
 // 3. 替换原来的 fetchLegalPlanDetail 函数
 export async function fetchLegalPlanDetail(id: number): Promise<LegalPlan> {
   // 【修改点】：进入函数第一步，先从内存数组里找是不是刚才手动新增的方案
-  const memPlan = memoryLegalPlans.find(p => p.id === id || p.planId === id)
-  if (memPlan) {
-    return Promise.resolve(memPlan) // 如果是，直接返回它
+  if (useMock) {
+    const memPlan = memoryLegalPlans.find(p => p.id === id || p.planId === id)
+    if (memPlan) return Promise.resolve(memPlan)
   }
 
   // 如果内存里没有，说明是系统原本的数据，继续执行你原来的逻辑：
@@ -2033,7 +2037,7 @@ const buildStreetMapOverview = (input?: Partial<StreetMapFilters>): StreetMapOve
   const streets = mockMapPoints.map((point) => ({
     streetCode: STREET_MAP_CODES[point.community] || point.community,
     streetName: point.community,
-    caseCount: Math.max(0, Math.round(point.annualCases * factor))
+    caseCount: Math.max(0, Math.round((point.annualCases ?? 0) * factor))
   }))
   const confirmedCases = streets.reduce((sum, item) => sum + item.caseCount, 0)
   const pendingCases = Math.max(0, Math.round(STREET_MAP_PENDING_BASE * factor))
@@ -2058,7 +2062,7 @@ const getStreetSeed = (streetName: string) => {
 }
 
 const splitCaseTypes = (point: CommunityRiskPoint, caseCount: number, selectedCaseType: string) => {
-  const sourceTypes = point.highIncidenceTypes.split(/[、,，]/).map((item) => item.trim()).filter(Boolean)
+  const sourceTypes = (point.highIncidenceTypes ?? '').split(/[、,，]/).map((item) => item.trim()).filter(Boolean)
   if (caseCount === 0) return []
   const names = selectedCaseType !== 'all'
     ? [selectedCaseType, ...sourceTypes.filter((name) => name !== selectedCaseType)]
@@ -2077,11 +2081,12 @@ const splitCaseTypes = (point: CommunityRiskPoint, caseCount: number, selectedCa
 const buildGovernanceIssues = (point: CommunityRiskPoint, caseCount: number) => {
   if (caseCount === 0) return []
   const issues: Array<{ name: string; count: number | null }> = []
-  if (point.highIncidenceTypes.includes('盗窃')) issues.push({ name: '人员密集场所财物保管提醒和巡查仍需加强', count: Math.round(caseCount * 0.22) })
-  if (point.highIncidenceTypes.includes('诈骗')) issues.push({ name: '银行卡及网络交易安全提示覆盖仍需加强', count: Math.round(caseCount * 0.18) })
-  if (point.highIncidenceTypes.includes('相邻权')) issues.push({ name: '物业、噪声和房屋使用类矛盾重复出现', count: Math.round(caseCount * 0.2) })
-  if (point.highIncidenceTypes.includes('消费')) issues.push({ name: '旅游消费和商户合规沟通需求较集中', count: Math.round(caseCount * 0.19) })
-  if (point.highIncidenceTypes.includes('合同')) issues.push({ name: '合同履行和经营主体合规提示需要前置', count: Math.round(caseCount * 0.17) })
+  const types = point.highIncidenceTypes ?? ''
+  if (types.includes('盗窃')) issues.push({ name: '人员密集场所财物保管提醒和巡查仍需加强', count: Math.round(caseCount * 0.22) })
+  if (types.includes('诈骗')) issues.push({ name: '银行卡及网络交易安全提示覆盖仍需加强', count: Math.round(caseCount * 0.18) })
+  if (types.includes('相邻权')) issues.push({ name: '物业、噪声和房屋使用类矛盾重复出现', count: Math.round(caseCount * 0.2) })
+  if (types.includes('消费')) issues.push({ name: '旅游消费和商户合规沟通需求较集中', count: Math.round(caseCount * 0.19) })
+  if (types.includes('合同')) issues.push({ name: '合同履行和经营主体合规提示需要前置', count: Math.round(caseCount * 0.17) })
   issues.push({ name: '跨部门信息核验和重复事项归并仍需持续完善', count: Math.round(caseCount * 0.12) })
   return issues.slice(0, 4)
 }
@@ -2126,7 +2131,7 @@ const buildStreetMapDetail = (streetName: string, input?: Partial<StreetMapFilte
     })) : [],
     newRisks: caseCount > 0 ? [
       {
-        name: point.highIncidenceTypes.split('、')[0] || '案件类型变化',
+        name: (point.highIncidenceTypes ?? '').split('、')[0] || '案件类型变化',
         basis: momChangeCount > 0 ? `较上一周期增加 ${momChangeCount} 件` : '本周期持续出现，建议保持观察',
         comparisonPeriod: `当前${STREET_MAP_PERIOD_META[filters.period].label}与上一相邻周期比较`
       }
@@ -2137,7 +2142,7 @@ const buildStreetMapDetail = (streetName: string, input?: Partial<StreetMapFilte
       canViewDetails: false
     },
     attentionItems: caseCount > 0 ? [
-      `${point.highIncidenceTypes.split('、')[0] || '高频案件类型'}相关重复问题的事实变化`,
+      `${(point.highIncidenceTypes ?? '').split('、')[0] || '高频案件类型'}相关重复问题的事实变化`,
       `${industries[0] || '重点行业领域'}从业主体的合规提示和纠纷预防`,
       '待确认案件补充核验及跨街道事项协同处置情况'
     ] : [],

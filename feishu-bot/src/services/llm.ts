@@ -2,7 +2,7 @@
  * 智谱 GLM 大模型调用
  */
 
-const baseUrl = process.env.LLM_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4'
+const baseUrl = process.env.LLM_BASE_URL || ''
 const apiKey = process.env.LLM_API_KEY || ''
 const model = process.env.LLM_MODEL || 'glm-4.5'
 

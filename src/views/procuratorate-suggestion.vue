@@ -182,7 +182,7 @@ const handleAddSuggestion = () => router.push({ name: 'ProcuratorateSuggestionNe
 const handleAddPoliticalSuggestion = () => router.push({ name: 'ProcuratorateSuggestionNew', query: { type: 'political' } })
 const handleView = (r: any) => router.push({ name: 'ProcuratorateSuggestionDetail', params: { id: String(r.id) } })
 const handleEdit = (r: any) => router.push({ name: 'ProcuratorateSuggestionEdit', params: { id: String(r.id) } })
-const handleIgnore = (r: any) => { Modal.confirm({ title: '忽略建议', onOk: async () => { await ignoreProcuratorateSuggestion(r.id); suggestions.value = await fetchProcuratorateSuggestions() } }) }
+const handleIgnore = (r: any) => { Modal.confirm({ title: '忽略建议', content: '确认忽略该条建议？此操作将写入审计日志。', onOk: async () => { await ignoreProcuratorateSuggestion(r.id); suggestions.value = await fetchProcuratorateSuggestions() } }) }
 
 onMounted(async () => {
   loading.value = true; try { [suggestions.value, feedItems.value, monthlyTrend.value, categoryDistribution.value] = await Promise.all([fetchProcuratorateSuggestions(), fetchProcuratorateFeed(), fetchProcuratorateMonthlyTrend(), fetchProcuratorateCategoryDistribution()]) } finally { loading.value = false }

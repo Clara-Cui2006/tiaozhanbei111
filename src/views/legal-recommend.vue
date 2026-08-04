@@ -301,7 +301,7 @@ onMounted(async () => {
       if (animatedCounter.value + step >= target) {
         animatedCounter.value = target
         if (counterTimer) clearInterval(counterTimer)
-        counterTimer = window.setInterval(() => { animatedCounter.value++ }, 8000)
+        counterTimer = null
       } else {
         animatedCounter.value += step
       }

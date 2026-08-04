@@ -10,8 +10,13 @@ lerna-debug.log*
 node_modules
 .DS_Store
 dist
+offline-bundle
+wheelhouse
+var/
 dist-ssr
 coverage
+__pycache__/
+*.py[cod]
 *.local
 
 # Editor directories and files
@@ -49,6 +54,7 @@ id_rsa
 id_ed25519
 "venv/" 
 venv/
+.venv/
 feishu-bot/.env
 .claude/settings.local.json
 miniapp/project.private.config.json

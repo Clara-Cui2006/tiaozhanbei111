@@ -5,6 +5,8 @@ export type MapClassification =
   | '人口流动' | '潮汐特征' | '风险承载力' | '社会资本'
   | '产业生态' | '数字化程度'
 
+export type MapDimensionScores = Partial<Record<MapClassification, number>>
+
 // ===== 新增：政治安全专项类型 =====
 export type PoliticalSecurityCategory = 
   | '危害国家安全类' 
@@ -132,9 +134,7 @@ export interface CommunityEffectStat {
 
 export interface SystemSettings {
   name: string
-  threshold: number
-  sms: boolean
-  wechat: boolean
+  dataScopeNotice: string
 }
 
 export interface OfficialDynamic {

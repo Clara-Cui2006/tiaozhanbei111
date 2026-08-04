@@ -1,4 +1,5 @@
-import { SYSTEM_PROMPTS, type PromptModule } from './prompts'
+import type { PromptModule } from './prompts'
+import { http } from '../api/http'
 
 /**
  * 调用大模型 API（智谱 GLM-4.5）
@@ -7,35 +8,15 @@ import { SYSTEM_PROMPTS, type PromptModule } from './prompts'
  * @param module - 模块标识，自动注入对应的 system prompt；不传则用通用角色
  */
 export async function chatWithLLM(prompt: string, module?: PromptModule) {
-  const baseUrl = import.meta.env.VITE_LLM_BASE_URL
-  const apiKey = import.meta.env.VITE_LLM_API_KEY
-  const model = import.meta.env.VITE_LLM_MODEL
-
-  const systemContent = module
-    ? SYSTEM_PROMPTS[module]
-    : `你是一位资深的社区法治专家和检察官助理，服务于西城区社区法治风险预警平台。`
-
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [
-          { role: 'system', content: systemContent },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7
-      })
+    const { data } = await http.post<{ content: string; notice: string }>('/ai/generate', {
+      prompt,
+      module: module || 'general',
+      caseIds: []
     })
-
-    const data = await response.json()
-    return data.choices[0].message.content
+    return `${data.content}\n\n${data.notice}`
   } catch (error) {
-    console.error('LLM API 调用失败:', error)
-    return '（方案生成失败，请检查网络或 API 配置）'
+    console.error('院内模型调用失败:', error)
+    return '（院内统一模型尚未配置或当前不可用，请联系系统管理员。系统不会返回模拟生成结果。）'
   }
 }

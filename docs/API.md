@@ -2,7 +2,7 @@
 
 本文档汇总前端项目中的 **HTTP 请求**（`src/api/http.ts` + `src/api/platform.ts`）及 **WebSocket** 约定，便于与后端联调。默认 `axios` 的 `baseURL` 为环境变量 `VITE_API_BASE_URL`；未配置时为 `"/api"`。
 
-当 `VITE_USE_MOCK !== 'false'` 时，`platform.ts` 内对应接口走本地 Mock，不发起真实请求。
+Mock仅允许在开发构建中通过 `VITE_USE_MOCK=true` 显式开启；生产构建始终访问后端，失败时不得回退演示数据。登录、权限、导入、审计和AI接口以 `server/main.py` 为准。
 
 ---
 
@@ -11,7 +11,7 @@
 | 变量 | 作用 |
 |------|------|
 | `VITE_API_BASE_URL` | HTTP 接口根路径，默认 `/api` |
-| `VITE_USE_MOCK` | 设为 `false` 时走真实 HTTP，否则多数接口使用 Mock |
+| `VITE_USE_MOCK` | 仅开发环境设为 `true` 时使用演示数据 |
 | `VITE_WS_URL` | 地图等模块可选的 WebSocket 地址；未配置则不连接 |
 
 ---

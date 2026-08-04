@@ -18,9 +18,6 @@
     "security:scan": "bash scripts/check_no_plain_secrets.sh",
     "secrets:encrypt": "bash scripts/encrypt_server_secrets.sh",
     "secrets:verify": "bash scripts/verify_server_secrets.sh",
-    "kernel:crypto": "sudo bash scripts/load_crypto_accel_module.sh",
-    "native:build": "bash scripts/build_native.sh",
-    "native:bench": "bash scripts/run_native_benchmark.sh",
     "server:setup": "bash scripts/setup_server_linux.sh",
     "server:deploy": "bash scripts/deploy_server.sh"
   },
@@ -32,7 +29,6 @@
     "@dataview/datav-vue3": "^0.0.0-test.1672506674342",
     "axios": "^1.14.0",
     "echarts": "^5.6.0",
-    "echarts-extension-amap": "^1.12.0",
     "echarts-gl": "^2.0.9",
     "github-markdown-css": "^5.9.0",
     "marked": "^18.0.2",

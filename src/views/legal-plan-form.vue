@@ -38,7 +38,7 @@
         </a-row>
 
         <a-form-item>
-          <a-button type="outline" status="primary" :loading="isGenerating" @click="generateWithAI">
+          <a-button type="outline" :loading="isGenerating" @click="generateWithAI">
             🤖 AI 一键生成普法方案内容
           </a-button>
           <div class="ai-tip-bar">
@@ -141,9 +141,9 @@ const generateWithAI = async () => {
 4. 包含核心普法知识点与法条引用。
 5. 直接输出正文，无需任何寒暄用语。`
 
-    const result = await chatWithLLM(prompt, 'dashboard')
+    const result = await chatWithLLM(prompt, 'legalPlan')
     form.value.content = result
-    Message.success('AI 普法方案生成成功！')
+    Message.success('AI辅助草稿已生成，正式使用前必须人工审核')
   } catch (e) {
     Message.error('AI 生成失败，请重试')
   } finally {
@@ -157,7 +157,7 @@ const handleSave = async () => {
   saving.value = true
   try {
     await createLegalRecommendation(form.value)
-    Message.success('普法方案已成功创建并下发')
+    Message.success('普法方案已保存为待人工审核草稿')
     router.push('/legal-recommend')
   } catch (e) {
     Message.error('保存失败')

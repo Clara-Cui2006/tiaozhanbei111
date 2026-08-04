@@ -1,102 +1,26 @@
-# CLAUDE.md
+# 项目维护说明
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+这是检察内网部署方向的社区法治风险预警平台，包含 Vue 3 前端和 FastAPI 后端。界面、代码注释和文档使用简体中文。
 
-## Project Overview
+## 必须保持的生产约束
 
-Community Legal Risk Early Warning Platform (社区法治风险预警平台) — a government dashboard for monitoring community legal disputes in Beijing's Xicheng District. All UI text and code comments are in **Simplified Chinese**.
+- Mock仅限开发环境显式开启；生产接口失败不得回退演示数据。
+- 浏览器不得直接访问模型、数据库或持有密钥。
+- 真实案件、内网地址、账号、证书和日志不得提交到仓库。
+- 普通用户只看所属业务条线；部门主管和院领导看全院；系统管理员不默认看案件正文。
+- 政治安全使用独立权限；AI只作辅助，输出必须人工审核。
+- 不恢复高德、智谱公网、飞书、微信或其他外网生产依赖。
+- 不恢复C++高中低风险评分引擎，不用随机数冒充真实统计。
+- 内网服务器不在线安装依赖，统一使用离线交付包。
 
-## Commands
+## 检查命令
 
 ```bash
-npm run dev          # Dev server at http://localhost:5173/ (mock mode, no backend needed)
-npm run build        # Production build → dist/
-npm run type-check   # TypeScript type checking via vue-tsc
-npm run native:build # Build C++ risk engine (CMake/Ninja)
-npm run native:bench # Run C++ benchmark (default 1M records)
-npm run security:scan # Scan for plaintext secrets
-npm run hooks:install # Install pre-commit secret scanning hook
+npm run type-check
+npm run build
+python3 -m py_compile server/*.py
+bash -n scripts/deploy_server.sh scripts/build_offline_bundle.sh
+npm run security:scan
 ```
 
-No test framework, linter, or formatter is configured.
-
-## Architecture
-
-### Tech Stack
-- **Frontend:** Vue 3.5 + TypeScript 6 + Vite 8
-- **UI:** Arco Design (`@arco-design/web-vue`) with dark navy/cyan theme
-- **Charts/Maps:** ECharts 5 with GeoJSON (Xicheng district → Beijing fallback → scatter fallback)
-- **HTTP:** Axios (`src/api/http.ts`, baseURL from `VITE_API_BASE_URL` or `/api`, 8s timeout)
-- **Native Engine:** C++17 static library (standalone systemd service, no frontend binding)
-
-### Source Layout
-```
-src/
-  api/
-    http.ts            # Axios instance
-    platform.ts        # All API functions + inline mock data (21 functions)
-  components/
-    back-home.vue      # Navigation button
-    risk-map-panel.vue # ECharts geo map (~688 lines, WebSocket + 3s simulation fallback)
-  views/               # 12 page-level components (all use <script setup lang="ts">)
-  services/
-    platform-socket.ts # WebSocket factory: createPlatformSocket({onOpen,onMessage,onClose,onError})
-  types/
-    platform.ts        # All TypeScript interfaces (single source of truth)
-  router/
-    index.ts           # 12 flat routes, no lazy loading, no guards
-native/                # C++17 risk scoring engine (CMake, outputs librisk_engine.a + demo + bench)
-public/maps/           # GeoJSON: xicheng_full.json, beijing_full.json
-scripts/               # Shell/Python tooling for deploy, security, native build
-```
-
-### Mock-First API Pattern (Core Design)
-`src/api/platform.ts` is the central file. Every API function checks `import.meta.env.VITE_USE_MOCK !== 'false'` — **mock mode is the default**. The app runs entirely without a backend.
-
-- Mock data is defined as `const` objects inline alongside each function
-- Exception: `mockOfficialDynamics` is `let` — CRUD operations mutate it in-memory
-- When adding new API endpoints, follow the same pattern: mock data at top, typed async function returning mock or calling `http.get/post/put/delete`
-
-### Environment Variables
-No `.env` files are committed (all gitignored). Create `.env.local` for local overrides.
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `VITE_USE_MOCK` | `true` (anything except `'false'`) | Toggle mock vs real API |
-| `VITE_API_BASE_URL` | `/api` | Axios baseURL |
-| `VITE_WS_URL` | unset | WebSocket URL; if unset, map uses 3s local simulation |
-
-### Risk Scoring
-C++ engine formula: `score = conflict×0.30 + severity×0.25 + fraud×0.20 + unresolved×0.25`, clamped [0, 100].
-TypeScript `getRiskLevelByScore()` mirrors threshold logic: ≥80 → '高', ≥60 → '中', <60 → '低'.
-
-### TypeScript Configuration
-- `noUncheckedIndexedAccess: true` — all indexed access returns `T | undefined`
-- Path alias: `@` → `./src` (in both tsconfig.app.json and vite.config.ts)
-- Split config: `tsconfig.app.json` (browser, extends `@vue/tsconfig/tsconfig.dom.json`) + `tsconfig.node.json` (vite config only)
-
-### Coding Conventions
-- Vue 3 Composition API only (`<script setup lang="ts">`)
-- Local state per view with `ref()`/`reactive()`, data loaded in `onMounted()`
-- Scoped styles with `:deep()` for Arco Design overrides
-- Dark theme: navy gradients, `#d8f2ff`/`#9fd4f2` text colors, `rgba()` blue-range backgrounds
-
-### Security
-- Pre-commit hook + GitHub Actions (`secrets-guard.yml`) scan for plaintext secrets
-- Server secrets encrypted with AES-256-CBC, decrypted only at runtime in `/run/`
-- Never commit `.env` files or credentials
-
-### Deployment (Linux)
-```bash
-npm run server:setup    # Install system dependencies (apt-based)
-npm run server:deploy   # Build + deploy site + systemd service
-```
-Requires systemd. Deploy script installs nginx SPA config and starts native risk engine as a service.
-
-## Known Issues
-- **Pinia not initialized:** `createPinia()` never called in `main.ts` — stores won't work
-- **`procuratorate-suggestion.vue` bug:** calls undeclared `message` (lowercase) instead of imported `Message` (uppercase) — runtime ReferenceError in all handlers
-- **`procuratorate-suggestion.vue`:** data hardcoded inline instead of wired to API layer
-- **Unused dependencies:** `echarts-gl`, `@dataview/datav-vue3`, `stores/counter.ts` — installed/present but never imported
-- **`venv/` tracked in git** — should be gitignored
-- **No Vite proxy** — real API mode needs a reverse proxy or proxy config
+架构、权限、数据口径与部署路径见 `docs/intranet-deployment.md`。

@@ -230,9 +230,9 @@ const generateWithAI = async () => {
     const result = await chatWithLLM(prompt, 'procuratorate')
     const titleMatch = result.match(/【标题】(.+?)(?:\n|【)/)
     const contentMatch = result.match(/【正文】([\s\S]+)/)
-    if (titleMatch) form.value.title = titleMatch[1].trim()
-    if (contentMatch) form.value.content = contentMatch[1].trim()
-    Message.success(isPolitical.value ? '已基于风险模型自动补全加密建议草稿' : 'AI 建议已生成，可在此基础上修改')
+    if (titleMatch?.[1]) form.value.title = titleMatch[1].trim()
+    if (contentMatch?.[1]) form.value.content = contentMatch[1].trim()
+    Message.success('AI辅助草稿已生成，正式使用前必须由检察官人工审核')
   } catch (e) {
     Message.error('AI 生成失败，请重试')
   } finally {

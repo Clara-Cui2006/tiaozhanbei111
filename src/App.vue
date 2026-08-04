@@ -1,5 +1,6 @@
 <template>
-  <div class="app-container" :class="`theme-${theme}`">
+  <router-view v-if="route.meta.public" />
+  <div v-else class="app-container" :class="`theme-${theme}`">
     <a-layout class="layout-shell">
       <a-layout-header class="header">
         <div class="brand">
@@ -19,11 +20,16 @@
         </a-menu>
 
         <div class="header-right">
-          <a-tag color="arcoblue">实时态势</a-tag>
+          <a-tag color="arcoblue">院内数据</a-tag>
           <a-button size="mini" class="theme-toggle-btn" @click="toggleTheme">
             {{ theme === 'dark' ? '切换浅色' : '切换深色' }}
           </a-button>
-          <a-avatar :size="30">U</a-avatar>
+          <div class="user-summary">
+            <span>{{ authState.user?.displayName }}</span>
+            <small>{{ roleLabel }}</small>
+          </div>
+          <a-button size="mini" @click="passwordModalVisible = true">修改密码</a-button>
+          <a-button size="mini" @click="handleLogout">退出</a-button>
         </div>
       </a-layout-header>
 
@@ -52,14 +58,23 @@
         </div>
       </a-layout-footer>
     </a-layout>
+    <a-modal v-model:visible="passwordModalVisible" title="修改登录密码" :on-before-ok="changePassword" @cancel="clearPasswordForm">
+      <a-form layout="vertical">
+        <a-form-item label="当前密码"><a-input-password v-model="currentPassword" /></a-form-item>
+        <a-form-item label="新密码"><a-input-password v-model="newPassword" placeholder="至少12位" /></a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchSiteFooterInfo } from './api/platform'
 import type { SiteFooterInfo } from './types/platform'
+import { authState, hasPermission, logout } from './services/auth'
+import { http } from './api/http'
+import { Message } from '@arco-design/web-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -72,18 +87,58 @@ const footerInfo = ref<SiteFooterInfo>({
   links: []
 })
 
-const menuItems = [
+type MenuItem = { key: string; label: string; permissions?: string[] }
+const allMenuItems: MenuItem[] = [
   { key: '/', label: '主页' },
-  { key: '/dashboard', label: '风险预警态势盘' },
-  { key: '/risk-analysis', label: '风险分析管理' },
-  { key: '/alert-push', label: '预警推送' },
-  { key: '/procuratorate-suggestion', label: '检察建议' },
-  { key: '/legal-recommend', label: '普法方案' },
-  { key: '/political-security', label: '政治安全' },
-  { key: '/effect-stats', label: '效果评估统计' },
-  { key: '/system-settings', label: '系统设置' },
-  { key: '/archive', label: '往期窗口' }
+  { key: '/dashboard', label: '风险预警态势盘', permissions: ['dashboard:read'] },
+  { key: '/risk-analysis', label: '风险分析管理', permissions: ['case:read:department', 'case:read:all', 'case:read:metadata'] },
+  { key: '/alert-push', label: '预警推送', permissions: ['dashboard:read'] },
+  { key: '/procuratorate-suggestion', label: '检察建议', permissions: ['case:read:department', 'case:read:all'] },
+  { key: '/legal-recommend', label: '普法方案', permissions: ['dashboard:read'] },
+  { key: '/political-security', label: '政治安全', permissions: ['political:read'] },
+  { key: '/effect-stats', label: '效果评估统计', permissions: ['dashboard:read'] },
+  { key: '/data-management', label: '数据导入', permissions: ['data:import'] },
+  { key: '/access-management', label: '权限审计', permissions: ['user:manage'] },
+  { key: '/system-settings', label: '系统设置', permissions: ['system:manage'] },
+  { key: '/archive', label: '往期窗口', permissions: ['dashboard:read'] }
 ]
+const menuItems = computed(() => allMenuItems.filter((item) => !item.permissions || item.permissions.some(hasPermission)))
+const roleNames: Record<string, string> = {
+  ordinary: '普通用户', department_supervisor: '部门主任/主管', leadership: '院领导',
+  data_admin: '数据管理员', system_admin: '系统管理员'
+}
+const roleLabel = computed(() => roleNames[authState.user?.role || ''] || '')
+const passwordModalVisible = ref(false)
+const currentPassword = ref('')
+const newPassword = ref('')
+
+function clearPasswordForm() {
+  currentPassword.value = ''
+  newPassword.value = ''
+}
+
+async function changePassword() {
+  if (!currentPassword.value || newPassword.value.length < 12) {
+    Message.error('请输入当前密码，新密码不得少于12位')
+    return false
+  }
+  try {
+    await http.post('/auth/change-password', { currentPassword: currentPassword.value, newPassword: newPassword.value })
+    Message.success('密码已修改，请重新登录')
+    clearPasswordForm()
+    await logout()
+    await router.replace('/login')
+    return true
+  } catch (error: any) {
+    Message.error(error.response?.data?.detail || '密码修改失败')
+    return false
+  }
+}
+
+async function handleLogout() {
+  await logout()
+  await router.replace('/login')
+}
 
 watch(
   () => route.path,

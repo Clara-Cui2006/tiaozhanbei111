@@ -16,8 +16,24 @@ import ProcuratorateSuggestionDetail from '../views/procuratorate-suggestion-det
 import ProcuratorateSuggestionForm from '../views/procuratorate-suggestion-form.vue'
 import PoliticalSecurity from '../views/political-security.vue'
 import LegalPlanForm from '../views/legal-plan-form.vue'
+import Login from '../views/login.vue'
+import DataManagement from '../views/data-management.vue'
+import AccessManagement from '../views/access-management.vue'
+import { authState, hasPermission, restoreSession } from '../services/auth'
 
 const routes = [
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login,
+    meta: { public: true }
+  },
+  {
+    path: '/data-management', name: 'DataManagement', component: DataManagement, meta: { permission: 'data:import' }
+  },
+  {
+    path: '/access-management', name: 'AccessManagement', component: AccessManagement, meta: { permission: 'user:manage' }
+  },
   {
     path: '/',
     name: 'Home',
@@ -76,7 +92,8 @@ const routes = [
   {
     path: '/system-settings',
     name: 'SystemSettings',
-    component: SystemSettings
+    component: SystemSettings,
+    meta: { permission: 'system:manage' }
   },
   {
     path: '/archive',
@@ -101,20 +118,33 @@ const routes = [
   {
     path: '/political-security',
     name: 'PoliticalSecurity',
-    component: PoliticalSecurity
+    component: PoliticalSecurity,
+    meta: { permission: 'political:read' }
   },
   {
       path: '/legal-plan-form',
       name: 'LegalPlanForm',
-      component: LegalPlanForm
+      component: LegalPlanForm,
+      meta: { permission: 'material:edit' }
   }
 ]
 
-const isElectron = typeof window !== 'undefined' && window.process?.type === 'renderer' || location.protocol === 'file:'
+const isElectron = (typeof window !== 'undefined' && (window as Window & { process?: { type?: string } }).process?.type === 'renderer') || location.protocol === 'file:'
 
 const router = createRouter({
   history: isElectron ? createWebHashHistory() : createWebHistory(),
   routes
+})
+
+router.beforeEach(async (to) => {
+  if (!authState.ready) await restoreSession()
+  if (to.meta.public) {
+    return authState.user && to.path === '/login' ? '/dashboard' : true
+  }
+  if (!authState.user) return { path: '/login', query: { redirect: to.fullPath } }
+  const permission = typeof to.meta.permission === 'string' ? to.meta.permission : undefined
+  if (!hasPermission(permission)) return '/dashboard'
+  return true
 })
 
 export default router

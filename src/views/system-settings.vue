@@ -8,14 +8,8 @@
         <a-form-item field="name" label="平台名称">
           <a-input v-model="form.name" />
         </a-form-item>
-        <a-form-item field="threshold" label="高风险预警阈值">
-          <a-input-number v-model="form.threshold" :min="1" :max="100" />
-        </a-form-item>
-        <a-form-item field="sms" label="短信推送开关">
-          <a-switch v-model="form.sms" />
-        </a-form-item>
-        <a-form-item field="wechat" label="微信推送开关">
-          <a-switch v-model="form.wechat" />
+        <a-form-item field="dataScopeNotice" label="数据口径提示">
+          <a-input v-model="form.dataScopeNotice" />
         </a-form-item>
         <a-button type="primary" @click="save">保存设置</a-button>
       </a-form>
@@ -32,9 +26,7 @@ import type { SystemSettings } from '../types/platform'
 
 const form = reactive<SystemSettings>({
   name: '社区法治智能平台',
-  threshold: 80,
-  sms: true,
-  wechat: true
+  dataScopeNotice: '仅展示已确认入库的数据'
 })
 
 const save = async () => {
@@ -45,8 +37,6 @@ const save = async () => {
 onMounted(async () => {
   const settings = await fetchSystemSettings()
   form.name = settings.name
-  form.threshold = settings.threshold
-  form.sms = settings.sms
-  form.wechat = settings.wechat
+  form.dataScopeNotice = settings.dataScopeNotice
 })
 </script>

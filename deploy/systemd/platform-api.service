@@ -1,0 +1,26 @@
+[Unit]
+Description=Xicheng Community Legal Risk Platform API
+After=network.target
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_USER__
+WorkingDirectory=__APP_ROOT__
+EnvironmentFile=__ENV_FILE__
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=__VENV_DIR__/bin/uvicorn server.main:app --host 127.0.0.1 --port 8090 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=__DATA_DIR__ __LOG_DIR__
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
+import { restoreSession } from './services/auth'
 
 
 // 引入 Arco Design
@@ -13,4 +14,4 @@ const app = createApp(App)
 app.use(router)
 app.use(ArcoVue)
 
-app.mount('#app')
+restoreSession().finally(() => app.mount('#app'))

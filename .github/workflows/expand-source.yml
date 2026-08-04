@@ -1,0 +1,39 @@
+name: Expand cleaned project source
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  expand:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Expand source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="tiaozhanbei_clean_source_2026-08-03.zip"
+          test -f "$archive"
+          mkdir -p .source_extract
+          unzip -q "$archive" -d .source_extract
+          shopt -s dotglob nullglob
+          cp -a .source_extract/Tiaozhanbei/. .
+          rm -rf .source_extract "$archive"
+          rm -f .github/workflows/expand-source.yml
+
+      - name: Commit expanded source
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Import cleaned project source [skip ci]"
+          git push

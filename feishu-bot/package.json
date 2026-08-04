@@ -1,0 +1,20 @@
+{
+  "name": "feishu-bot",
+  "version": "1.0.0",
+  "description": "西城区法治风险平台 — 飞书机器人服务",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.61.0",
+    "dotenv": "^16.4.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

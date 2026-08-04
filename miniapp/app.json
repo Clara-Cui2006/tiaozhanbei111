@@ -1,0 +1,13 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/webview/webview"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#0a1225",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "西城法治平台",
+    "backgroundColor": "#0a1225",
+    "backgroundTextStyle": "dark"
+  }
+}

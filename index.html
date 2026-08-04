@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="">
+  <head>
+    <meta charset="UTF-8">
+    <link rel="icon" href="/favicon.ico">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="format-detection" content="telephone=no">
+    <title>西城区社区法治风险预警平台</title>
+    <!-- 高德地图 JS API -->
+    <script type="text/javascript">
+      window._AMapSecurityConfig = {
+        securityJsCode: '3415011640f358e97703b4115331b152',
+      }
+    </script>
+    <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=bbb474900d8a6fec84a47219b31bd3dd"></script>
+    <!-- 移动端检测 -->
+    <script>
+    (function(){
+      var w = Math.min(screen.width, window.innerWidth || 999);
+      var ua = navigator.userAgent || '';
+      var isMobile = w <= 768 || /Mobile|Android|iPhone|iPad|miniProgram|MicroMessenger|WeChat|Quark|UCBrowser/i.test(ua);
+      if (isMobile) {
+        document.documentElement.classList.add('mobile');
+      }
+    })();
+    </script>
+    <!-- 移动端CSS（全部在 html.mobile 下，不影响桌面端） -->
+    <style>
+    html.mobile body {
+      font-size: 14px;
+    }
+    html.mobile .header {
+      height: auto !important;
+      display: flex !important;
+      flex-direction: column !important;
+      padding: 6px 10px !important;
+      gap: 4px !important;
+    }
+    html.mobile .brand {
+      font-size: 13px !important;
+      justify-content: center !important;
+    }
+    html.mobile .top-menu {
+      width: 100% !important;
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+    }
+    html.mobile .arco-menu-inner {
+      flex-wrap: nowrap !important;
+      justify-content: flex-start !important;
+    }
+    html.mobile .arco-menu-item {
+      font-size: 11px !important;
+      padding: 2px 5px !important;
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
+      min-width: auto !important;
+      margin: 0 1px !important;
+    }
+    html.mobile .arco-menu-pop-button {
+      flex-shrink: 0 !important;
+      font-size: 11px !important;
+      padding: 2px 8px !important;
+    }
+    html.mobile .header-right {
+      display: none !important;
+    }
+    html.mobile .content {
+      padding: 6px !important;
+      min-height: auto !important;
+    }
+    html.mobile .arco-page-header {
+      padding: 8px 10px !important;
+      border-radius: 6px !important;
+      margin-bottom: 6px !important;
+    }
+    html.mobile .arco-page-header-title {
+      font-size: 15px !important;
+      white-space: normal !important;
+      word-break: break-word !important;
+      line-height: 1.4 !important;
+    }
+    html.mobile .arco-page-header-sub-title,
+    html.mobile .arco-page-header-back {
+      display: none !important;
+    }
+    html.mobile .arco-card {
+      border-radius: 8px !important;
+      margin-bottom: 6px !important;
+    }
+    html.mobile .arco-card-header {
+      padding: 8px 10px !important;
+    }
+    html.mobile .arco-card-body {
+      padding: 8px 10px !important;
+    }
+    html.mobile .arco-card-header-title {
+      font-size: 13px !important;
+    }
+    /* 多列变单列 */
+    html.mobile .arco-row {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 6px !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+      padding: 0 !important;
+    }
+    html.mobile .arco-col {
+      max-width: 100% !important;
+      flex: none !important;
+      width: 100% !important;
+      padding: 0 !important;
+    }
+    /* 首页 dark-panel 桌面端有 padding-left: 48px */
+    html.mobile .dark-panel {
+      padding: 0 !important;
+    }
+    /* 表格横向滚动 */
+    html.mobile .arco-table-container,
+    html.mobile .arco-table-content-scroll,
+    html.mobile .arco-table-content,
+    html.mobile .arco-table-body {
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+    }
+    html.mobile .arco-table,
+    html.mobile .arco-table-element,
+    html.mobile table {
+      min-width: 580px !important;
+    }
+    html.mobile .arco-card-body {
+      overflow-x: auto !important;
+    }
+    /* 隐藏次要元素 */
+    html.mobile .map-note,
+    html.mobile .map-intro,
+    html.mobile .data-hint,
+    html.mobile .classification-hint,
+    html.mobile .detail-panel,
+    html.mobile .urgency-card {
+      display: none !important;
+    }
+    /* radio/tabs横向滚动 */
+    html.mobile .arco-radio-group-button,
+    html.mobile .arco-radio-group {
+      overflow-x: auto !important;
+      flex-wrap: nowrap !important;
+    }
+    html.mobile .arco-radio-button,
+    html.mobile .arco-radio {
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
+      font-size: 11px !important;
+    }
+    html.mobile .arco-tabs-tab {
+      padding: 4px 8px !important;
+      font-size: 12px !important;
+    }
+    /* KPI卡片两列 */
+    html.mobile .kpi-strip {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+      gap: 8px !important;
+    }
+    html.mobile .kpi-item:last-child {
+      grid-column: span 2 !important;
+    }
+    html.mobile .kpi-label {
+      font-size: 12px !important;
+      transform: none !important;
+    }
+    html.mobile .kpi-value {
+      font-size: 22px !important;
+    }
+    /* Hero区域 */
+    html.mobile .hero-section {
+      min-height: auto !important;
+      height: auto !important;
+      max-height: none !important;
+      background-image: none !important;
+    }
+    html.mobile .hero-overlay {
+      display: none !important;
+    }
+    html.mobile .hero-content {
+      padding: 20px 16px 0 !important;
+      transform: none !important;
+      flex-direction: column !important;
+    }
+    html.mobile .hero-title {
+      font-size: 20px !important;
+      text-shadow: none !important;
+    }
+    html.mobile .hero-subtitle {
+      font-size: 11px !important;
+      text-shadow: none !important;
+    }
+    html.mobile .hero-visual-empty {
+      display: none !important;
+    }
+    html.mobile .hero-bottom-bar {
+      position: static !important;
+      padding: 12px 8px !important;
+    }
+    html.mobile .hero-stat-number {
+      font-size: 18px !important;
+    }
+    html.mobile .features-group {
+      display: none !important;
+    }
+    /* 地图移动端 */
+    html.mobile .map-layout {
+      grid-template-columns: 1fr !important;
+      min-height: auto !important;
+    }
+    html.mobile .map-box {
+      height: 320px !important;
+    }
+    /* footer */
+    html.mobile .footer-inner {
+      flex-direction: column !important;
+      gap: 4px !important;
+      text-align: center !important;
+      font-size: 10px !important;
+    }
+    /* 文章详情换行 */
+    html.mobile .article-body,
+    html.mobile .markdown-body,
+    html.mobile pre,
+    html.mobile p {
+      word-break: break-word !important;
+      overflow-wrap: break-word !important;
+      max-width: 100% !important;
+    }
+    /* 搜索框自适应 */
+    html.mobile .arco-input-wrapper {
+      max-width: 100% !important;
+    }
+    /* 1. 饼状图/图表容器移动端缩小，减少标签重叠 */
+    html.mobile div[style*="height: 500px"] { height: 280px !important; }
+    html.mobile div[style*="height: 420px"] { height: 240px !important; }
+    html.mobile div[style*="height: 380px"] { height: 240px !important; }
+    html.mobile div[style*="height: 360px"] { height: 220px !important; }
+    html.mobile div[style*="height: 340px"] { height: 220px !important; }
+    html.mobile .chart-tall { height: 260px !important; }
+    html.mobile .chart-mid { height: 220px !important; }
+    /* 2. 表格横向滚动增强 */
+    html.mobile .arco-table-wrapper {
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+    }
+    html.mobile .arco-table-scroll {
+      overflow-x: auto !important;
+    }
+    /* 3. 标题/描述文字防溢出 */
+    html.mobile .arco-page-header-wrapper {
+      overflow: hidden !important;
+    }
+    html.mobile .arco-card-header-title {
+      white-space: normal !important;
+      word-break: break-word !important;
+      line-height: 1.4 !important;
+      overflow: hidden !important;
+    }
+    html.mobile .arco-card-header-extra {
+      display: none !important;
+    }
+    html.mobile .arco-page-header-content {
+      overflow: hidden !important;
+      word-break: break-word !important;
+    }
+    html.mobile .arco-descriptions-item-label,
+    html.mobile .arco-descriptions-item-value {
+      font-size: 12px !important;
+      word-break: break-word !important;
+    }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

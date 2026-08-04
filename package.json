@@ -1,0 +1,89 @@
+{
+  "name": "community_legal_risk_platform",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build-only",
+    "preview": "vite preview",
+    "build-only": "vite build",
+    "type-check": "vue-tsc --build",
+    "electron:dev": "npm run build && electron .",
+    "electron:build": "npm run build && electron-builder",
+    "env:setup": "bash scripts/setup_server_linux.sh",
+    "env:check": "python3 scripts/check_env.py",
+    "hooks:install": "bash scripts/install_git_hooks.sh",
+    "security:scan": "bash scripts/check_no_plain_secrets.sh",
+    "secrets:encrypt": "bash scripts/encrypt_server_secrets.sh",
+    "secrets:verify": "bash scripts/verify_server_secrets.sh",
+    "kernel:crypto": "sudo bash scripts/load_crypto_accel_module.sh",
+    "native:build": "bash scripts/build_native.sh",
+    "native:bench": "bash scripts/run_native_benchmark.sh",
+    "server:setup": "bash scripts/setup_server_linux.sh",
+    "server:deploy": "bash scripts/deploy_server.sh"
+  },
+  "dependencies": {
+    "@arco-design/web-vue": "^2.57.0",
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/cli": "^8.3.1",
+    "@capacitor/core": "^8.3.1",
+    "@dataview/datav-vue3": "^0.0.0-test.1672506674342",
+    "axios": "^1.14.0",
+    "echarts": "^5.6.0",
+    "echarts-extension-amap": "^1.12.0",
+    "echarts-gl": "^2.0.9",
+    "github-markdown-css": "^5.9.0",
+    "marked": "^18.0.2",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.31",
+    "vue-router": "^5.0.4"
+  },
+  "devDependencies": {
+    "@tsconfig/node24": "^24.0.4",
+    "@types/marked": "^5.0.2",
+    "@types/node": "^24.12.0",
+    "@vitejs/plugin-vue": "^6.0.5",
+    "@vue/tsconfig": "^0.9.1",
+    "electron": "^41.3.0",
+    "electron-builder": "^26.8.1",
+    "npm-run-all2": "^8.0.4",
+    "typescript": "~6.0.0",
+    "vite": "^8.0.3",
+    "vite-plugin-vue-devtools": "^8.1.1",
+    "vue-tsc": "^3.2.6"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "build": {
+    "appId": "com.xicheng.legal-risk-platform",
+    "productName": "西城区法治风险平台",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "public/favicon.ico"
+    ],
+    "mac": {
+      "target": "dmg",
+      "icon": "public/icon.icns"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon-512.png"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "public/favicon.ico",
+      "shortcutName": "西城法治平台"
+    }
+  }
+}

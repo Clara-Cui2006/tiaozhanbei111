@@ -1,0 +1,52 @@
+<view class="container">
+  <!-- 头部 -->
+  <view class="hero">
+    <view class="hero-title">西城区社区法治风险</view>
+    <view class="hero-title accent">智能研判与治理平台</view>
+    <view class="hero-subtitle">数据驱动 · 精准普法 · 靶向治理 · 智能预警</view>
+  </view>
+
+  <!-- 功能入口 -->
+  <view class="section-title">功能模块</view>
+  <view class="grid">
+    <view class="grid-item" bindtap="goWebview" data-path="/dashboard">
+      <view class="grid-icon">📊</view>
+      <view class="grid-label">态势盘</view>
+    </view>
+    <view class="grid-item" bindtap="goWebview" data-path="/risk-analysis">
+      <view class="grid-icon">🔍</view>
+      <view class="grid-label">风险分析</view>
+    </view>
+    <view class="grid-item" bindtap="goWebview" data-path="/alert-push">
+      <view class="grid-icon">🔔</view>
+      <view class="grid-label">预警推送</view>
+    </view>
+    <view class="grid-item" bindtap="goWebview" data-path="/procuratorate-suggestion">
+      <view class="grid-icon">⚖️</view>
+      <view class="grid-label">检察建议</view>
+    </view>
+    <view class="grid-item" bindtap="goWebview" data-path="/legal-recommend">
+      <view class="grid-icon">📚</view>
+      <view class="grid-label">普法方案</view>
+    </view>
+    <view class="grid-item" bindtap="goWebview" data-path="/effect-stats">
+      <view class="grid-icon">📋</view>
+      <view class="grid-label">效果评估</view>
+    </view>
+    <view class="grid-item" bindtap="goWebview" data-path="/archive">
+      <view class="grid-icon">📰</view>
+      <view class="grid-label">往期窗口</view>
+    </view>
+    <view class="grid-item" bindtap="goWebview" data-path="/">
+      <view class="grid-icon">🗺</view>
+      <view class="grid-label">风险地图</view>
+    </view>
+  </view>
+
+  <!-- 快速进入 -->
+  <view class="enter-btn" bindtap="goWebview" data-path="/">
+    进入完整平台
+  </view>
+
+  <view class="footer">西城区司法局 · 社区法治风险预警平台</view>
+</view>

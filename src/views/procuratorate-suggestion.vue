@@ -1,0 +1,429 @@
+<template>
+  <div class="page-contrast" :class="{ 'theme-light': themeMode === 'light' }">
+    <BackHome />
+    <a-page-header class="page-header" title="检察建议" subtitle="Procuratorate Recommend" />
+
+    <a-card class="content-card">
+      <template #title>
+        <div class="card-title">
+          <span>检察建议管理</span>
+          <a-space>
+            <a-button type="primary" @click="handleAddSuggestion">新增建议</a-button>
+            <a-button type="primary" status="danger" @click="handleAddPoliticalSuggestion">
+              政治安全专属模板
+            </a-button>
+          </a-space>
+        </div>
+      </template>
+
+      <div class="filter-section">
+        <a-form :model="filterForm" layout="vertical" class="filter-form">
+          <a-row :gutter="16">
+            <a-col :xs="24" :sm="12" :md="6">
+              <a-form-item label="建议类型">
+                <a-select v-model="filterForm.type" placeholder="请选择类型">
+                  <a-option value="all">全部</a-option>
+                  <a-option value="刑事检察">刑事检察</a-option>
+                  <a-option value="民事检察">民事检察</a-option>
+                  <a-option value="行政检察">行政检察</a-option>
+                  <a-option value="公益诉讼检察">公益诉讼检察</a-option>
+                  <a-option value="政治安全专办">政治安全专办</a-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="12" :md="6">
+              <a-form-item label="状态">
+                <a-select v-model="filterForm.status" placeholder="请选择状态">
+                  <a-option value="all">全部</a-option>
+                  <a-option value="待处理">待处理</a-option>
+                  <a-option value="处理中">处理中</a-option>
+                  <a-option value="已反馈">已反馈</a-option>
+                  <a-option value="已驳回">已驳回</a-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="12" :md="6">
+              <a-form-item label="建议对象">
+                <a-input v-model="filterForm.targetKeyword" placeholder="输入被建议单位或对象关键词" allow-clear />
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="12" :md="6">
+              <a-form-item label="发布日期">
+                <a-range-picker v-model="filterForm.dateRange" style="width: 100%" value-format="YYYY-MM-DD" allow-clear />
+              </a-form-item>
+            </a-col>
+          </a-row>
+          <a-row :gutter="16">
+            <a-col :xs="24" :sm="16" :md="12">
+              <a-form-item label="标题 / 正文关键词">
+                <a-input-search v-model="filterForm.keyword" placeholder="检索建议标题或正文内容" allow-clear @search="handleSearch" />
+              </a-form-item>
+            </a-col>
+            <a-col :xs="24" :sm="8" :md="12" class="filter-actions-col">
+              <a-form-item label=" ">
+                <a-space>
+                  <a-button type="primary" @click="handleSearch">查询</a-button>
+                  <a-button @click="handleReset">重置</a-button>
+                </a-space>
+              </a-form-item>
+            </a-col>
+          </a-row>
+        </a-form>
+      </div>
+    </a-card>
+
+    <a-row :gutter="16">
+      <a-col :span="6">
+        <a-card title="检察建议类别分布" :bordered="false" class="content-card">
+          <div ref="pieChartRef" class="chart-container"></div>
+        </a-card>
+        <a-card title="近六个月建议数量趋势" :bordered="false" class="content-card">
+          <div ref="lineChartRef" class="chart-container"></div>
+        </a-card>
+      </a-col>
+
+      <a-col :span="12">
+        <a-card title="检察建议列表" :bordered="false" class="content-card">
+          <template #extra>
+            <a-input-search v-model="filterForm.keyword" class="table-quick-search" placeholder="快速检索标题或正文" allow-clear @search="handleSearch" />
+          </template>
+          <a-table :columns="columns" :data="filteredSuggestions" :loading="loading" row-key="id">
+            <template #title="{ record }">
+              <a-space>
+                {{ record.title }}
+                <a-tag v-if="record.isPolitical" color="red" size="small">高保密</a-tag>
+              </a-space>
+            </template>
+            <template #statusName="{ record }">
+              <span class="status-dot" :class="getStatusClass(record.status)"></span>
+              {{ record.status }}
+            </template>
+            <template #actions="{ record }">
+              <a-button size="small" type="primary" @click="handleView(record)">查看</a-button>
+              <a-button size="small" @click="handleEdit(record)">编辑</a-button>
+              <a-button size="small" @click="handleIgnore(record)">忽略</a-button>
+            </template>
+          </a-table>
+        </a-card>
+      </a-col>
+
+      <a-col :span="6">
+        <a-card title="实时动态流" :bordered="false" class="content-card">
+          <div class="feed-list">
+            <div v-for="item in feedItems" :key="item.time" class="feed-item">
+              <span class="feed-time">{{ item.time }}</span>
+              <span class="feed-content">{{ item.content }}</span>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+    </a-row>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted, onUnmounted, onActivated, nextTick } from 'vue'
+import { Message, Modal } from '@arco-design/web-vue'
+import { useRouter } from 'vue-router'
+import * as echarts from 'echarts'
+import BackHome from '../components/back-home.vue'
+import {
+  fetchProcuratorateSuggestions,
+  fetchProcuratorateFeed,
+  fetchProcuratorateMonthlyTrend,
+  fetchProcuratorateCategoryDistribution,
+  ignoreProcuratorateSuggestion
+} from '../api/platform'
+import type { ProcuratorateSuggestion, ProcuratorateFeedItem, ProcuratorateMonthlyTrend } from '../types/platform'
+
+const router = useRouter()
+const isLightTheme = () => localStorage.getItem('platform:theme-mode') === 'light'
+const themeMode = ref<'light' | 'dark'>(isLightTheme() ? 'light' : 'dark')
+const updateTheme = () => { themeMode.value = isLightTheme() ? 'light' : 'dark' }
+const handleStorageChange = (e: StorageEvent) => { if (e.key === 'platform:theme-mode') updateTheme() }
+
+const pieChartRef = ref<HTMLElement | null>(null); const lineChartRef = ref<HTMLElement | null>(null)
+let pieChart: echarts.ECharts | null = null; let lineChart: echarts.ECharts | null = null; let themeObserver: MutationObserver | null = null
+
+const filterForm = reactive({ type: 'all', status: 'all', keyword: '', targetKeyword: '', dateRange: [] as string[] })
+const suggestions = ref<ProcuratorateSuggestion[]>([]); const feedItems = ref<ProcuratorateFeedItem[]>([]); const monthlyTrend = ref<ProcuratorateMonthlyTrend[]>([]); const categoryDistribution = ref<{ name: string; value: number }[]>([]); const loading = ref(false)
+
+const filteredSuggestions = computed(() => {
+  return suggestions.value.filter((item) => {
+    if (filterForm.type !== 'all' && item.type !== filterForm.type) return false
+    if (filterForm.status !== 'all' && item.status !== filterForm.status) return false
+    return true
+  })
+})
+
+const columns = [
+  { title: '建议标题', dataIndex: 'title', key: 'title', slotName: 'title', width: 250 },
+  { title: '建议类型', dataIndex: 'type', key: 'type', width: 120 },
+  { title: '建议对象', dataIndex: 'target', key: 'target', width: 150 },
+  { title: '发布日期', dataIndex: 'issueDate', key: 'issueDate', width: 120 },
+  { title: '状态', dataIndex: 'status', key: 'statusName', slotName: 'statusName', width: 120 },
+  { title: '操作', dataIndex: 'actions', key: 'actions', slotName: 'actions', width: 220 }
+]
+
+const getStatusClass = (status: string) => { const map: Record<string, string> = { '已反馈': 'status-feedback', '处理中': 'status-processing', '待处理': 'status-pending', '已驳回': 'status-rejected' }; return map[status] || 'status-pending' }
+
+const initPieChart = () => {
+  if (!pieChartRef.value) return; pieChart = echarts.init(pieChartRef.value)
+  pieChart.setOption({ series: [{ name: '建议类别', type: 'pie', radius: ['40%', '65%'], center: ['50%', '45%'], data: categoryDistribution.value }] })
+}
+const initLineChart = () => {
+  if (!lineChartRef.value) return; lineChart = echarts.init(lineChartRef.value)
+  lineChart.setOption({ xAxis: { type: 'category', data: monthlyTrend.value.map(i => i.month) }, yAxis: { type: 'value' }, series: [{ type: 'line', data: monthlyTrend.value.map(i => i.count) }] })
+}
+
+const handleSearch = () => { loading.value = true; setTimeout(() => { loading.value = false }, 500) }
+const handleReset = () => { filterForm.type = 'all'; filterForm.status = 'all' }
+const handleAddSuggestion = () => router.push({ name: 'ProcuratorateSuggestionNew' })
+const handleAddPoliticalSuggestion = () => router.push({ name: 'ProcuratorateSuggestionNew', query: { type: 'political' } })
+const handleView = (r: any) => router.push({ name: 'ProcuratorateSuggestionDetail', params: { id: String(r.id) } })
+const handleEdit = (r: any) => router.push({ name: 'ProcuratorateSuggestionEdit', params: { id: String(r.id) } })
+const handleIgnore = (r: any) => { Modal.confirm({ title: '忽略建议', onOk: async () => { await ignoreProcuratorateSuggestion(r.id); suggestions.value = await fetchProcuratorateSuggestions() } }) }
+
+onMounted(async () => {
+  loading.value = true; try { [suggestions.value, feedItems.value, monthlyTrend.value, categoryDistribution.value] = await Promise.all([fetchProcuratorateSuggestions(), fetchProcuratorateFeed(), fetchProcuratorateMonthlyTrend(), fetchProcuratorateCategoryDistribution()]) } finally { loading.value = false }
+  await nextTick(); initPieChart(); initLineChart()
+  window.addEventListener('resize', () => { pieChart?.resize(); lineChart?.resize() })
+  updateTheme(); window.addEventListener('storage', handleStorageChange)
+})
+onActivated(async () => { suggestions.value = await fetchProcuratorateSuggestions() })
+onUnmounted(() => { pieChart?.dispose(); lineChart?.dispose(); window.removeEventListener('storage', handleStorageChange) })
+</script>
+
+<style scoped>
+/* ===== 基础深色样式（默认） ===== */
+.page-contrast :deep(.arco-page-header-title) {
+  color: #eff9ff;
+  font-size: 22px;
+  font-weight: 600;
+}
+.page-contrast :deep(.arco-page-header-sub-title) {
+  color: #bde7ff;
+  font-size: 14px;
+}
+.page-contrast :deep(.arco-card-header-title) {
+  color: #eff9ff;
+  font-size: 18px;
+  font-weight: 600;
+}
+.page-contrast :deep(.arco-table-th-item) {
+  color: #dbf2ff;
+  font-size: 16px;
+  font-weight: 700;
+}
+.page-contrast :deep(.arco-table-td) {
+  color: #dbf2ff;
+  font-size: 14px;
+}
+.page-contrast :deep(.arco-select-view-value),
+.page-contrast :deep(.arco-input) {
+  color: #e8f6ff;
+  font-size: 15px;
+}
+.page-contrast :deep(.arco-form-item-label) {
+  color: #c8e8ff;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.page-contrast :deep(.arco-table-tr .arco-table-th) {
+  background: rgba(13, 35, 66, 0.95);
+}
+.page-contrast :deep(.arco-table-container),
+.page-contrast :deep(.arco-table-element),
+.page-contrast :deep(.arco-table-tr),
+.page-contrast :deep(.arco-table-td) {
+  background: rgba(8, 23, 44, 0.92) !important;
+}
+.page-contrast :deep(.arco-table .arco-table-th),
+.page-contrast :deep(.arco-table .arco-table-td) {
+  border-color: rgba(110, 196, 255, 0.2);
+}
+
+.page-header {
+  margin-bottom: 20px;
+}
+
+.content-card {
+  margin-bottom: 20px;
+  border: 1px solid rgba(93, 191, 255, 0.22);
+  background: linear-gradient(180deg, rgba(14, 39, 78, 0.78), rgba(9, 24, 47, 0.86));
+}
+
+.card-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.filter-section {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: rgba(13, 30, 56, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(93, 191, 255, 0.15);
+}
+
+.filter-form :deep(.arco-form-item-label) {
+  color: #c8e8ff;
+}
+
+.filter-actions-col :deep(.arco-form-item-label) {
+  visibility: hidden;
+}
+
+.table-quick-search {
+  width: min(100%, 240px);
+}
+
+.page-contrast :deep(.arco-picker) {
+  background: rgba(8, 23, 44, 0.85);
+  border-color: rgba(110, 196, 255, 0.25);
+  color: #e8f6ff;
+}
+
+.chart-container {
+  width: 100%;
+  height: 260px;
+}
+
+.feed-list {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.feed-item {
+  padding: 8px 0;
+  border-bottom: 1px dashed rgba(108, 192, 248, 0.2);
+  font-size: 13px;
+}
+
+.feed-time {
+  color: #5ad6ff;
+  margin-right: 8px;
+  font-weight: 600;
+}
+
+.feed-content {
+  color: #d8f2ff;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  animation: blink 1.5s ease-in-out infinite;
+}
+
+.status-feedback { background: #165DFF; box-shadow: 0 0 8px rgba(22, 93, 255, 0.6); }
+.status-processing { background: #FF7D00; box-shadow: 0 0 8px rgba(255, 125, 0, 0.6); }
+.status-pending { background: #00B42A; box-shadow: 0 0 8px rgba(0, 180, 42, 0.6); }
+.status-rejected { background: #F53F3F; box-shadow: 0 0 8px rgba(245, 63, 63, 0.6); }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ===== 浅色主题覆盖 ===== */
+:global(body.theme-light) .page-contrast :deep(.arco-page-header-title),
+.page-contrast.theme-light :deep(.arco-page-header-title) {
+  color: #0a2f4d !important;
+}
+:global(body.theme-light) .page-contrast :deep(.arco-page-header-sub-title),
+.page-contrast.theme-light :deep(.arco-page-header-sub-title) {
+  color: #1f5a85 !important;
+}
+:global(body.theme-light) .page-contrast :deep(.arco-card-header-title),
+.page-contrast.theme-light :deep(.arco-card-header-title) {
+  color: #0a2f4d !important;
+}
+:global(body.theme-light) .page-contrast :deep(.arco-table-th-item),
+.page-contrast.theme-light :deep(.arco-table-th-item) {
+  color: #0a2f4d !important;
+}
+:global(body.theme-light) .page-contrast :deep(.arco-table-td),
+.page-contrast.theme-light :deep(.arco-table-td) {
+  color: #103a60 !important;
+}
+:global(body.theme-light) .page-contrast :deep(.arco-form-item-label),
+.page-contrast.theme-light :deep(.arco-form-item-label) {
+  color: #0a2f4d !important;
+}
+:global(body.theme-light) .page-contrast .feed-content,
+:global(body.theme-light) .page-contrast .feed-time,
+.page-contrast.theme-light .feed-content,
+.page-contrast.theme-light .feed-time {
+  color: #103a60 !important;
+}
+
+:global(body.theme-light) .page-contrast .filter-section,
+.page-contrast.theme-light .filter-section {
+  background: rgba(221, 239, 255, 0.92) !important;
+  border-color: rgba(70, 136, 192, 0.35) !important;
+}
+:global(body.theme-light) .page-contrast .content-card,
+:global(body.theme-light) .page-contrast :deep(.arco-card),
+.page-contrast.theme-light .content-card,
+.page-contrast.theme-light :deep(.arco-card) {
+  background: rgba(235, 246, 255, 0.92) !important;
+  border-color: rgba(74, 140, 198, 0.28) !important;
+}
+:global(body.theme-light) .page-contrast :deep(.arco-table-container),
+:global(body.theme-light) .page-contrast :deep(.arco-table-element),
+:global(body.theme-light) .page-contrast :deep(.arco-table-tr),
+:global(body.theme-light) .page-contrast :deep(.arco-table-td),
+.page-contrast.theme-light :deep(.arco-table-container),
+.page-contrast.theme-light :deep(.arco-table-element),
+.page-contrast.theme-light :deep(.arco-table-tr),
+.page-contrast.theme-light :deep(.arco-table-td) {
+  background: rgba(235, 246, 255, 0.92) !important;
+  border-color: rgba(70, 136, 192, 0.26) !important;
+}
+:global(body.theme-light) .page-contrast :deep(.arco-table-tr .arco-table-th),
+.page-contrast.theme-light :deep(.arco-table-tr .arco-table-th) {
+  background: rgba(196, 224, 247, 0.94) !important;
+}
+
+:global(body.theme-light) .page-contrast :deep(.arco-btn-secondary),
+.page-contrast.theme-light :deep(.arco-btn-secondary) {
+  color: #103a60 !important;
+  border-color: rgba(70, 136, 192, 0.42) !important;
+  background: rgba(233, 245, 255, 0.95) !important;
+}
+:global(body.theme-light) .page-contrast :deep(.arco-btn-primary),
+.page-contrast.theme-light :deep(.arco-btn-primary) {
+  background: #1e6eb5 !important;
+  border-color: #1e6eb5 !important;
+  color: #fff !important;
+}
+
+:global(body.theme-light) .page-contrast .feed-item,
+.page-contrast.theme-light .feed-item {
+  border-bottom-color: rgba(70, 136, 192, 0.34) !important;
+}
+
+/* 核心修复：输入框包裹层的灰色背景移除，并将字体统一设为黑色 */
+:global(body.theme-light) .page-contrast :deep(.arco-select-view-value),
+:global(body.theme-light) .page-contrast :deep(.arco-input),
+.page-contrast.theme-light :deep(.arco-select-view-value),
+.page-contrast.theme-light :deep(.arco-input) {
+  color: #1d2129 !important;
+}
+:global(body.theme-light) .page-contrast :deep(.arco-picker),
+:global(body.theme-light) .page-contrast :deep(.arco-input-wrapper),
+:global(body.theme-light) .page-contrast :deep(.arco-select-view-single),
+.page-contrast.theme-light :deep(.arco-picker),
+.page-contrast.theme-light :deep(.arco-input-wrapper),
+.page-contrast.theme-light :deep(.arco-select-view-single) {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  border-color: rgba(74, 140, 198, 0.4) !important;
+}
+</style>

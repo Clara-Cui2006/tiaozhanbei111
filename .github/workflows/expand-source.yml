@@ -27,7 +27,7 @@ jobs:
           shopt -s dotglob nullglob
           cp -a .source_extract/Tiaozhanbei/. .
           rm -rf .source_extract "$archive"
-          rm -f .github/workflows/expand-source.yml
+          rm -rf .github/workflows
 
       - name: Commit expanded source
         shell: bash

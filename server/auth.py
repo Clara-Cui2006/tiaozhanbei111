@@ -14,7 +14,7 @@ bearer = HTTPBearer(auto_error=False)
 
 ROLE_DEFAULT_PERMISSIONS: dict[str, set[str]] = {
     "ordinary": {"dashboard:read", "case:read:department", "ai:use"},
-    "department_supervisor": {"dashboard:read", "case:read:all", "ai:use", "material:edit"},
+    "department_supervisor": {"dashboard:read", "case:read:department", "ai:use", "material:edit"},
     "leadership": {"dashboard:read", "case:read:all", "decision:read", "audit:summary"},
     "data_admin": {"dashboard:read", "data:import", "data:rollback", "case:read:metadata"},
     "system_admin": {"dashboard:read", "user:manage", "system:manage", "audit:read"},

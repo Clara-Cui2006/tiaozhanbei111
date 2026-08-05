@@ -1754,6 +1754,9 @@ const mockPoliticalMonthlyTrend: PoliticalMonthlyTrend[] = [
   { month: '2026-04', count: 12 }
 ]
 
+const POLITICAL_BEHAVIOR_TYPES = ['涉密材料异常流转', '重点人员异常聚集', '涉外敏感接触', '网络政治安全线索', '重大活动周边异常']
+const POLITICAL_SUBJECT_TYPES = ['重点关注人员', '涉外关联人员', '重点单位从业人员', '网络账号主体', '群体性诉求参与人员']
+
 const mockPoliticalStreetStats: PoliticalStreetStat[] = [
   { community: '西长安街街道', count: 15, longitude: 116.375, latitude: 39.912, riskLevel: '高风险', reviewStatus: '人工研判' },
   { community: '新街口街道', count: 12, longitude: 116.370, latitude: 39.945, riskLevel: '中风险', reviewStatus: '研判确认' },
@@ -1798,19 +1801,24 @@ export const POLITICAL_POLYGONS_DATA = [
 export const fetchPoliticalOverview = async (): Promise<PoliticalOverview> => {
   if (useMock) return Promise.resolve({
     totalSignalsThisYear: 142,
-    highIncidenceTypes: '涉老权益保护、涉外风险、邻里及相邻关系纠纷',
+    highIncidenceTypes: '涉外风险',
     riskAlertPushCount: 26,
     procuratorateSuggestions: 18,
     majorEventCoupling: '需人工研判',
     pendingManualReview: 26,
+    pendingManualReviewRate: 26 / 142,
     highConcernRisks: 18,
+    highConcernRiskRate: 18 / 142,
+    highRiskCases: 9,
+    highRiskRate: 9 / 142,
+    yearOverYearRate: 0.12,
     fourDimensionMethod: [
-      { name: '地点因素', description: '发生地政治属性、敏感程度与核心区属性' },
+      { name: '地点维度', description: '发生地政治属性、敏感程度与核心区属性' },
       { name: '行为内容', description: '言论、行为、诉求等内容是否涉及政治安全风险' },
       { name: '涉及主体', description: '主体身份、组织属性、背景关系与关联网络' },
-      { name: '传播影响', description: '传播范围、扩散路径、社会舆情与影响程度' }
+      { name: '时间维度', description: '政治安全案件数量随时间变化的趋势' }
     ],
-    priorityTopics: ['涉老权益保护', '涉外风险', '邻里及相邻关系纠纷']
+    priorityTopics: ['涉外风险']
   })
   const { data } = await http.get<PoliticalOverview>('/political/overview')
   return data
@@ -1937,6 +1945,12 @@ export interface StreetMapFilters {
   period: StreetMapPeriod
   caseType: string
   governanceTheme: string
+  locationDimension?: string
+  behaviorContent?: string
+  subjectType?: string
+  timeDimension?: string
+  reviewStatusTopic?: string
+  politicalOnly?: boolean
 }
 
 export interface StreetMapStreetStat {
@@ -1971,6 +1985,9 @@ export interface StreetMapDetail {
   topGovernanceIssues: Array<{ name: string; count: number | null }>
   keyGroups: Array<{ label: string; count: number | null }>
   keyIndustries: Array<{ name: string; count: number | null }>
+  subjectBreakdown?: Array<{ name: string; count: number; rate: number }>
+  behaviorBreakdown?: Array<{ name: string; count: number; rate: number }>
+  timeTrend?: Array<{ period: string; count: number }>
   newRisks: Array<{ name: string; basis: string; comparisonPeriod: string }>
   transferClues: {
     count: number
@@ -2049,7 +2066,13 @@ const STREET_MAP_INDUSTRIES: Record<string, string[]> = {
 const normalizeStreetMapFilters = (filters?: Partial<StreetMapFilters>): StreetMapFilters => ({
   period: filters?.period && filters.period in STREET_MAP_PERIOD_META ? filters.period : '30d',
   caseType: filters?.caseType || 'all',
-  governanceTheme: filters?.governanceTheme || 'all'
+  governanceTheme: filters?.governanceTheme || 'all',
+  locationDimension: filters?.locationDimension || 'all',
+  behaviorContent: filters?.behaviorContent || 'all',
+  subjectType: filters?.subjectType || 'all',
+  timeDimension: filters?.timeDimension || 'all',
+  reviewStatusTopic: filters?.reviewStatusTopic || 'all',
+  politicalOnly: Boolean(filters?.politicalOnly)
 })
 
 const getStreetMapFactor = (filters: StreetMapFilters) => {
@@ -2063,6 +2086,10 @@ const getStreetMapPeriodLabel = (filters: StreetMapFilters) => {
   const parts = [STREET_MAP_PERIOD_META[filters.period].label]
   if (filters.caseType !== 'all') parts.push(`案件类型：${filters.caseType}`)
   if (filters.governanceTheme !== 'all') parts.push(`治理主题：${filters.governanceTheme}`)
+  if (filters.locationDimension !== 'all') parts.push(`地点维度：${filters.locationDimension}`)
+  if (filters.behaviorContent !== 'all') parts.push(`行为内容：${filters.behaviorContent}`)
+  if (filters.subjectType !== 'all') parts.push(`涉及主体：${filters.subjectType}`)
+  if (filters.reviewStatusTopic !== 'all') parts.push(`专题/复核：${filters.reviewStatusTopic}`)
   return parts.join(' ｜ ')
 }
 
@@ -2074,7 +2101,7 @@ const buildStreetMapOverview = (input?: Partial<StreetMapFilters>): StreetMapOve
   const streets = mockMapPoints.map((point) => ({
     streetCode: STREET_MAP_CODES[point.community] || point.community,
     streetName: point.community,
-    caseCount: Math.max(0, Math.round((point.annualCases ?? 0) * factor))
+    caseCount: Math.max(0, Math.round((point.annualCases ?? 0) * factor * (filters.politicalOnly ? 0.18 : 1)))
   }))
   const confirmedCases = streets.reduce((sum, item) => sum + item.caseCount, 0)
   const pendingCases = Math.max(0, Math.round(STREET_MAP_PENDING_BASE * factor))
@@ -2092,8 +2119,29 @@ const buildStreetMapOverview = (input?: Partial<StreetMapFilters>): StreetMapOve
     streets,
     dataPeriod: getStreetMapPeriodLabel(filters),
     updatedAt: getStreetMapUpdatedAt(),
-    statisticalNote: '已归属街道、待确认、跨街道、不纳入街道统计四类分离；地图只展示已确认唯一街道归属案件。'
+    statisticalNote: filters.politicalOnly
+      ? '政治安全模式仅统计政治安全类别案件；地图只展示已确认唯一街道归属案件。'
+      : '已归属街道、待确认、跨街道、不纳入街道统计四类分离；地图只展示已确认唯一街道归属案件。'
   }
+}
+
+const buildMockBreakdown = (names: string[], total: number, seed: number) => {
+  if (total <= 0) return []
+  const weights = names.map((_, index) => Math.max(1, ((seed + 3) * (index + 2) * 7) % 19 + 5))
+  const weightTotal = weights.reduce((sum, value) => sum + value, 0)
+  return names.map((name, index) => {
+    const count = Math.max(1, Math.round(total * weights[index]! / weightTotal))
+    return { name, count, rate: count / total }
+  }).sort((a, b) => b.count - a.count)
+}
+
+const buildMockPoliticalTimeTrend = (total: number, seed: number) => {
+  const months = ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06']
+  if (total <= 0) return months.map((period) => ({ period, count: 0 }))
+  return months.map((period, index) => ({
+    period,
+    count: Math.max(0, Math.round(total / months.length + ((seed + index * 3) % 5) - 2))
+  }))
 }
 
 const getStreetSeed = (streetName: string) => {
@@ -2168,6 +2216,9 @@ const buildStreetMapDetail = (streetName: string, input?: Partial<StreetMapFilte
       name,
       count: Math.round(caseCount * [0.26, 0.18, 0.12][index]!)
     })) : [],
+    subjectBreakdown: buildMockBreakdown(POLITICAL_SUBJECT_TYPES, caseCount, seed),
+    behaviorBreakdown: buildMockBreakdown(POLITICAL_BEHAVIOR_TYPES, caseCount, seed + 11),
+    timeTrend: buildMockPoliticalTimeTrend(caseCount, seed),
     newRisks: caseCount > 0 ? [
       {
         name: (point.highIncidenceTypes ?? '').split('、')[0] || '案件类型变化',

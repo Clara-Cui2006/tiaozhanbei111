@@ -164,27 +164,69 @@ def _json_list(value: Any) -> list[str]:
 
 
 def _case_filter_clause(user: dict[str, Any], *, caseType: str | None = None,
-                        governanceTheme: str | None = None) -> tuple[str, list[Any]]:
+                        governanceTheme: str | None = None,
+                        locationDimension: str | None = None,
+                        behaviorContent: str | None = None,
+                        subjectType: str | None = None,
+                        reviewStatusTopic: str | None = None,
+                        politicalOnly: bool = False) -> tuple[str, list[Any]]:
     where, params = _case_scope(user)
     clauses = [where]
     values = list(params)
+    if politicalOnly:
+        clauses.append("political_review_status!='不属于政治安全'")
     if caseType and caseType != "all":
         clauses.append("(legal_cause=? OR crime=? OR category=?)")
         values.extend([caseType, caseType, caseType])
     if governanceTheme and governanceTheme != "all":
         clauses.append("governance_themes LIKE ?")
         values.append(f"%{governanceTheme}%")
+    if locationDimension and locationDimension != "all":
+        clauses.append("(street_name=? OR political_location_factor LIKE ?)")
+        values.extend([locationDimension, f"%{locationDimension}%"])
+    if behaviorContent and behaviorContent != "all":
+        clauses.append("(political_behavior_content LIKE ? OR governance_themes LIKE ?)")
+        values.extend([f"%{behaviorContent}%", f"%{behaviorContent}%"])
+    if subjectType and subjectType != "all":
+        clauses.append("(political_subject LIKE ? OR key_groups LIKE ?)")
+        values.extend([f"%{subjectType}%", f"%{subjectType}%"])
+    if reviewStatusTopic and reviewStatusTopic != "all":
+        clauses.append("(political_review_status=? OR political_risk_level=? OR political_topic LIKE ?)")
+        values.extend([reviewStatusTopic, reviewStatusTopic, f"%{reviewStatusTopic}%"])
     return " AND ".join(clauses), values
 
 
-def _period_label(period: str | None, caseType: str | None, governanceTheme: str | None) -> str:
+def _period_label(period: str | None, caseType: str | None, governanceTheme: str | None,
+                  locationDimension: str | None = None, behaviorContent: str | None = None,
+                  subjectType: str | None = None, reviewStatusTopic: str | None = None) -> str:
     period_map = {"30d": "近30天", "quarter": "本季度", "year": "本年度"}
     parts = [period_map.get(period or "30d", "近30天")]
     if caseType and caseType != "all":
         parts.append(f"法定罪名/案由：{caseType}")
     if governanceTheme and governanceTheme != "all":
         parts.append(f"治理主题：{governanceTheme}")
+    if locationDimension and locationDimension != "all":
+        parts.append(f"地点维度：{locationDimension}")
+    if behaviorContent and behaviorContent != "all":
+        parts.append(f"行为内容：{behaviorContent}")
+    if subjectType and subjectType != "all":
+        parts.append(f"涉及主体：{subjectType}")
+    if reviewStatusTopic and reviewStatusTopic != "all":
+        parts.append(f"专题/复核：{reviewStatusTopic}")
     return " ｜ ".join(parts)
+
+
+def _top_counts(rows: list[dict[str, Any]], field: str, fallback: str) -> list[dict[str, Any]]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        values = _json_list(row.get(field)) or ([str(row.get(field) or "").strip()] if row.get(field) else [])
+        if not values and fallback:
+            values = [fallback]
+        for value in values:
+            if value:
+                counts[value] = counts.get(value, 0) + 1
+    return [{"name": name, "count": count, "rate": count / len(rows) if rows else 0}
+            for name, count in sorted(counts.items(), key=lambda item: item[1], reverse=True)]
 
 
 @app.get("/risk-analysis/case-details")
@@ -239,8 +281,13 @@ def dashboard_overview(user: dict[str, Any] = Depends(require_permission("dashbo
 
 @app.get("/dashboard/street-map/overview")
 def street_overview(period: str = "30d", caseType: str = "all", governanceTheme: str = "all",
+                    locationDimension: str = "all", behaviorContent: str = "all", subjectType: str = "all",
+                    timeDimension: str = "all", reviewStatusTopic: str = "all", politicalOnly: bool = False,
                     user: dict[str, Any] = Depends(require_permission("dashboard:read"))) -> dict[str, Any]:
-    where, params = _case_filter_clause(user, caseType=caseType, governanceTheme=governanceTheme)
+    where, params = _case_filter_clause(user, caseType=caseType, governanceTheme=governanceTheme,
+                                        locationDimension=locationDimension, behaviorContent=behaviorContent,
+                                        subjectType=subjectType, reviewStatusTopic=reviewStatusTopic,
+                                        politicalOnly=politicalOnly)
     with connect() as db:
         rows = db.execute(f"SELECT street_name,COUNT(*) count FROM cases WHERE {where} AND street_status='已确认街道' GROUP BY street_name", params).fetchall()
         pending = db.execute(f"SELECT street_status,COUNT(*) count FROM cases WHERE {where} AND street_status!='已确认街道' GROUP BY street_status", params).fetchall()
@@ -259,22 +306,33 @@ def street_overview(period: str = "30d", caseType: str = "all", governanceTheme:
         },
         "streets": [{"streetCode": STREET_CODES.get(r["street_name"], r["street_name"]), "streetName": r["street_name"], "caseCount": r["count"]} for r in rows if r["street_name"]],
         "unassigned": unassigned,
-        "dataPeriod": _period_label(period, caseType, governanceTheme),
+        "dataPeriod": _period_label(period, caseType, governanceTheme, locationDimension,
+                                    behaviorContent, subjectType, reviewStatusTopic),
         "updatedAt": utc_now(),
-        "statisticalNote": "已归属街道、待确认、跨街道、不纳入街道统计四类分离；地图只展示已确认唯一街道归属案件。",
+        "statisticalNote": "政治安全模式仅统计政治安全类别案件；地图只展示已确认唯一街道归属案件。" if politicalOnly
+        else "已归属街道、待确认、跨街道、不纳入街道统计四类分离；地图只展示已确认唯一街道归属案件。",
         "dataBatch": "正式业务库",
     }
 
 
 @app.get("/dashboard/street-map/detail")
 def street_detail(streetName: str, period: str = "30d", caseType: str = "all", governanceTheme: str = "all",
+                  locationDimension: str = "all", behaviorContent: str = "all", subjectType: str = "all",
+                  timeDimension: str = "all", reviewStatusTopic: str = "all", politicalOnly: bool = False,
                   user: dict[str, Any] = Depends(require_permission("dashboard:read"))) -> dict[str, Any]:
-    where, params = _case_filter_clause(user, caseType=caseType, governanceTheme=governanceTheme)
+    where, params = _case_filter_clause(user, caseType=caseType, governanceTheme=governanceTheme,
+                                        locationDimension=locationDimension, behaviorContent=behaviorContent,
+                                        subjectType=subjectType, reviewStatusTopic=reviewStatusTopic,
+                                        politicalOnly=politicalOnly)
     with connect() as db:
         total = db.execute(f"SELECT COUNT(*) FROM cases WHERE {where} AND street_status='已确认街道' AND street_name=?", (*params, streetName)).fetchone()[0]
-        cases = db.execute(f"SELECT * FROM cases WHERE {where} AND street_status='已确认街道' AND street_name=? LIMIT 500", (*params, streetName)).fetchall()
+        case_rows = db.execute(f"SELECT * FROM cases WHERE {where} AND street_status='已确认街道' AND street_name=? LIMIT 500", (*params, streetName)).fetchall()
         categories = db.execute(f"SELECT COALESCE(NULLIF(legal_cause,''), NULLIF(crime,''), category) name,COUNT(*) count FROM cases WHERE {where} AND street_status='已确认街道' AND street_name=? GROUP BY name ORDER BY count DESC LIMIT 5", (*params, streetName)).fetchall()
         transfer_rows = db.execute(f"SELECT internal_transfer_status,COUNT(*) count FROM cases WHERE {where} AND street_status='已确认街道' AND street_name=? GROUP BY internal_transfer_status", (*params, streetName)).fetchall()
+        trend_rows = db.execute(f"""SELECT substr(COALESCE(NULLIF(accepted_date,''), created_at),1,7) month,COUNT(*) count
+                                    FROM cases WHERE {where} AND street_status='已确认街道' AND street_name=?
+                                    GROUP BY month ORDER BY month LIMIT 18""", (*params, streetName)).fetchall()
+    cases = [dict(row) for row in case_rows]
     theme_counts: dict[str, int] = {}
     group_counts: dict[str, int] = {}
     industry_counts: dict[str, int] = {}
@@ -298,10 +356,14 @@ def street_detail(streetName: str, period: str = "30d", caseType: str = "all", g
         "topGovernanceIssues": [{"name": name, "count": count} for name, count in sorted(theme_counts.items(), key=lambda item: item[1], reverse=True)[:5]],
         "keyGroups": [{"label": name, "count": count} for name, count in sorted(group_counts.items(), key=lambda item: item[1], reverse=True)[:5]],
         "keyIndustries": [{"name": name, "count": count} for name, count in sorted(industry_counts.items(), key=lambda item: item[1], reverse=True)[:5]],
+        "subjectBreakdown": _top_counts(cases, "political_subject", "未标注主体")[:6],
+        "behaviorBreakdown": _top_counts(cases, "political_behavior_content", "未标注行为")[:6],
+        "timeTrend": [{"period": row["month"] or "未填日期", "count": row["count"]} for row in trend_rows],
         "newRisks": [],
         "transferClues": {"count": sum(r["count"] for r in transfer_rows if r["internal_transfer_status"] != "未形成线索"), "statusSummary": transfer_summary, "canViewDetails": False},
-        "attentionItems": ["先内部移送并人工复核，再形成治理建议或普法材料", "跨街道和待确认案件不重复计入街道统计"],
-        "dataPeriod": _period_label(period, caseType, governanceTheme),
+        "attentionItems": ["高风险识别依据案件分类标签、风险规则匹配和人工复核结果综合确定", "高发风险可按案件数量排序，异常信号需已被标记为政治安全类别"],
+        "dataPeriod": _period_label(period, caseType, governanceTheme, locationDimension,
+                                    behaviorContent, subjectType, reviewStatusTopic),
         "updatedAt": utc_now(),
     }
 
@@ -599,6 +661,7 @@ def political_overview(user: dict[str, Any] = Depends(require_permission("politi
     top_topics = "、".join(name for name, _ in sorted(topic_counts.items(), key=lambda item: item[1], reverse=True)[:3]) or "暂无已导入数据"
     pending_review = sum(1 for row in rows if row["political_review_status"] in {"待人工复核", "人工研判"})
     high_risk = sum(1 for row in rows if row["political_risk_level"] == "高风险")
+    high_attention = sum(1 for row in rows if row["political_risk_level"] in {"高风险", "中风险", "关注"})
     return {
         "totalSignalsThisYear": len(rows),
         "highIncidenceTypes": top_topics,
@@ -606,14 +669,19 @@ def political_overview(user: dict[str, Any] = Depends(require_permission("politi
         "procuratorateSuggestions": suggestions,
         "majorEventCoupling": "需人工研判" if rows else "暂无数据",
         "pendingManualReview": pending_review,
-        "highConcernRisks": high_risk,
+        "pendingManualReviewRate": pending_review / len(rows) if rows else 0,
+        "highConcernRisks": high_attention,
+        "highConcernRiskRate": high_attention / len(rows) if rows else 0,
+        "highRiskCases": high_risk,
+        "highRiskRate": high_risk / len(rows) if rows else 0,
+        "yearOverYearRate": None,
         "fourDimensionMethod": [
-            {"name": "地点因素", "description": "发生地政治属性、敏感程度与核心区属性"},
+            {"name": "地点维度", "description": "发生地政治属性、敏感程度与核心区属性"},
             {"name": "行为内容", "description": "言论、行为、诉求等内容是否涉及政治安全风险"},
             {"name": "涉及主体", "description": "主体身份、组织属性、背景关系与关联网络"},
-            {"name": "传播影响", "description": "传播范围、扩散路径、社会舆情与影响程度"},
+            {"name": "时间维度", "description": "政治安全案件数量随时间变化的趋势"},
         ],
-        "priorityTopics": ["涉老权益保护", "涉外风险", "邻里及相邻关系纠纷"],
+        "priorityTopics": ["涉外风险"],
     }
 
 

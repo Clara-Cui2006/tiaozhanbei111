@@ -2,9 +2,9 @@
   <a-card :bordered="false" class="xrm-card" :class="{ 'xrm-theme-light': isLightTheme, 'xrm-theme-dark': !isLightTheme }">
     <header class="xrm-page-header">
       <div class="xrm-title-group">
-        <span class="eyebrow">西法智治 · 街道空间分析</span>
-        <h2>西城区街道法治风险分布</h2>
-        <p>颜色仅表示案件数量区间，不表示风险等级；点击街道区域或名称查看详情。</p>
+        <span class="eyebrow">{{ isPoliticalMode ? '政治安全 · 空间与时间研判' : '西法智治 · 街道空间分析' }}</span>
+        <h2>{{ isPoliticalMode ? '西城区政治安全风险空间分布' : '西城区街道法治风险分布' }}</h2>
+        <p>{{ isPoliticalMode ? '围绕地点、行为、主体、时间四个维度展示政治安全案件分布与复核状态。' : '颜色仅表示案件数量区间，不表示风险等级；点击街道区域或名称查看详情。' }}</p>
       </div>
       <div class="xrm-header-status" :class="mapBoundaryMode">
         <span class="xrm-status-dot"></span>
@@ -19,10 +19,77 @@
             <span class="xrm-section-kicker">筛选条件</span>
             <h3>选择统计口径</h3>
           </div>
-          <span class="xrm-section-helper">筛选变化后，地图和街道详情同步更新</span>
+          <span class="xrm-section-helper">{{ isPoliticalMode ? '点击四维筛选后，仅加载政治安全相关案件' : '筛选变化后，地图和街道详情同步更新' }}</span>
         </div>
 
-        <div class="xrm-filter-grid">
+        <div v-if="isPoliticalMode" class="xrm-filter-grid political">
+          <div class="xrm-filter-item">
+            <span class="xrm-filter-label">地点维度</span>
+            <div class="xrm-select-wrap">
+              <select v-model="filters.locationDimension" class="xrm-filter-select" aria-label="地点维度">
+                <option value="all">全部地点</option>
+                <option v-for="street in expectedStreetOptions" :key="street" :value="street">{{ street }}</option>
+              </select>
+              <span class="xrm-select-arrow" aria-hidden="true">⌄</span>
+            </div>
+          </div>
+          <div class="xrm-filter-item">
+            <span class="xrm-filter-label">行为内容</span>
+            <div class="xrm-select-wrap">
+              <select v-model="filters.behaviorContent" class="xrm-filter-select" aria-label="行为内容">
+                <option value="all">全部行为</option>
+                <option value="涉密材料异常流转">涉密材料异常流转</option>
+                <option value="重点人员异常聚集">重点人员异常聚集</option>
+                <option value="涉外敏感接触">涉外敏感接触</option>
+                <option value="网络政治安全线索">网络政治安全线索</option>
+                <option value="重大活动周边异常">重大活动周边异常</option>
+              </select>
+              <span class="xrm-select-arrow" aria-hidden="true">⌄</span>
+            </div>
+          </div>
+          <div class="xrm-filter-item">
+            <span class="xrm-filter-label">涉及主体</span>
+            <div class="xrm-select-wrap">
+              <select v-model="filters.subjectType" class="xrm-filter-select" aria-label="涉及主体">
+                <option value="all">全部主体</option>
+                <option value="重点关注人员">重点关注人员</option>
+                <option value="涉外关联人员">涉外关联人员</option>
+                <option value="重点单位从业人员">重点单位从业人员</option>
+                <option value="网络账号主体">网络账号主体</option>
+                <option value="群体性诉求参与人员">群体性诉求参与人员</option>
+              </select>
+              <span class="xrm-select-arrow" aria-hidden="true">⌄</span>
+            </div>
+          </div>
+          <div class="xrm-filter-item">
+            <span class="xrm-filter-label">时间维度</span>
+            <div class="xrm-select-wrap">
+              <select v-model="filters.period" class="xrm-filter-select" aria-label="时间维度">
+                <option value="30d">近30天</option>
+                <option value="quarter">本季度</option>
+                <option value="year">本年度</option>
+              </select>
+              <span class="xrm-select-arrow" aria-hidden="true">⌄</span>
+            </div>
+          </div>
+          <div class="xrm-filter-item">
+            <span class="xrm-filter-label">重点专题与复核状态</span>
+            <div class="xrm-select-wrap">
+              <select v-model="filters.reviewStatusTopic" class="xrm-filter-select" aria-label="重点专题与复核状态">
+                <option value="all">全部专题/状态</option>
+                <option value="涉外风险">涉外风险</option>
+                <option value="待人工复核">待人工复核</option>
+                <option value="人工研判">人工研判</option>
+                <option value="研判确认">研判确认</option>
+                <option value="纳入统计">纳入统计</option>
+                <option value="高风险">高风险</option>
+              </select>
+              <span class="xrm-select-arrow" aria-hidden="true">⌄</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="xrm-filter-grid">
           <div class="xrm-filter-item">
             <span class="xrm-filter-label">统计周期</span>
             <div class="xrm-select-wrap">
@@ -251,11 +318,18 @@
               <div class="xrm-detail-meta">
                 <span class="xrm-detail-filter-summary">
                   <span>统计周期：{{ currentPeriodLabel }}</span>
-                  <span>案件类型：{{ filters.caseType === 'all' ? '全部类型' : filters.caseType }}</span>
-                  <span>治理主题：{{ filters.governanceTheme === 'all' ? '全部主题' : filters.governanceTheme }}</span>
-                </span>
-                <span>更新时间：{{ detail?.updatedAt || overview?.updatedAt || '暂无数据' }}</span>
-              </div>
+                <span v-if="isPoliticalMode">地点维度：{{ filters.locationDimension === 'all' ? '全部地点' : filters.locationDimension }}</span>
+                <span v-if="isPoliticalMode">行为内容：{{ filters.behaviorContent === 'all' ? '全部行为' : filters.behaviorContent }}</span>
+                <span v-if="isPoliticalMode">涉及主体：{{ filters.subjectType === 'all' ? '全部主体' : filters.subjectType }}</span>
+                <span v-if="!isPoliticalMode">案件类型：{{ filters.caseType === 'all' ? '全部类型' : filters.caseType }}</span>
+                <span v-if="!isPoliticalMode">治理主题：{{ filters.governanceTheme === 'all' ? '全部主题' : filters.governanceTheme }}</span>
+              </span>
+              <span>更新时间：{{ detail?.updatedAt || overview?.updatedAt || '暂无数据' }}</span>
+            </div>
+            <div class="xrm-detail-tabs">
+              <button :class="{ active: activeDetailTab === 'metrics' }" @click="activeDetailTab = 'metrics'">指标详情</button>
+              <button :class="{ active: activeDetailTab === 'charts' }" @click="activeDetailTab = 'charts'">图表详情</button>
+            </div>
             </div>
 
             <div v-if="detailLoading" class="xrm-detail-state">
@@ -270,6 +344,7 @@
             <template v-else-if="detail">
               <div v-if="detail.caseCount === 0" class="xrm-empty-data">当前筛选条件下暂无数据</div>
 
+              <template v-if="activeDetailTab === 'metrics'">
               <div class="xrm-metric-grid">
                 <div class="xrm-metric-card primary">
                   <span class="xrm-metric-label">案件总量</span>
@@ -352,8 +427,8 @@
                 <div class="xrm-detail-xrm-section-heading">
                   <span class="xrm-section-index">04</span>
                   <div>
-                    <h4>重点行业领域</h4>
-                    <p>案件较集中的行业或生活场景</p>
+                    <h4>{{ isPoliticalMode ? '重点案发情形' : '重点行业领域' }}</h4>
+                    <p>{{ isPoliticalMode ? '政治安全风险较集中的具体案发情形' : '案件较集中的行业或生活场景' }}</p>
                   </div>
                 </div>
                 <ul v-if="detail.keyIndustries.length" class="xrm-plain-list xrm-compact-list">
@@ -417,6 +492,40 @@
                 </ul>
                 <div v-else class="xrm-section-empty">当前筛选条件下暂无数据</div>
               </section>
+              </template>
+
+              <template v-else>
+                <section class="xrm-detail-section-card">
+                  <div class="xrm-detail-xrm-section-heading">
+                    <span class="xrm-section-index">图1</span>
+                    <div>
+                      <h4>涉及主体分析</h4>
+                      <p>不同主体类型案件占比</p>
+                    </div>
+                  </div>
+                  <div ref="subjectChartRef" class="xrm-detail-chart"></div>
+                </section>
+                <section class="xrm-detail-section-card">
+                  <div class="xrm-detail-xrm-section-heading">
+                    <span class="xrm-section-index">图2</span>
+                    <div>
+                      <h4>行为内容类型分析</h4>
+                      <p>不同政治安全风险行为类型占比</p>
+                    </div>
+                  </div>
+                  <div ref="behaviorChartRef" class="xrm-detail-chart"></div>
+                </section>
+                <section class="xrm-detail-section-card">
+                  <div class="xrm-detail-xrm-section-heading">
+                    <span class="xrm-section-index">图3</span>
+                    <div>
+                      <h4>时间趋势分析</h4>
+                      <p>政治安全案件数量随时间变化</p>
+                    </div>
+                  </div>
+                  <div ref="timeTrendChartRef" class="xrm-detail-chart line"></div>
+                </section>
+              </template>
             </template>
             <div v-else class="xrm-detail-state">当前筛选条件下暂无数据</div>
           </template>
@@ -428,12 +537,16 @@
             <div class="xrm-empty-steps">
               <span><b>1</b> 选择街道</span>
               <span><b>2</b> 查看指标</span>
-              <span><b>3</b> 切换对比</span>
+              <span><b>3</b> 查看图表</span>
+              <span><b>4</b> 切换对比</span>
             </div>
             <div class="xrm-detail-filter-summary xrm-empty-filter-summary">
               <span>统计周期：{{ currentPeriodLabel }}</span>
-              <span>案件类型：{{ filters.caseType === 'all' ? '全部类型' : filters.caseType }}</span>
-              <span>治理主题：{{ filters.governanceTheme === 'all' ? '全部主题' : filters.governanceTheme }}</span>
+              <span v-if="isPoliticalMode">地点维度：{{ filters.locationDimension === 'all' ? '全部地点' : filters.locationDimension }}</span>
+              <span v-if="isPoliticalMode">行为内容：{{ filters.behaviorContent === 'all' ? '全部行为' : filters.behaviorContent }}</span>
+              <span v-if="isPoliticalMode">涉及主体：{{ filters.subjectType === 'all' ? '全部主体' : filters.subjectType }}</span>
+              <span v-if="!isPoliticalMode">案件类型：{{ filters.caseType === 'all' ? '全部类型' : filters.caseType }}</span>
+              <span v-if="!isPoliticalMode">治理主题：{{ filters.governanceTheme === 'all' ? '全部主题' : filters.governanceTheme }}</span>
             </div>
           </div>
         </aside>
@@ -564,10 +677,19 @@ type MapBoundaryMode = 'street' | 'district'
 
 const mapRef = ref<HTMLDivElement | null>(null)
 const mapPanelRef = ref<HTMLElement | null>(null)
+const subjectChartRef = ref<HTMLDivElement | null>(null)
+const behaviorChartRef = ref<HTMLDivElement | null>(null)
+const timeTrendChartRef = ref<HTMLDivElement | null>(null)
 const filters = reactive<StreetMapFilters>({
   period: '30d',
   caseType: 'all',
-  governanceTheme: 'all'
+  governanceTheme: 'all',
+  locationDimension: 'all',
+  behaviorContent: 'all',
+  subjectType: 'all',
+  timeDimension: 'all',
+  reviewStatusTopic: 'all',
+  politicalOnly: false
 })
 const currentPeriodLabel = computed(() => {
   if (filters.period === 'quarter') return '本季度'
@@ -586,6 +708,7 @@ const activeStreetName = ref('')
 const detail = ref<StreetMapDetail | null>(null)
 const detailLoading = ref(false)
 const detailError = ref(false)
+const activeDetailTab = ref<'metrics' | 'charts'>('metrics')
 const summaryExplanation = ref<StreetMapSummaryKey | ''>('')
 const mapDisplayHeight = computed(() => Math.max(460, Math.min(620, Number(props.height) || 520)))
 const detailPanelHeight = ref(0)
@@ -594,6 +717,9 @@ const mapZoom = ref(1)
 const legendVisible = ref(true)
 
 let chart: echarts.ECharts | null = null
+let subjectChart: echarts.ECharts | null = null
+let behaviorChart: echarts.ECharts | null = null
+let timeTrendChart: echarts.ECharts | null = null
 let mapRegistered = false
 let themeObserver: MutationObserver | null = null
 let mapPanelResizeObserver: ResizeObserver | null = null
@@ -612,6 +738,13 @@ const detectLightTheme = () => {
   if (classTokens.has('theme-dark') || classTokens.has('dark') || dataTheme.includes('dark')) return false
   return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches
 }
+
+const isPoliticalMode = computed(() => props.defaultOverlayPolitical)
+const expectedStreetOptions = EXPECTED_STREETS
+
+watch(isPoliticalMode, (enabled) => {
+  filters.politicalOnly = enabled
+}, { immediate: true })
 
 const syncTheme = () => {
   isLightTheme.value = detectLightTheme()
@@ -808,12 +941,109 @@ const loadStreetDetail = async () => {
   detailError.value = false
   try {
     detail.value = await fetchXichengStreetMapDetail(activeStreetName.value, { ...filters })
+    activeDetailTab.value = 'metrics'
   } catch (error) {
     console.error('加载街道详情失败', error)
     detail.value = null
     detailError.value = true
   } finally {
     detailLoading.value = false
+  }
+}
+
+const disposeDetailCharts = () => {
+  subjectChart?.dispose()
+  behaviorChart?.dispose()
+  timeTrendChart?.dispose()
+  subjectChart = null
+  behaviorChart = null
+  timeTrendChart = null
+}
+
+const renderPieChart = (
+  container: HTMLDivElement | null,
+  current: echarts.ECharts | null,
+  title: string,
+  data: Array<{ name: string; count: number; rate?: number }>
+) => {
+  if (!container) return current
+  current?.dispose()
+  const instance = echarts.init(container)
+  const chartTheme = getChartTheme()
+  instance.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: chartTheme.tooltipBg,
+      borderColor: chartTheme.tooltipBorder,
+      textStyle: { color: chartTheme.tooltipText },
+      formatter: (params: any) => `${params.name}<br/>政治安全案件数量：${params.value} 件<br/>占比：${params.percent}%`
+    },
+    series: [{
+      name: title,
+      type: 'pie',
+      radius: ['38%', '68%'],
+      center: ['50%', '54%'],
+      avoidLabelOverlap: true,
+      label: {
+        color: chartTheme.labelText,
+        fontSize: 11,
+        formatter: '{b}\n{d}%'
+      },
+      labelLine: { lineStyle: { color: chartTheme.labelText } },
+      data: data.map((item) => ({ name: item.name, value: item.count }))
+    }]
+  })
+  return instance
+}
+
+const renderDetailCharts = async () => {
+  if (activeDetailTab.value !== 'charts' || !detail.value) return
+  await nextTick()
+  const chartTheme = getChartTheme()
+  subjectChart = renderPieChart(subjectChartRef.value, subjectChart, '涉及主体分析', detail.value.subjectBreakdown || [])
+  behaviorChart = renderPieChart(behaviorChartRef.value, behaviorChart, '行为内容类型分析', detail.value.behaviorBreakdown || [])
+  timeTrendChart?.dispose()
+  timeTrendChart = null
+  if (timeTrendChartRef.value) {
+    timeTrendChart = echarts.init(timeTrendChartRef.value)
+    const trend = detail.value.timeTrend || []
+    timeTrendChart.setOption({
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: chartTheme.tooltipBg,
+        borderColor: chartTheme.tooltipBorder,
+        textStyle: { color: chartTheme.tooltipText },
+        formatter: (params: any) => {
+          const item = params?.[0]
+          return `${item?.axisValue || ''}<br/>政治安全案件数量：${item?.data ?? 0}`
+        }
+      },
+      grid: { left: 38, right: 14, top: 24, bottom: 34 },
+      xAxis: {
+        type: 'category',
+        data: trend.map((item) => item.period),
+        axisLabel: { color: chartTheme.tooltipHint, fontSize: 10 },
+        axisLine: { lineStyle: { color: chartTheme.tooltipBorder } }
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { color: chartTheme.tooltipHint, fontSize: 10 },
+        splitLine: { lineStyle: { color: 'rgba(120, 198, 230, 0.16)' } }
+      },
+      series: [{
+        name: '政治安全案件数量',
+        type: 'line',
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 7,
+        data: trend.map((item) => item.count),
+        lineStyle: { color: '#ff7a7a', width: 3 },
+        itemStyle: { color: '#ff7a7a' },
+        areaStyle: { color: 'rgba(255, 122, 122, 0.16)' }
+      }]
+    })
   }
 }
 
@@ -1185,6 +1415,9 @@ const syncDetailPanelHeight = () => {
 
 const handleResize = () => {
   chart?.resize()
+  subjectChart?.resize()
+  behaviorChart?.resize()
+  timeTrendChart?.resize()
   syncDetailPanelHeight()
 }
 
@@ -1199,13 +1432,29 @@ watch(activeStreetName, async () => {
   await loadStreetDetail()
 })
 
+watch(activeDetailTab, async () => {
+  if (activeDetailTab.value === 'charts') {
+    await renderDetailCharts()
+  } else {
+    disposeDetailCharts()
+  }
+})
+
+watch(detail, async () => {
+  await renderDetailCharts()
+})
+
 watch(mapDisplayHeight, () => nextTick(() => {
   chart?.resize()
+  subjectChart?.resize()
+  behaviorChart?.resize()
+  timeTrendChart?.resize()
   syncDetailPanelHeight()
 }))
 
 watch(isLightTheme, async () => {
   await renderMap()
+  await renderDetailCharts()
 })
 
 onMounted(async () => {
@@ -1231,6 +1480,7 @@ onUnmounted(() => {
   mapPanelResizeObserver = null
   chart?.dispose()
   chart = null
+  disposeDetailCharts()
 })
 </script>
 
@@ -1379,6 +1629,10 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+
+.xrm-filter-grid.political {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .xrm-filter-item {
@@ -2029,6 +2283,40 @@ onUnmounted(() => {
   border-top: 1px dashed var(--line);
   color: var(--text-3);
   font-size: 11px;
+}
+
+.xrm-detail-tabs {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.xrm-detail-tabs button {
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.xrm-detail-tabs button.active,
+.xrm-detail-tabs button:hover {
+  border-color: var(--line-strong);
+  background: rgba(90, 214, 255, 0.14);
+  color: var(--text-1);
+}
+
+.xrm-detail-chart {
+  width: 100%;
+  height: 230px;
+}
+
+.xrm-detail-chart.line {
+  height: 220px;
 }
 
 .xrm-detail-filter-summary {

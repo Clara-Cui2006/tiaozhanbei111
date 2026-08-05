@@ -87,15 +87,17 @@ Mock仅允许在开发构建中通过 `VITE_USE_MOCK=true` 显式开启；生产
 | 前端函数 | 方法 | 路径 | 说明 |
 |----------|------|------|------|
 | `fetchXichengStreetMapOverview` | GET | `/dashboard/street-map/overview` | 返回全区总量、已归属街道、待确认、跨街道、不纳入街道统计四类口径 |
-| `fetchXichengStreetMapDetail` | GET | `/dashboard/street-map/detail` | 返回街道详情：法定罪名/案由、治理主题、重点人群、重点行业、内部移送线索 |
+| `fetchXichengStreetMapDetail` | GET | `/dashboard/street-map/detail` | 返回街道详情：法定罪名/案由、治理主题、重点人群、重点行业/案发情形、内部移送线索；政治安全模式下额外返回主体、行为、时间趋势图表数据 |
 
-筛选参数：`period`、`caseType`、`governanceTheme`。其中 `caseType` 对应法定罪名/案由，`governanceTheme` 对应治理主题标签。
+通用筛选参数：`period`、`caseType`、`governanceTheme`。其中 `caseType` 对应法定罪名/案由，`governanceTheme` 对应治理主题标签。
+
+政治安全地图筛选参数：`politicalOnly=true`、`locationDimension`、`behaviorContent`、`subjectType`、`timeDimension`、`reviewStatusTopic`。政治安全模式下只加载政治安全类别案件，四维筛选分别对应地点维度、行为内容、涉及主体、时间维度，并支持按“涉外风险/待人工复核/高风险”等重点专题与复核状态筛选。
 
 ### 政治安全专题
 
 | 前端函数 | 方法 | 路径 | 说明 |
 |----------|------|------|------|
-| `fetchPoliticalOverview` | GET | `/political/overview` | 政治安全总览、四维研判说明、待人工复核和重点专题 |
+| `fetchPoliticalOverview` | GET | `/political/overview` | 政治安全总览、四维研判说明、人工复核、高关注/高风险数量及占比、重点专题 |
 | `fetchPoliticalMonthlyTrend` | GET | `/political/monthly-trend` | 政治安全信号月度趋势 |
 | `fetchPoliticalStreetStats` | GET | `/political/street-stats` | 街道级政治安全信号、风险等级、研判状态 |
 

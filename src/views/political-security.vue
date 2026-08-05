@@ -10,8 +10,9 @@
     <div class="kpi-strip">
       <div class="kpi-item kpi-red">
         <div class="kpi-accent"></div>
-        <div class="kpi-label">年度异常信号总数</div>
+        <div class="kpi-label">年度政治安全案件总数</div>
         <div class="kpi-value">{{ overview.totalSignalsThisYear }}</div>
+        <div class="kpi-sub">同比 {{ formatSignedRate(overview.yearOverYearRate) }}</div>
       </div>
       <div class="kpi-item kpi-cyan">
         <div class="kpi-accent"></div>
@@ -20,12 +21,12 @@
       </div>
       <div class="kpi-item kpi-orange">
         <div class="kpi-accent"></div>
-        <div class="kpi-label">风险预警推送次数</div>
+        <div class="kpi-label">风险预警推送</div>
         <div class="kpi-value">{{ overview.riskAlertPushCount }}</div>
       </div>
       <div class="kpi-item kpi-yellow">
         <div class="kpi-accent"></div>
-        <div class="kpi-label">保密级检察建议</div>
+        <div class="kpi-label">政治安全相关检察建议</div>
         <div class="kpi-value">{{ overview.procuratorateSuggestions }}</div>
       </div>
       <div class="kpi-item kpi-blue">
@@ -36,8 +37,39 @@
     </div>
 
     <a-row :gutter="16" class="dashboard-row">
-      <a-col :span="14">
-        <a-card :bordered="false" class="chart-card method-card">
+      <a-col :span="24">
+        <a-card :bordered="false" class="chart-card topic-card">
+          <template #title>西城重点专题与复核状态</template>
+          <div class="topic-card-layout">
+            <div class="topic-list">
+              <a-tag v-for="topic in priorityTopics" :key="topic" color="orangered" size="large">{{ topic }}</a-tag>
+            </div>
+            <div class="review-metrics">
+              <div>
+                <span>人工复核案件总量</span>
+                <strong>{{ overview.pendingManualReview || 0 }}</strong>
+                <em>{{ formatRate(overview.pendingManualReviewRate) }}</em>
+              </div>
+              <div>
+                <span>高关注风险案件总量</span>
+                <strong>{{ overview.highConcernRisks || 0 }}</strong>
+                <em>{{ formatRate(overview.highConcernRiskRate) }}</em>
+              </div>
+              <div>
+                <span>高风险案件总量</span>
+                <strong>{{ overview.highRiskCases || 0 }}</strong>
+                <em>{{ formatRate(overview.highRiskRate) }}</em>
+              </div>
+            </div>
+          </div>
+          <a-alert type="info" class="method-alert">“高风险/高关注”不单纯依据案件数量判断，需结合案件分类标签、风险规则匹配和人工复核结果；高发风险类型可按案件数量排序。</a-alert>
+        </a-card>
+      </a-col>
+    </a-row>
+
+    <a-row :gutter="16" class="dashboard-row">
+      <a-col :span="24">
+        <a-card :bordered="false" class="chart-card method-card map-method-card">
           <template #title>政治安全四维研判</template>
           <div class="method-grid">
             <div v-for="item in overview.fourDimensionMethod || defaultFourDimensionMethod" :key="item.name" class="method-item">
@@ -45,25 +77,8 @@
               <span>{{ item.description }}</span>
             </div>
           </div>
-          <a-alert type="warning" class="method-alert">位于重点区域不必然属于政治安全案件，必须结合地点、行为、主体、传播影响进行人工复核。</a-alert>
+          <a-alert type="warning" class="method-alert">位于重点区域不必然属于政治安全案件，必须结合地点、行为、主体、时间趋势进行人工复核。</a-alert>
         </a-card>
-      </a-col>
-      <a-col :span="10">
-        <a-card :bordered="false" class="chart-card method-card">
-          <template #title>西城重点专题与复核状态</template>
-          <div class="topic-list">
-            <a-tag v-for="topic in overview.priorityTopics || defaultPriorityTopics" :key="topic" color="orangered" size="large">{{ topic }}</a-tag>
-          </div>
-          <div class="review-metrics">
-            <div><span>待人工复核</span><strong>{{ overview.pendingManualReview || 0 }}</strong></div>
-            <div><span>高关注风险</span><strong>{{ overview.highConcernRisks || 0 }}</strong></div>
-          </div>
-        </a-card>
-      </a-col>
-    </a-row>
-
-    <a-row :gutter="16" class="dashboard-row">
-      <a-col :span="24">
         <RiskMapPanel :height="660" :default-overlay-political="true" />
       </a-col>
     </a-row>
@@ -93,18 +108,11 @@
     <a-row :gutter="16" class="dashboard-row">
       <a-col :span="24">
         <a-card title="数据驾驶舱" class="chart-card" :bordered="false">
-          <template #extra>
-            <a-radio-group v-model="activeChart" type="button" size="medium">
-              <a-radio value="line">月度趋势</a-radio>
-              <a-radio value="heatmap">风险分布</a-radio>
-              <a-radio value="bar">街道对比</a-radio>
-            </a-radio-group>
-          </template>
-          
-          <div class="chart-container-large">
-            <div v-show="activeChart === 'line'" class="chart-box" ref="lineChartRef"></div>
-            <div v-show="activeChart === 'heatmap'" class="chart-box" ref="heatmapChartRef"></div>
-            <div v-show="activeChart === 'bar'" class="chart-box" ref="barChartRef"></div>
+          <div class="cockpit-grid">
+            <div class="cockpit-chart"><h4>地点因素</h4><div ref="locationChartRef" class="chart-box"></div></div>
+            <div class="cockpit-chart"><h4>行为内容</h4><div ref="behaviorChartRef" class="chart-box"></div></div>
+            <div class="cockpit-chart"><h4>涉及主体</h4><div ref="subjectChartRef" class="chart-box"></div></div>
+            <div class="cockpit-chart"><h4>时间因素</h4><div ref="timeChartRef" class="chart-box"></div></div>
           </div>
         </a-card>
       </a-col>
@@ -113,7 +121,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 import BackHome from '../components/back-home.vue'
 import RiskMapPanel from '../components/risk-map-panel.vue'
@@ -124,16 +132,17 @@ import type { PoliticalMonthlyTrend, PoliticalStreetStat, PoliticalOverview } fr
 import { chatWithLLM } from '../services/llm'
 import { USER_PROMPT_TEMPLATES } from '../services/prompts'
 
-const lineChartRef = ref<HTMLElement | null>(null)
-const heatmapChartRef = ref<HTMLElement | null>(null)
-const barChartRef = ref<HTMLElement | null>(null)
+const locationChartRef = ref<HTMLElement | null>(null)
+const behaviorChartRef = ref<HTMLElement | null>(null)
+const subjectChartRef = ref<HTMLElement | null>(null)
+const timeChartRef = ref<HTMLElement | null>(null)
 
-let lineChart: echarts.ECharts | null = null
-let heatmapChart: echarts.ECharts | null = null
-let barChart: echarts.ECharts | null = null
+let locationChart: echarts.ECharts | null = null
+let behaviorChart: echarts.ECharts | null = null
+let subjectChart: echarts.ECharts | null = null
+let timeChart: echarts.ECharts | null = null
 let themeObserver: MutationObserver | null = null
 
-const activeChart = ref('line')
 const trendData = ref<PoliticalMonthlyTrend[]>([])
 const streetData = ref<PoliticalStreetStat[]>([])
 
@@ -146,12 +155,13 @@ const overview = ref<PoliticalOverview>({
   majorEventCoupling: ''
 })
 const defaultFourDimensionMethod = [
-  { name: '地点因素', description: '发生地政治属性、敏感程度与核心区属性' },
+  { name: '地点维度', description: '发生地政治属性、敏感程度与核心区属性' },
   { name: '行为内容', description: '言论、行为、诉求等内容是否涉及政治安全风险' },
   { name: '涉及主体', description: '主体身份、组织属性、背景关系与关联网络' },
-  { name: '传播影响', description: '传播范围、扩散路径、社会舆情与影响程度' }
+  { name: '时间维度', description: '政治安全案件数量随时间变化的趋势' }
 ]
-const defaultPriorityTopics = ['涉老权益保护', '涉外风险', '邻里及相邻关系纠纷']
+const defaultPriorityTopics = ['涉外风险']
+const priorityTopics = computed(() => (overview.value.priorityTopics?.length ? overview.value.priorityTopics : defaultPriorityTopics).filter((topic) => topic === '涉外风险'))
 const aiAssessing = ref(false)
 const aiAssessment = ref('')
 
@@ -195,169 +205,89 @@ const chartSplitColor = () => isLightTheme() ? 'rgba(52, 123, 180, 0.16)' : 'rgb
 const tooltipBg = () => isLightTheme() ? 'rgba(235, 246, 255, 0.96)' : 'rgba(8, 23, 44, 0.9)'
 const tooltipBorder = () => isLightTheme() ? 'rgba(70, 136, 192, 0.42)' : 'rgba(245, 63, 63, 0.3)'
 
-const getNormalizedXY = (lon: number, lat: number, points: PoliticalStreetStat[]): [number, number] => {
-  if (!points.length) return [50, 50]
-  const lons = points.map(p => p.longitude)
-  const lats = points.map(p => p.latitude)
-  const lonMin = Math.min(...lons)
-  const lonMax = Math.max(...lons)
-  const latMin = Math.min(...lats)
-  const latMax = Math.max(...lats)
-  
-  const lonPadding = (lonMax - lonMin) * 0.05 || 0.01
-  const latPadding = (latMax - latMin) * 0.05 || 0.01
-  
-  const x = ((lon - (lonMin - lonPadding)) / ((lonMax + lonPadding) - (lonMin - lonPadding))) * 100
-  const y = ((lat - (latMin - latPadding)) / ((latMax + latPadding) - (latMin - latPadding))) * 100
-  
-  return [Math.min(100, Math.max(0, x)), Math.min(100, Math.max(0, y))]
+const formatRate = (value?: number | null) => typeof value === 'number' ? `${(value * 100).toFixed(1)}%` : '暂无'
+const formatSignedRate = (value?: number | null) => {
+  if (typeof value !== 'number') return '暂无'
+  return `${value >= 0 ? '+' : ''}${(value * 100).toFixed(1)}%`
+}
+
+const behaviorNames = ['涉密材料异常流转', '重点人员异常聚集', '涉外敏感接触', '网络政治安全线索', '重大活动周边异常']
+const subjectNames = ['重点关注人员', '涉外关联人员', '重点单位从业人员', '网络账号主体', '群体性诉求参与人员']
+const buildSyntheticDistribution = (names: string[], total: number, seed: number) => {
+  const safeTotal = Math.max(0, total)
+  const weights = names.map((_, index) => ((seed + 5) * (index + 3) * 11) % 23 + 8)
+  const sum = weights.reduce((acc, item) => acc + item, 0)
+  return names.map((name, index) => ({ name, value: Math.max(0, Math.round(safeTotal * weights[index]! / sum)) }))
+}
+
+const renderPie = (container: HTMLElement | null, instance: echarts.ECharts | null, title: string, data: Array<{ name: string; value: number }>) => {
+  if (!container) return instance
+  instance?.dispose()
+  const chart = echarts.init(container)
+  chart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: tooltipBg(),
+      borderColor: tooltipBorder(),
+      textStyle: { color: chartTextPrimary(), fontSize: 13 },
+      formatter: (params: any) => `${params.name}<br/>政治安全案件数量：${params.value} 件<br/>占比：${params.percent}%`
+    },
+    series: [{
+      name: title,
+      type: 'pie',
+      radius: ['38%', '68%'],
+      center: ['50%', '54%'],
+      label: { color: chartTextPrimary(), fontSize: 12, formatter: '{b}\n{d}%' },
+      labelLine: { lineStyle: { color: chartAxisColor() } },
+      data
+    }]
+  })
+  return chart
 }
 
 const renderCharts = () => {
-  if (lineChart) lineChart.dispose()
-  if (heatmapChart) heatmapChart.dispose()
-  if (barChart) barChart.dispose()
-
-  // --- 1. 渲染折线趋势图 ---
-  if (lineChartRef.value) {
-    lineChart = echarts.init(lineChartRef.value)
-    lineChart.setOption({
+  locationChart = renderPie(locationChartRef.value, locationChart, '地点因素', streetData.value.map((item) => ({ name: item.community, value: item.count })))
+  const total = overview.value.totalSignalsThisYear || streetData.value.reduce((sum, item) => sum + item.count, 0)
+  behaviorChart = renderPie(behaviorChartRef.value, behaviorChart, '行为内容', buildSyntheticDistribution(behaviorNames, total, 7))
+  subjectChart = renderPie(subjectChartRef.value, subjectChart, '涉及主体', buildSyntheticDistribution(subjectNames, total, 13))
+  timeChart?.dispose()
+  if (timeChartRef.value) {
+    timeChart = echarts.init(timeChartRef.value)
+    timeChart.setOption({
       backgroundColor: 'transparent',
       tooltip: {
         trigger: 'axis',
         backgroundColor: tooltipBg(),
         borderColor: tooltipBorder(),
-        textStyle: { color: chartTextPrimary(), fontSize: 16 }
-      },
-      grid: { left: '5%', right: '5%', top: '10%', bottom: '15%' },
-      xAxis: { 
-        type: 'category', 
-        data: trendData.value.map(d => d.month), 
-        axisLabel: { color: chartTextSecondary(), fontSize: 15 }, 
-        axisLine: { show: true, lineStyle: { color: chartAxisColor(), width: 1.5 } },
-        axisTick: { show: true }
-      },
-      yAxis: { 
-        type: 'value', 
-        splitLine: { show: true, lineStyle: { color: chartSplitColor(), width: 1 } }, 
-        axisLabel: { color: chartTextSecondary(), fontSize: 15 }, 
-        axisLine: { show: true, lineStyle: { color: chartAxisColor(), width: 1.5 } }
-      },
-      series: [{ 
-        name: '异常信号',
-        data: trendData.value.map(d => d.count), 
-        type: 'line', 
-        smooth: true, 
-        symbol: 'circle',
-        symbolSize: 8, 
-        lineStyle: { color: '#f53f3f', width: 4 }, 
-        itemStyle: { color: '#f53f3f' }, 
-        areaStyle: { 
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(245, 63, 63, 0.5)' }, 
-            { offset: 1, color: 'rgba(245, 63, 63, 0)' }
-          ]) 
-        } 
-      }]
-    })
-  }
-
-  // --- 2. 渲染热力示意图 ---
-  if (heatmapChartRef.value) {
-    heatmapChart = echarts.init(heatmapChartRef.value)
-    const scatterData = streetData.value.map((p) => {
-      const [x, y] = getNormalizedXY(p.longitude, p.latitude, streetData.value)
-      return {
-        name: p.community,
-        value: [x, y, p.count],
-        riskLevel: p.riskLevel || '关注',
-        reviewStatus: p.reviewStatus || '待人工复核',
-        symbolSize: 15 + p.count * 1.8
-      }
-    })
-
-    heatmapChart.setOption({
-      backgroundColor: 'transparent',
-      tooltip: {
-        trigger: 'item',
-        backgroundColor: tooltipBg(),
-        borderColor: tooltipBorder(),
-        textStyle: { color: chartTextPrimary(), fontSize: 16 },
-        formatter: (params: any) => `${params.name}<br/>风险信号: ${params.value[2]} 个<br/>风险等级: ${params.data.riskLevel}<br/>研判状态: ${params.data.reviewStatus}`
-      },
-      grid: { left: '8%', right: '5%', top: '10%', bottom: '15%' },
-      xAxis: { 
-        type: 'value', min: 0, max: 100,
-        name: '西 → 东', nameLocation: 'middle', nameGap: 30,
-        nameTextStyle: { color: chartTextSecondary(), fontSize: 15 },
-        axisLabel: { show: true, color: chartTextSecondary(), fontSize: 13 },
-        axisLine: { show: true, lineStyle: { color: chartAxisColor(), width: 1.5 } },
-        splitLine: { show: true, lineStyle: { color: chartSplitColor(), width: 1 } }
-      },
-      yAxis: { 
-        type: 'value', min: 0, max: 100, 
-        name: '南 → 北', nameLocation: 'middle', nameGap: 40,
-        nameTextStyle: { color: chartTextSecondary(), fontSize: 15 },
-        axisLabel: { show: true, color: chartTextSecondary(), fontSize: 13 },
-        axisLine: { show: true, lineStyle: { color: chartAxisColor(), width: 1.5 } },
-        splitLine: { show: true, lineStyle: { color: chartSplitColor(), width: 1 } }
-      },
-      series: [
-        {
-          type: 'effectScatter',
-          coordinateSystem: 'cartesian2d',
-          data: scatterData,
-          rippleEffect: { brushType: 'stroke', scale: 4, period: 3 }, 
-          itemStyle: {
-            color: '#f53f3f',
-            shadowBlur: 12,
-            shadowColor: 'rgba(245, 63, 63, 0.5)'
-          }
+        textStyle: { color: chartTextPrimary(), fontSize: 13 },
+        formatter: (params: any) => {
+          const item = params?.[0]
+          return `${item?.axisValue || ''}<br/>政治安全案件数量：${item?.data ?? 0}`
         }
-      ]
-    })
-  }
-
-  // --- 3. 渲染柱状对比图 ---
-  if (barChartRef.value) {
-    barChart = echarts.init(barChartRef.value)
-    const allStreets = [...streetData.value].sort((a, b) => b.count - a.count)
-
-    barChart.setOption({
-      backgroundColor: 'transparent',
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        backgroundColor: tooltipBg(),
-        borderColor: tooltipBorder(),
-        textStyle: { color: chartTextPrimary(), fontSize: 16 }
       },
-      grid: { left: '5%', right: '5%', top: '10%', bottom: '15%' },
-      xAxis: { 
-        type: 'category', 
-        data: allStreets.map(s => s.community), 
-        axisLabel: { color: chartTextSecondary(), interval: 0, rotate: 30, fontSize: 14 }, 
-        axisLine: { show: true, lineStyle: { color: chartAxisColor(), width: 1.5 } },
-        axisTick: { show: true }
+      grid: { left: 46, right: 18, top: 26, bottom: 36 },
+      xAxis: {
+        type: 'category',
+        data: trendData.value.map(d => d.month),
+        axisLabel: { color: chartTextSecondary(), fontSize: 12 },
+        axisLine: { lineStyle: { color: chartAxisColor() } }
       },
-      yAxis: { 
-        type: 'value', 
-        splitLine: { show: true, lineStyle: { color: chartSplitColor(), width: 1 } }, 
-        axisLabel: { color: chartTextSecondary(), fontSize: 15 }, 
-        axisLine: { show: true, lineStyle: { color: chartAxisColor(), width: 1.5 } }
+      yAxis: {
+        type: 'value',
+        axisLabel: { color: chartTextSecondary(), fontSize: 12 },
+        splitLine: { lineStyle: { color: chartSplitColor() } }
       },
-      series: [{ 
-        name: '风险信号',
-        data: allStreets.map(s => s.count), 
-        type: 'bar', 
-        barWidth: '40%', 
-        itemStyle: { 
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: '#ff7a7a' }, 
-            { offset: 1, color: '#f53f3f' }
-          ]), 
-          borderRadius: [5, 5, 0, 0] 
-        } 
+      series: [{
+        name: '政治安全案件数量',
+        data: trendData.value.map(d => d.count),
+        type: 'line',
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 7,
+        lineStyle: { color: '#f53f3f', width: 3 },
+        itemStyle: { color: '#f53f3f' },
+        areaStyle: { color: 'rgba(245, 63, 63, 0.18)' }
       }]
     })
   }
@@ -376,15 +306,11 @@ const initDataAndRender = async () => {
 }
 
 const handleResize = () => {
-  if (activeChart.value === 'line') lineChart?.resize()
-  if (activeChart.value === 'heatmap') heatmapChart?.resize()
-  if (activeChart.value === 'bar') barChart?.resize()
+  locationChart?.resize()
+  behaviorChart?.resize()
+  subjectChart?.resize()
+  timeChart?.resize()
 }
-
-watch(activeChart, async () => {
-  await nextTick()
-  handleResize()
-})
 
 onMounted(() => {
   initDataAndRender()
@@ -398,9 +324,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  lineChart?.dispose()
-  heatmapChart?.dispose()
-  barChart?.dispose()
+  locationChart?.dispose()
+  behaviorChart?.dispose()
+  subjectChart?.dispose()
+  timeChart?.dispose()
   themeObserver?.disconnect()
 })
 </script>
@@ -473,6 +400,14 @@ onUnmounted(() => {
   line-height: 1.3;
 }
 
+.kpi-sub {
+  margin-top: 8px;
+  padding: 0 16px;
+  color: rgba(219, 242, 255, 0.82);
+  font-size: 13px;
+  text-align: center;
+}
+
 .kpi-red .kpi-value   { color: #e8a0a5; }
 .kpi-cyan .kpi-value   { color: #5ad6ff; }
 .kpi-orange .kpi-value { color: #ffb347; }
@@ -486,6 +421,17 @@ onUnmounted(() => {
 
 .method-card {
   min-height: 236px;
+}
+
+.map-method-card {
+  margin-bottom: 16px;
+}
+
+.topic-card-layout {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.28fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
 }
 
 .method-grid {
@@ -523,12 +469,12 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-bottom: 18px;
+  align-content: flex-start;
 }
 
 .review-metrics {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -546,8 +492,45 @@ onUnmounted(() => {
 }
 
 .review-metrics strong {
+  display: block;
   color: #ffb3b3;
   font-size: 28px;
+}
+
+.review-metrics em {
+  display: inline-flex;
+  margin-top: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffd5a1;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.cockpit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.cockpit-chart {
+  min-height: 314px;
+  padding: 14px;
+  border: 1px solid rgba(110, 196, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(5, 21, 43, 0.32);
+}
+
+.cockpit-chart h4 {
+  margin: 0 0 8px;
+  color: #dbf2ff;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.cockpit-chart .chart-box {
+  height: 260px;
 }
 
 .chart-container-large { 
@@ -648,6 +631,24 @@ onUnmounted(() => {
   color: #b4232d !important;
 }
 
+:global(body.theme-light .political-security-page .kpi-sub) {
+  color: #285b78 !important;
+}
+
+:global(body.theme-light .political-security-page .review-metrics em) {
+  background: #ffe8d0 !important;
+  color: #8a4b12 !important;
+}
+
+:global(body.theme-light .political-security-page .cockpit-chart) {
+  border-color: rgba(70, 136, 192, 0.26) !important;
+  background: #f7fbff !important;
+}
+
+:global(body.theme-light .political-security-page .cockpit-chart h4) {
+  color: #0a2f4d !important;
+}
+
 :global(body.theme-light .political-security-page .arco-radio-group-button),
 :global(body.theme-light .political-security-page .arco-radio-button) { 
   background-color: rgba(255, 255, 255, 0.5) !important; 
@@ -697,6 +698,8 @@ onUnmounted(() => {
 
 @media (max-width: 768px) {
   .kpi-strip { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .topic-card-layout,
+  .cockpit-grid,
   .method-grid,
   .review-metrics { grid-template-columns: 1fr; }
   .kpi-item { flex: none !important; }

@@ -327,7 +327,12 @@ export interface PoliticalOverview {
   procuratorateSuggestions: number;
   majorEventCoupling: string;
   pendingManualReview?: number;
+  pendingManualReviewRate?: number;
   highConcernRisks?: number;
+  highConcernRiskRate?: number;
+  highRiskCases?: number;
+  highRiskRate?: number;
+  yearOverYearRate?: number | null;
   fourDimensionMethod?: Array<{ name: string; description: string }>;
   priorityTopics?: string[];
 }

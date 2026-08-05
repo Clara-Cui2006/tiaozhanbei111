@@ -46,19 +46,26 @@
             </div>
             <div class="review-metrics">
               <div>
-                <span>人工复核案件总量</span>
-                <strong>{{ overview.pendingManualReview || 0 }}</strong>
-                <em>{{ formatRate(overview.pendingManualReviewRate) }}</em>
+                <div class="review-metric-copy">
+                  <span>人工复核案件总量</span>
+                  <strong>{{ overview.pendingManualReview || 0 }}</strong>
+                </div>
+                <div class="mini-ring" :style="ringStyle(overview.pendingManualReviewRate)">
+                  <i>{{ formatRate(overview.pendingManualReviewRate) }}</i>
+                </div>
               </div>
               <div>
-                <span>高关注风险案件总量</span>
-                <strong>{{ overview.highConcernRisks || 0 }}</strong>
-                <em>{{ formatRate(overview.highConcernRiskRate) }}</em>
+                <div class="review-metric-copy">
+                  <span>重点专题案件总量</span>
+                  <strong>{{ overview.highConcernRisks || 0 }}</strong>
+                </div>
+                <div class="mini-ring" :style="ringStyle(overview.highConcernRiskRate)">
+                  <i>{{ formatRate(overview.highConcernRiskRate) }}</i>
+                </div>
               </div>
-              <div>
-                <span>高风险案件总量</span>
-                <strong>{{ overview.highRiskCases || 0 }}</strong>
-                <em>{{ formatRate(overview.highRiskRate) }}</em>
+              <div class="review-metric-note">
+                <span>识别口径</span>
+                <p>结合案件分类标签、风险规则匹配和人工复核结果综合判断。</p>
               </div>
             </div>
           </div>
@@ -69,16 +76,6 @@
 
     <a-row :gutter="16" class="dashboard-row">
       <a-col :span="24">
-        <a-card :bordered="false" class="chart-card method-card map-method-card">
-          <template #title>政治安全四维研判</template>
-          <div class="method-grid">
-            <div v-for="item in overview.fourDimensionMethod || defaultFourDimensionMethod" :key="item.name" class="method-item">
-              <strong>{{ item.name }}</strong>
-              <span>{{ item.description }}</span>
-            </div>
-          </div>
-          <a-alert type="warning" class="method-alert">位于重点区域不必然属于政治安全案件，必须结合地点、行为、主体、时间趋势进行人工复核。</a-alert>
-        </a-card>
         <RiskMapPanel :height="660" :default-overlay-political="true" />
       </a-col>
     </a-row>
@@ -154,12 +151,6 @@ const overview = ref<PoliticalOverview>({
   procuratorateSuggestions: 0,
   majorEventCoupling: ''
 })
-const defaultFourDimensionMethod = [
-  { name: '地点维度', description: '发生地政治属性、敏感程度与核心区属性' },
-  { name: '行为内容', description: '言论、行为、诉求等内容是否涉及政治安全风险' },
-  { name: '涉及主体', description: '主体身份、组织属性、背景关系与关联网络' },
-  { name: '时间维度', description: '政治安全案件数量随时间变化的趋势' }
-]
 const defaultPriorityTopics = ['涉外风险']
 const priorityTopics = computed(() => (overview.value.priorityTopics?.length ? overview.value.priorityTopics : defaultPriorityTopics).filter((topic) => topic === '涉外风险'))
 const aiAssessing = ref(false)
@@ -209,6 +200,10 @@ const formatRate = (value?: number | null) => typeof value === 'number' ? `${(va
 const formatSignedRate = (value?: number | null) => {
   if (typeof value !== 'number') return '暂无'
   return `${value >= 0 ? '+' : ''}${(value * 100).toFixed(1)}%`
+}
+const ringStyle = (value?: number | null) => {
+  const rate = typeof value === 'number' ? Math.max(0, Math.min(1, value)) : 0
+  return { '--ring-value': `${rate * 100}%` } as Record<string, string>
 }
 
 const behaviorNames = ['涉密材料异常流转', '重点人员异常聚集', '涉外敏感接触', '网络政治安全线索', '重大活动周边异常']
@@ -479,9 +474,17 @@ onUnmounted(() => {
 }
 
 .review-metrics > div {
+  position: relative;
+  display: flex;
+  min-height: 112px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
   padding: 16px;
   border-radius: 8px;
-  background: rgba(245, 63, 63, 0.12);
+  border: 1px solid rgba(119, 190, 235, 0.22);
+  background: linear-gradient(135deg, rgba(27, 78, 120, 0.42), rgba(8, 30, 58, 0.72));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .review-metrics span {
@@ -493,19 +496,56 @@ onUnmounted(() => {
 
 .review-metrics strong {
   display: block;
-  color: #ffb3b3;
+  color: #d9f2ff;
   font-size: 28px;
 }
 
-.review-metrics em {
-  display: inline-flex;
-  margin-top: 8px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffd5a1;
-  font-size: 12px;
+.review-metric-copy {
+  min-width: 0;
+}
+
+.mini-ring {
+  --ring-value: 0%;
+  position: relative;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  border-radius: 50%;
+  background: conic-gradient(#69c7f3 var(--ring-value), rgba(120, 185, 225, 0.18) 0);
+  box-shadow: 0 8px 20px rgba(5, 28, 58, 0.24);
+}
+
+.mini-ring::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: #0b2747;
+}
+
+.mini-ring i {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #dff7ff;
+  font-size: 11px;
   font-style: normal;
+  font-weight: 700;
+}
+
+.review-metric-note {
+  align-items: flex-start !important;
+  justify-content: center !important;
+}
+
+.review-metric-note p {
+  margin: 0;
+  color: #c2e8fb;
+  font-size: 13px;
+  line-height: 1.65;
 }
 
 .cockpit-grid {
@@ -624,20 +664,28 @@ onUnmounted(() => {
 }
 
 :global(body.theme-light .political-security-page .review-metrics > div) {
-  background: #fff3f3 !important;
+  border-color: rgba(70, 136, 192, 0.24) !important;
+  background: linear-gradient(135deg, #f5fbff, #e7f3fd) !important;
 }
 
 :global(body.theme-light .political-security-page .review-metrics strong) {
-  color: #b4232d !important;
+  color: #0f4f7b !important;
 }
 
 :global(body.theme-light .political-security-page .kpi-sub) {
   color: #285b78 !important;
 }
 
-:global(body.theme-light .political-security-page .review-metrics em) {
-  background: #ffe8d0 !important;
-  color: #8a4b12 !important;
+:global(body.theme-light .political-security-page .mini-ring::after) {
+  background: #f5fbff !important;
+}
+
+:global(body.theme-light .political-security-page .mini-ring i) {
+  color: #0f4f7b !important;
+}
+
+:global(body.theme-light .political-security-page .review-metric-note p) {
+  color: #285b78 !important;
 }
 
 :global(body.theme-light .political-security-page .cockpit-chart) {

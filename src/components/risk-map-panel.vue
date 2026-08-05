@@ -13,71 +13,38 @@
     </header>
 
     <div class="xrm-content">
-      <section class="xrm-filter-section xrm-section-shell">
+      <section v-if="isPoliticalMode" class="xrm-method-section xrm-section-shell">
         <div class="xrm-section-heading">
           <div>
-            <span class="xrm-section-kicker">筛选条件</span>
-            <h3>选择统计口径</h3>
+            <span class="xrm-section-kicker">四维研判</span>
+            <h3>政治安全四维研判</h3>
           </div>
-          <span class="xrm-section-helper">{{ isPoliticalMode ? '点击四维筛选后，仅加载政治安全相关案件' : '筛选变化后，地图和街道详情同步更新' }}</span>
+          <span class="xrm-section-helper">围绕哪里发生、发生什么、涉及谁、什么时候变化进行综合分析</span>
         </div>
 
-        <div v-if="isPoliticalMode" class="xrm-filter-grid political">
-          <div class="xrm-filter-item">
-            <span class="xrm-filter-label">地点维度</span>
-            <div class="xrm-select-wrap">
-              <select v-model="filters.locationDimension" class="xrm-filter-select" aria-label="地点维度">
-                <option value="all">全部地点</option>
-                <option v-for="street in expectedStreetOptions" :key="street" :value="street">{{ street }}</option>
-              </select>
-              <span class="xrm-select-arrow" aria-hidden="true">⌄</span>
-            </div>
+        <div class="xrm-method-grid">
+          <div v-for="item in politicalMethodCards" :key="item.name" class="xrm-method-card">
+            <strong>{{ item.name }}</strong>
+            <span>{{ item.description }}</span>
           </div>
-          <div class="xrm-filter-item">
-            <span class="xrm-filter-label">行为内容</span>
+        </div>
+
+        <div class="xrm-political-filter-bar" aria-label="政治安全专题和复核状态筛选">
+          <div class="xrm-filter-item compact">
+            <span class="xrm-filter-label">重点专题</span>
             <div class="xrm-select-wrap">
-              <select v-model="filters.behaviorContent" class="xrm-filter-select" aria-label="行为内容">
-                <option value="all">全部行为</option>
-                <option value="涉密材料异常流转">涉密材料异常流转</option>
-                <option value="重点人员异常聚集">重点人员异常聚集</option>
-                <option value="涉外敏感接触">涉外敏感接触</option>
-                <option value="网络政治安全线索">网络政治安全线索</option>
-                <option value="重大活动周边异常">重大活动周边异常</option>
-              </select>
-              <span class="xrm-select-arrow" aria-hidden="true">⌄</span>
-            </div>
-          </div>
-          <div class="xrm-filter-item">
-            <span class="xrm-filter-label">涉及主体</span>
-            <div class="xrm-select-wrap">
-              <select v-model="filters.subjectType" class="xrm-filter-select" aria-label="涉及主体">
-                <option value="all">全部主体</option>
-                <option value="重点关注人员">重点关注人员</option>
-                <option value="涉外关联人员">涉外关联人员</option>
-                <option value="重点单位从业人员">重点单位从业人员</option>
-                <option value="网络账号主体">网络账号主体</option>
-                <option value="群体性诉求参与人员">群体性诉求参与人员</option>
-              </select>
-              <span class="xrm-select-arrow" aria-hidden="true">⌄</span>
-            </div>
-          </div>
-          <div class="xrm-filter-item">
-            <span class="xrm-filter-label">时间维度</span>
-            <div class="xrm-select-wrap">
-              <select v-model="filters.period" class="xrm-filter-select" aria-label="时间维度">
-                <option value="30d">近30天</option>
-                <option value="quarter">本季度</option>
-                <option value="year">本年度</option>
-              </select>
-              <span class="xrm-select-arrow" aria-hidden="true">⌄</span>
-            </div>
-          </div>
-          <div class="xrm-filter-item">
-            <span class="xrm-filter-label">重点专题与复核状态</span>
-            <div class="xrm-select-wrap">
-              <select v-model="filters.reviewStatusTopic" class="xrm-filter-select" aria-label="重点专题与复核状态">
-                <option value="all">全部专题/状态</option>
+              <select v-model="politicalTopicFilter" class="xrm-filter-select" aria-label="重点专题">
+                <option value="all">全部专题</option>
                 <option value="涉外风险">涉外风险</option>
+              </select>
+              <span class="xrm-select-arrow" aria-hidden="true">⌄</span>
+            </div>
+          </div>
+          <div class="xrm-filter-item compact">
+            <span class="xrm-filter-label">复核状态</span>
+            <div class="xrm-select-wrap">
+              <select v-model="politicalReviewFilter" class="xrm-filter-select" aria-label="复核状态">
+                <option value="all">全部状态</option>
                 <option value="待人工复核">待人工复核</option>
                 <option value="人工研判">人工研判</option>
                 <option value="研判确认">研判确认</option>
@@ -88,8 +55,18 @@
             </div>
           </div>
         </div>
+      </section>
 
-        <div v-else class="xrm-filter-grid">
+      <section v-else class="xrm-filter-section xrm-section-shell">
+        <div class="xrm-section-heading">
+          <div>
+            <span class="xrm-section-kicker">筛选条件</span>
+            <h3>选择统计口径</h3>
+          </div>
+          <span class="xrm-section-helper">{{ isPoliticalMode ? '点击四维筛选后，仅加载政治安全相关案件' : '筛选变化后，地图和街道详情同步更新' }}</span>
+        </div>
+
+        <div class="xrm-filter-grid">
           <div class="xrm-filter-item">
             <span class="xrm-filter-label">统计周期</span>
             <div class="xrm-select-wrap">
@@ -132,7 +109,7 @@
         </div>
       </section>
 
-      <section class="xrm-summary-section">
+      <section v-if="!isPoliticalMode" class="xrm-summary-section">
         <div class="xrm-section-heading compact">
           <div>
             <span class="xrm-section-kicker">全区汇总</span>
@@ -318,9 +295,8 @@
               <div class="xrm-detail-meta">
                 <span class="xrm-detail-filter-summary">
                   <span>统计周期：{{ currentPeriodLabel }}</span>
-                <span v-if="isPoliticalMode">地点维度：{{ filters.locationDimension === 'all' ? '全部地点' : filters.locationDimension }}</span>
-                <span v-if="isPoliticalMode">行为内容：{{ filters.behaviorContent === 'all' ? '全部行为' : filters.behaviorContent }}</span>
-                <span v-if="isPoliticalMode">涉及主体：{{ filters.subjectType === 'all' ? '全部主体' : filters.subjectType }}</span>
+                <span v-if="isPoliticalMode">重点专题：{{ politicalTopicFilter === 'all' ? '全部专题' : politicalTopicFilter }}</span>
+                <span v-if="isPoliticalMode">复核状态：{{ politicalReviewFilter === 'all' ? '全部状态' : politicalReviewFilter }}</span>
                 <span v-if="!isPoliticalMode">案件类型：{{ filters.caseType === 'all' ? '全部类型' : filters.caseType }}</span>
                 <span v-if="!isPoliticalMode">治理主题：{{ filters.governanceTheme === 'all' ? '全部主题' : filters.governanceTheme }}</span>
               </span>
@@ -542,9 +518,8 @@
             </div>
             <div class="xrm-detail-filter-summary xrm-empty-filter-summary">
               <span>统计周期：{{ currentPeriodLabel }}</span>
-              <span v-if="isPoliticalMode">地点维度：{{ filters.locationDimension === 'all' ? '全部地点' : filters.locationDimension }}</span>
-              <span v-if="isPoliticalMode">行为内容：{{ filters.behaviorContent === 'all' ? '全部行为' : filters.behaviorContent }}</span>
-              <span v-if="isPoliticalMode">涉及主体：{{ filters.subjectType === 'all' ? '全部主体' : filters.subjectType }}</span>
+              <span v-if="isPoliticalMode">重点专题：{{ politicalTopicFilter === 'all' ? '全部专题' : politicalTopicFilter }}</span>
+              <span v-if="isPoliticalMode">复核状态：{{ politicalReviewFilter === 'all' ? '全部状态' : politicalReviewFilter }}</span>
               <span v-if="!isPoliticalMode">案件类型：{{ filters.caseType === 'all' ? '全部类型' : filters.caseType }}</span>
               <span v-if="!isPoliticalMode">治理主题：{{ filters.governanceTheme === 'all' ? '全部主题' : filters.governanceTheme }}</span>
             </div>
@@ -572,6 +547,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import * as echarts from 'echarts'
+import 'echarts-gl'
 import type {
   StreetMapDetail,
   StreetMapFilters,
@@ -628,7 +604,7 @@ const EXPECTED_STREETS = [
   '陶然亭街道', '广安门内街道', '牛街街道', '白纸坊街道', '广安门外街道'
 ]
 const EXPECTED_STREET_SET = new Set(EXPECTED_STREETS)
-const QUANTITY_COLORS = ['#1D4ED8', '#0284C7', '#059669', '#F59E0B', '#EA580C']
+const QUANTITY_COLORS = ['#DCEEFF', '#BFDDF5', '#96C7E8', '#68ADD9', '#3F93C7']
 
 const STREET_COORDINATES: Record<string, [number, number]> = {
   西长安街街道: [116.375, 39.912],
@@ -710,6 +686,8 @@ const detailLoading = ref(false)
 const detailError = ref(false)
 const activeDetailTab = ref<'metrics' | 'charts'>('metrics')
 const summaryExplanation = ref<StreetMapSummaryKey | ''>('')
+const politicalTopicFilter = ref('all')
+const politicalReviewFilter = ref('all')
 const mapDisplayHeight = computed(() => Math.max(460, Math.min(620, Number(props.height) || 520)))
 const detailPanelHeight = ref(0)
 const isLightTheme = ref(false)
@@ -740,11 +718,22 @@ const detectLightTheme = () => {
 }
 
 const isPoliticalMode = computed(() => props.defaultOverlayPolitical)
-const expectedStreetOptions = EXPECTED_STREETS
+const politicalMethodCards = [
+  { name: '地点因素', description: '研判案件发生区域、核心区属性和空间聚集情况' },
+  { name: '行为内容', description: '识别涉密流转、异常聚集、敏感接触等风险行为' },
+  { name: '涉及主体', description: '分析重点关注人员、涉外关联人员等主体结构' },
+  { name: '时间因素', description: '观察案件数量在月份、季度和重大活动前后的变化' }
+]
 
 watch(isPoliticalMode, (enabled) => {
   filters.politicalOnly = enabled
 }, { immediate: true })
+
+watch([politicalTopicFilter, politicalReviewFilter], () => {
+  filters.reviewStatusTopic = politicalReviewFilter.value !== 'all'
+    ? politicalReviewFilter.value
+    : politicalTopicFilter.value
+})
 
 const syncTheme = () => {
   isLightTheme.value = detectLightTheme()
@@ -756,17 +745,17 @@ const getChartTheme = () => isLightTheme.value
       tooltipBorder: '#4B8DB8',
       tooltipText: '#123B59',
       tooltipHint: '#3C789A',
-      mapArea: '#B8D8EE',
-      mapBorder: '#246B91',
-      mapShadow: 'rgba(44, 111, 151, 0.24)',
+      mapArea: '#EAF4FF',
+      mapBorder: '#6DA4D8',
+      mapShadow: 'rgba(44, 111, 151, 0.22)',
       labelText: '#0B3552',
       labelBg: 'rgba(255, 255, 255, 0.90)',
       labelBorder: 'rgba(35, 103, 143, 0.58)',
       labelStroke: 'rgba(255, 255, 255, 0.96)',
       selectedLabelText: '#FFFFFF',
-      selectedLabelBg: '#D95724',
-      selectedLabelBorder: '#8E2F0D',
-      selectedLabelStroke: 'rgba(79, 24, 4, 0.72)',
+      selectedLabelBg: '#2F7FB9',
+      selectedLabelBorder: '#D7EDFF',
+      selectedLabelStroke: 'rgba(13, 52, 88, 0.72)',
       pointBorder: '#FFFFFF'
     }
   : {
@@ -774,17 +763,17 @@ const getChartTheme = () => isLightTheme.value
       tooltipBorder: 'rgba(113, 216, 240, 0.7)',
       tooltipText: '#EAFAFF',
       tooltipHint: '#8FC6DC',
-      mapArea: '#123A66',
-      mapBorder: '#B9F1FF',
-      mapShadow: 'rgba(45, 161, 204, 0.2)',
+      mapArea: '#1B4266',
+      mapBorder: '#9BD9F4',
+      mapShadow: 'rgba(45, 161, 204, 0.22)',
       labelText: '#DFF8FF',
       labelBg: 'rgba(3, 18, 36, 0.82)',
       labelBorder: 'rgba(193, 241, 255, 0.52)',
       labelStroke: 'rgba(2, 12, 27, 0.98)',
       selectedLabelText: '#FFFFFF',
-      selectedLabelBg: '#E7652C',
-      selectedLabelBorder: '#FFD1B8',
-      selectedLabelStroke: 'rgba(55, 16, 2, 0.92)',
+      selectedLabelBg: '#2F8EC5',
+      selectedLabelBorder: '#DFF6FF',
+      selectedLabelStroke: 'rgba(4, 30, 55, 0.92)',
       pointBorder: '#9FE8F7'
     }
 
@@ -1131,23 +1120,30 @@ const renderMap = async () => {
     label: item.label
   }))
   const chartTheme = getChartTheme()
+  const map3DDistance = Math.max(62, 118 / mapZoom.value)
   const streetData = overview.value.streets.map((item) => {
     const quantityColor = getQuantityColor(item.caseCount, maxCaseCount)
+    const selected = item.streetName === activeStreetName.value
     return {
       name: item.streetName,
       value: item.caseCount,
-      selected: item.streetName === activeStreetName.value,
+      selected,
+      height: selected ? 9 : 2.4,
+      regionHeight: selected ? 9 : 2.4,
       itemStyle: {
+        color: quantityColor,
         areaColor: quantityColor,
-        opacity: hasSelection && item.streetName !== activeStreetName.value ? 0.34 : 1
+        opacity: hasSelection && !selected ? 0.44 : 0.98,
+        borderColor: selected ? '#E6F7FF' : chartTheme.mapBorder,
+        borderWidth: selected ? 2.2 : 1.1
       },
       emphasis: {
         label: { backgroundColor: quantityColor },
-        itemStyle: { areaColor: quantityColor }
+        itemStyle: { color: quantityColor, areaColor: quantityColor }
       },
       select: {
         label: { backgroundColor: quantityColor },
-        itemStyle: { areaColor: quantityColor }
+        itemStyle: { color: quantityColor, areaColor: quantityColor }
       }
     }
   })
@@ -1171,20 +1167,45 @@ const renderMap = async () => {
       series: [
         {
           id: 'xrm-street-map-series',
-          type: 'map',
+          type: 'map3D',
           map: STREET_MAP_NAME,
           nameProperty: 'name',
-          roam: true,
-          scaleLimit: { min: 0.9, max: 5 },
-          zoom: mapZoom.value,
+          shading: 'lambert',
+          regionHeight: hasSelection ? 2.2 : 1.8,
+          groundPlane: { show: false },
+          boxHeight: 16,
+          viewControl: {
+            projection: 'perspective',
+            autoRotate: false,
+            alpha: 46,
+            beta: 0,
+            distance: map3DDistance,
+            center: [0, 0, 0],
+            panMouseButton: 'left',
+            rotateMouseButton: 'right'
+          },
+          light: {
+            main: {
+              intensity: isLightTheme.value ? 1.28 : 1.05,
+              shadow: true,
+              shadowQuality: 'medium',
+              alpha: 46,
+              beta: 28
+            },
+            ambient: { intensity: isLightTheme.value ? 0.58 : 0.42 }
+          },
           selectedMode: 'single',
-          layoutCenter: ['52%', '50%'],
-          layoutSize: '96%',
+          left: 0,
+          right: 0,
+          top: 8,
+          bottom: 0,
           data: streetData,
           itemStyle: {
+            color: QUANTITY_COLORS[0],
             areaColor: QUANTITY_COLORS[0],
             borderColor: chartTheme.mapBorder,
-            borderWidth: 1.8
+            borderWidth: 1.1,
+            opacity: 0.96
           },
           emphasis: {
             label: {
@@ -1364,7 +1385,12 @@ const applyMapZoom = (nextZoom: number) => {
   if (!chart) return
   mapZoom.value = Math.max(0.9, Math.min(5, nextZoom))
   if (mapBoundaryMode.value === 'street') {
-    chart.setOption({ series: [{ id: 'xrm-street-map-series', zoom: mapZoom.value }] })
+    chart.setOption({
+      series: [{
+        id: 'xrm-street-map-series',
+        viewControl: { distance: Math.max(62, 118 / mapZoom.value) }
+      }]
+    })
   } else {
     chart.setOption({ geo: { id: 'xrm-district-geo', zoom: mapZoom.value } })
   }
@@ -1596,6 +1622,52 @@ onUnmounted(() => {
 .xrm-filter-section {
   padding: 16px;
   margin-bottom: 18px;
+}
+
+.xrm-method-section {
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.xrm-method-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.xrm-method-card {
+  min-height: 104px;
+  padding: 15px;
+  border: 1px solid rgba(111, 188, 232, 0.24);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(28, 78, 118, 0.36), rgba(7, 30, 58, 0.68));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.xrm-method-card strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-1);
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.xrm-method-card span {
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.xrm-political-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 320px));
+  gap: 14px;
+  align-items: end;
+  margin-top: 16px;
+  padding: 13px;
+  border: 1px solid rgba(111, 188, 232, 0.18);
+  border-radius: 8px;
+  background: rgba(5, 24, 48, 0.28);
 }
 
 .xrm-section-heading,
@@ -1921,13 +1993,14 @@ onUnmounted(() => {
   border: 1px solid rgba(95, 193, 255, 0.32);
   border-radius: 10px;
   background:
-    radial-gradient(circle at 18% 18%, rgba(80, 181, 255, 0.15), transparent 33%),
-    linear-gradient(180deg, #0d2948, #07182e 88%);
-  box-shadow: inset 0 0 38px rgba(53, 156, 219, 0.08);
+    linear-gradient(145deg, rgba(20, 57, 92, 0.96), rgba(7, 24, 45, 0.98) 72%),
+    #07182e;
+  box-shadow: inset 0 0 42px rgba(92, 165, 217, 0.09), 0 16px 36px rgba(0, 17, 38, 0.2);
 }
 
 .xrm-map-box {
   width: 100%;
+  filter: drop-shadow(0 20px 22px rgba(0, 14, 36, 0.22));
 }
 
 .xrm-map-state {
@@ -2389,14 +2462,16 @@ onUnmounted(() => {
 .xrm-empty-steps {
   display: grid;
   width: 100%;
-  max-width: 480px;
-  grid-template-columns: repeat(3, 1fr);
+  max-width: 420px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  justify-content: center;
 }
 
 .xrm-empty-steps span {
   display: flex;
-  min-height: 96px;
+  min-height: 104px;
+  aspect-ratio: 1.28 / 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -2860,6 +2935,20 @@ onUnmounted(() => {
   box-shadow: 0 5px 18px rgba(39, 100, 139, 0.06);
 }
 
+:global(body.theme-light) .xrm-method-section {
+  box-shadow: 0 5px 18px rgba(39, 100, 139, 0.06);
+}
+
+:global(body.theme-light) .xrm-method-card {
+  border-color: rgba(70, 136, 192, 0.24);
+  background: linear-gradient(135deg, #f5fbff, #e7f3fd);
+}
+
+:global(body.theme-light) .xrm-political-filter-bar {
+  border-color: rgba(70, 136, 192, 0.22);
+  background: #f5faff;
+}
+
 :global(body.theme-light) .xrm-detail-header {
   box-shadow: 0 8px 18px rgba(46, 97, 129, 0.08);
 }
@@ -2953,9 +3042,8 @@ onUnmounted(() => {
 
 .xrm-card .xrm-map-stage {
   background:
-    radial-gradient(circle at 20% 18%, rgba(39, 139, 255, 0.24), transparent 34%),
-    radial-gradient(circle at 82% 78%, rgba(0, 201, 181, 0.12), transparent 30%),
-    linear-gradient(180deg, #0a2546 0%, #06162d 100%) !important;
+    linear-gradient(145deg, rgba(21, 61, 96, 0.96), rgba(7, 24, 45, 0.98) 72%),
+    #07182e !important;
 }
 
 .xrm-card .xrm-map-legend {
@@ -3037,6 +3125,7 @@ onUnmounted(() => {
 }
 
 .xrm-card.xrm-theme-light .xrm-filter-section,
+.xrm-card.xrm-theme-light .xrm-method-section,
 .xrm-card.xrm-theme-light .xrm-map-panel,
 .xrm-card.xrm-theme-light .xrm-detail-panel,
 .xrm-card.xrm-theme-light .xrm-summary-card {
@@ -3069,10 +3158,8 @@ onUnmounted(() => {
 
 .xrm-card.xrm-theme-light .xrm-map-stage {
   background:
-    radial-gradient(circle at 18% 18%, rgba(67, 151, 205, 0.20), transparent 35%),
-    radial-gradient(circle at 82% 78%, rgba(30, 166, 156, 0.12), transparent 32%),
-    linear-gradient(180deg, #dceefa 0%, #c8e2f3 100%) !important;
-  box-shadow: inset 0 0 34px rgba(54, 126, 173, 0.10);
+    linear-gradient(145deg, #edf7ff 0%, #d8ebfa 68%, #c8e0f3 100%) !important;
+  box-shadow: inset 0 0 34px rgba(54, 126, 173, 0.10), 0 16px 34px rgba(54, 126, 173, 0.12);
 }
 
 .xrm-card.xrm-theme-light .xrm-map-ctrl-btn {
@@ -3355,6 +3442,10 @@ onUnmounted(() => {
 }
 
 @media (max-width: 1360px) {
+  .xrm-method-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .xrm-layout {
     grid-template-columns: minmax(0, 1.1fr) minmax(460px, 1fr);
   }
@@ -3365,6 +3456,10 @@ onUnmounted(() => {
 }
 
 @media (max-width: 1080px) {
+  .xrm-political-filter-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .xrm-filter-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3403,6 +3498,8 @@ onUnmounted(() => {
   }
 
   .xrm-filter-grid,
+  .xrm-method-grid,
+  .xrm-political-filter-bar,
   .xrm-summary-grid {
     grid-template-columns: 1fr;
   }

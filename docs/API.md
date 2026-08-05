@@ -77,7 +77,27 @@ Mock仅允许在开发构建中通过 `VITE_USE_MOCK=true` 显式开启；生产
 | `fetchLegalPlanDetail` | GET | `/legal-recommend/plans/:id` | 方案详情 |
 | `adoptLegalRecommendation` | POST | `/legal-recommend/adopt` | Body：`{ id }` 采纳推荐 |
 | `fetchLegalRecommendationsV2` | GET | `/legal-recommend/v2/recommendations` | 普法方案卡片（新版） |
+| `createLegalRecommendation` | POST | `/legal-recommend/v2/recommendations` | 新增材料草稿，状态为待人工审核 |
+| `updateLegalRecommendation` | PUT | `/legal-recommend/v2/recommendations/:id` | 在线编辑后保存，状态回到待人工审核 |
+| `submitLegalRecommendationReview` | POST | `/legal-recommend/v2/recommendations/:id/submit-review` | 提交人工审核，写入审计 |
 | `fetchLegalPushStats` | GET | `/legal-recommend/push-stats` | 投放与覆盖统计 |
+
+### 西城区街道风险地图
+
+| 前端函数 | 方法 | 路径 | 说明 |
+|----------|------|------|------|
+| `fetchXichengStreetMapOverview` | GET | `/dashboard/street-map/overview` | 返回全区总量、已归属街道、待确认、跨街道、不纳入街道统计四类口径 |
+| `fetchXichengStreetMapDetail` | GET | `/dashboard/street-map/detail` | 返回街道详情：法定罪名/案由、治理主题、重点人群、重点行业、内部移送线索 |
+
+筛选参数：`period`、`caseType`、`governanceTheme`。其中 `caseType` 对应法定罪名/案由，`governanceTheme` 对应治理主题标签。
+
+### 政治安全专题
+
+| 前端函数 | 方法 | 路径 | 说明 |
+|----------|------|------|------|
+| `fetchPoliticalOverview` | GET | `/political/overview` | 政治安全总览、四维研判说明、待人工复核和重点专题 |
+| `fetchPoliticalMonthlyTrend` | GET | `/political/monthly-trend` | 政治安全信号月度趋势 |
+| `fetchPoliticalStreetStats` | GET | `/political/street-stats` | 街道级政治安全信号、风险等级、研判状态 |
 
 ### 效果评估统计
 

@@ -135,6 +135,21 @@
             <strong class="xrm-summary-value">{{ overview?.summary.crossStreetCases ?? 0 }}</strong>
             <small>未重复计入关联街道</small>
           </div>
+          <div
+            class="xrm-summary-card excluded"
+            :class="{ active: summaryExplanation === 'notInStreet' }"
+            role="button"
+            tabindex="0"
+            @click="showSummaryExplanation('notInStreet')"
+            @keydown.enter="showSummaryExplanation('notInStreet')"
+          >
+            <div class="xrm-summary-card-top">
+              <span class="xrm-summary-symbol">外</span>
+              <span class="xrm-summary-label">不纳入街道统计</span>
+            </div>
+            <strong class="xrm-summary-value">{{ overview?.summary.notInStreetCases ?? 0 }}</strong>
+            <small>辖区外或无治理关联</small>
+          </div>
         </div>
 
         <transition name="fade-slide">
@@ -647,10 +662,11 @@ const selectedStreetStat = computed(() => {
 const summaryExplanationText = computed(() => {
   if (!summaryExplanation.value) return ''
   const texts: Record<StreetMapSummaryKey, string> = {
-    total: '全区总量由各街道已确认案件、待确认案件和跨街道案件共同构成。',
+    total: '全区总量由已归属街道、待确认、跨街道和不纳入街道统计四类案件共同构成。',
     confirmed: '已归属街道案件已明确归入唯一街道，并计入对应街道统计。',
     pending: '待确认案件未计入具体街道统计。',
-    crossStreet: '跨街道案件未重复计入各关联街道。'
+    crossStreet: '跨街道案件未重复计入各关联街道。',
+    notInStreet: '与西城无地域关联或不形成西城治理关联的数据保留在全区口径中，但不进入街道地图。'
   }
   return texts[summaryExplanation.value]
 })
@@ -1454,7 +1470,7 @@ onUnmounted(() => {
 
 .xrm-summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -1517,6 +1533,11 @@ onUnmounted(() => {
 .xrm-summary-card.cross {
   --accent: #a78bfa;
   --accent-soft: rgba(167, 139, 250, 0.14);
+}
+
+.xrm-summary-card.excluded {
+  --accent: #94a3b8;
+  --accent-soft: rgba(148, 163, 184, 0.14);
 }
 
 .xrm-summary-card-top {

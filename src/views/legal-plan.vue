@@ -9,6 +9,7 @@
       <template #extra>
         <a-tag color="red" v-if="plan?.riskContext?.riskLevel === '极高'">⚠️ 风险等级：极高</a-tag>
         <a-tag color="arcoblue" v-else>风险等级：{{ plan?.riskContext?.riskLevel || '平稳' }}</a-tag>
+        <a-tag color="orange">{{ plan?.reviewStatus || '待人工审核' }}</a-tag>
       </template>
     </a-page-header>
 
@@ -40,9 +41,11 @@
               <div class="action-btns">
                 <template v-if="!isEditingContent">
                   <a-button size="mini" type="outline" @click="startEditContent">修改内容</a-button>
+                  <a-button size="mini" type="outline" @click="exportWord">导出 Word</a-button>
+                  <a-button size="mini" type="primary" status="warning" :loading="submittingReview" @click="submitReview">提交审核</a-button>
                 </template>
                 <template v-else>
-                  <a-button size="mini" type="primary" status="success" @click="saveContent">保存更改</a-button>
+                  <a-button size="mini" type="primary" status="success" :loading="savingContent" @click="saveContent">保存更改</a-button>
                   <a-button size="mini" @click="isEditingContent = false">取消</a-button>
                 </template>
               </div>
@@ -167,7 +170,7 @@ import { onMounted, ref, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { useRoute, useRouter } from 'vue-router'
 import BackHome from '../components/back-home.vue'
-import { fetchLegalPlanDetail } from '../api/platform'
+import { fetchLegalPlanDetail, submitLegalRecommendationReview, updateLegalRecommendation } from '../api/platform'
 import type { LegalPlan } from '../types/platform'
 import { chatWithLLM } from '../services/llm'
 import { USER_PROMPT_TEMPLATES } from '../services/prompts'
@@ -183,6 +186,8 @@ const loadError = ref(false)
 // ---------------- 方案内容编辑态 ----------------
 const isEditingContent = ref(false)
 const editedContent = ref('')
+const savingContent = ref(false)
+const submittingReview = ref(false)
 
 const renderedContent = computed(() => {
   if (!plan.value?.content) return '暂无方案内容'
@@ -194,12 +199,52 @@ const startEditContent = () => {
   isEditingContent.value = true
 }
 
-const saveContent = () => {
-  if (plan.value) {
-    plan.value.content = editedContent.value
+const saveContent = async () => {
+  if (!plan.value) return
+  savingContent.value = true
+  try {
+    const updated = await updateLegalRecommendation(plan.value.id, {
+      title: plan.value.title,
+      community: plan.value.applicableGroup || '',
+      group: plan.value.applicableGroup || '',
+      scene: plan.value.triggerScene || '',
+      content: editedContent.value
+    })
+    plan.value = { ...plan.value, ...updated, content: editedContent.value, reviewStatus: updated.reviewStatus || '待人工审核' }
+    isEditingContent.value = false
+    Message.success('已保存为待人工审核稿')
+  } catch (e) {
+    Message.error('保存失败，请检查权限或稍后重试')
+  } finally {
+    savingContent.value = false
   }
-  isEditingContent.value = false
-  Message.success('方案内容已修改生效')
+}
+
+const exportWord = () => {
+  if (!plan.value) return
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${plan.value.title}</title></head><body><h1>${plan.value.title}</h1>${renderedContent.value}</body></html>`
+  const blob = new Blob([html], { type: 'application/msword;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${plan.value.title || '检察业务参考'}.doc`
+  link.click()
+  URL.revokeObjectURL(url)
+  Message.success('已导出 Word 草稿，正式使用前请人工审核')
+}
+
+const submitReview = async () => {
+  if (!plan.value) return
+  submittingReview.value = true
+  try {
+    const updated = await submitLegalRecommendationReview(plan.value.id)
+    plan.value = { ...plan.value, ...updated, reviewStatus: updated.reviewStatus || '已提交审核' }
+    Message.success('已提交审核，等待人工确认')
+  } catch (e) {
+    Message.error('提交审核失败，请检查权限或稍后重试')
+  } finally {
+    submittingReview.value = false
+  }
 }
 
 // ---------------- AI 建议编辑态 ----------------

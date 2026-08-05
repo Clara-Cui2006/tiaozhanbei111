@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS cases (
   department TEXT NOT NULL,
   category TEXT NOT NULL,
   crime TEXT,
+  legal_cause TEXT,
+  governance_themes TEXT NOT NULL DEFAULT '[]',
   accepted_date TEXT,
   closed_date TEXT,
   status TEXT,
@@ -61,12 +63,25 @@ CREATE TABLE IF NOT EXISTS cases (
   address TEXT,
   keywords TEXT,
   summary TEXT,
+  key_groups TEXT,
+  key_industries TEXT,
+  internal_transfer_status TEXT NOT NULL DEFAULT '未形成线索',
+  prosecutorial_track TEXT,
+  political_topic TEXT,
+  political_location_factor TEXT,
+  political_behavior_content TEXT,
+  political_subject TEXT,
+  political_spread_impact TEXT,
+  political_review_status TEXT NOT NULL DEFAULT '不属于政治安全',
+  political_risk_level TEXT,
   source_batch_id INTEGER,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_cases_department ON cases(department);
 CREATE INDEX IF NOT EXISTS idx_cases_street ON cases(street_status, street_name);
+CREATE INDEX IF NOT EXISTS idx_cases_internal_transfer ON cases(internal_transfer_status);
+CREATE INDEX IF NOT EXISTS idx_cases_political ON cases(political_review_status, political_risk_level);
 CREATE TABLE IF NOT EXISTS import_batches (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   filename TEXT NOT NULL,
@@ -140,12 +155,14 @@ CREATE TABLE IF NOT EXISTS legal_plans (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_legal_plans_status ON legal_plans(status);
 """
 
 
 def init_database() -> None:
     with connect() as db:
         db.executescript(SCHEMA)
+        _migrate_cases(db)
         count = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         if count == 0 and settings.bootstrap_password:
             db.execute(
@@ -153,6 +170,28 @@ def init_database() -> None:
                 (settings.bootstrap_username, "初始系统管理员", hash_password(settings.bootstrap_password), "system_admin", None,
                  json.dumps(["user:manage", "system:manage", "audit:read"], ensure_ascii=False), utc_now()),
             )
+
+
+def _migrate_cases(db: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in db.execute("PRAGMA table_info(cases)").fetchall()}
+    additions = {
+        "legal_cause": "TEXT",
+        "governance_themes": "TEXT NOT NULL DEFAULT '[]'",
+        "key_groups": "TEXT",
+        "key_industries": "TEXT",
+        "internal_transfer_status": "TEXT NOT NULL DEFAULT '未形成线索'",
+        "prosecutorial_track": "TEXT",
+        "political_topic": "TEXT",
+        "political_location_factor": "TEXT",
+        "political_behavior_content": "TEXT",
+        "political_subject": "TEXT",
+        "political_spread_impact": "TEXT",
+        "political_review_status": "TEXT NOT NULL DEFAULT '不属于政治安全'",
+        "political_risk_level": "TEXT",
+    }
+    for name, definition in additions.items():
+        if name not in columns:
+            db.execute(f"ALTER TABLE cases ADD COLUMN {name} {definition}")
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:

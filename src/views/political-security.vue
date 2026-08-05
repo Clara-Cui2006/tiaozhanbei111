@@ -36,6 +36,33 @@
     </div>
 
     <a-row :gutter="16" class="dashboard-row">
+      <a-col :span="14">
+        <a-card :bordered="false" class="chart-card method-card">
+          <template #title>政治安全四维研判</template>
+          <div class="method-grid">
+            <div v-for="item in overview.fourDimensionMethod || defaultFourDimensionMethod" :key="item.name" class="method-item">
+              <strong>{{ item.name }}</strong>
+              <span>{{ item.description }}</span>
+            </div>
+          </div>
+          <a-alert type="warning" class="method-alert">位于重点区域不必然属于政治安全案件，必须结合地点、行为、主体、传播影响进行人工复核。</a-alert>
+        </a-card>
+      </a-col>
+      <a-col :span="10">
+        <a-card :bordered="false" class="chart-card method-card">
+          <template #title>西城重点专题与复核状态</template>
+          <div class="topic-list">
+            <a-tag v-for="topic in overview.priorityTopics || defaultPriorityTopics" :key="topic" color="orangered" size="large">{{ topic }}</a-tag>
+          </div>
+          <div class="review-metrics">
+            <div><span>待人工复核</span><strong>{{ overview.pendingManualReview || 0 }}</strong></div>
+            <div><span>高关注风险</span><strong>{{ overview.highConcernRisks || 0 }}</strong></div>
+          </div>
+        </a-card>
+      </a-col>
+    </a-row>
+
+    <a-row :gutter="16" class="dashboard-row">
       <a-col :span="24">
         <RiskMapPanel :height="660" :default-overlay-political="true" />
       </a-col>
@@ -118,6 +145,13 @@ const overview = ref<PoliticalOverview>({
   procuratorateSuggestions: 0,
   majorEventCoupling: ''
 })
+const defaultFourDimensionMethod = [
+  { name: '地点因素', description: '发生地政治属性、敏感程度与核心区属性' },
+  { name: '行为内容', description: '言论、行为、诉求等内容是否涉及政治安全风险' },
+  { name: '涉及主体', description: '主体身份、组织属性、背景关系与关联网络' },
+  { name: '传播影响', description: '传播范围、扩散路径、社会舆情与影响程度' }
+]
+const defaultPriorityTopics = ['涉老权益保护', '涉外风险', '邻里及相邻关系纠纷']
 const aiAssessing = ref(false)
 const aiAssessment = ref('')
 
@@ -236,7 +270,9 @@ const renderCharts = () => {
       return {
         name: p.community,
         value: [x, y, p.count],
-        symbolSize: 15 + p.count * 1.8 
+        riskLevel: p.riskLevel || '关注',
+        reviewStatus: p.reviewStatus || '待人工复核',
+        symbolSize: 15 + p.count * 1.8
       }
     })
 
@@ -247,7 +283,7 @@ const renderCharts = () => {
         backgroundColor: tooltipBg(),
         borderColor: tooltipBorder(),
         textStyle: { color: chartTextPrimary(), fontSize: 16 },
-        formatter: (params: any) => `${params.name}<br/>风险信号: ${params.value[2]} 个`
+        formatter: (params: any) => `${params.name}<br/>风险信号: ${params.value[2]} 个<br/>风险等级: ${params.data.riskLevel}<br/>研判状态: ${params.data.reviewStatus}`
       },
       grid: { left: '8%', right: '5%', top: '10%', bottom: '15%' },
       xAxis: { 
@@ -443,9 +479,75 @@ onUnmounted(() => {
 .kpi-yellow .kpi-value { color: #f5d862; }
 .kpi-blue .kpi-value   { color: #5b9fd4; }
 
-.chart-card { 
-  background: rgba(14, 39, 78, 0.78) !important; 
+.chart-card {
+  background: rgba(14, 39, 78, 0.78) !important;
   border: 1px solid rgba(110, 196, 255, 0.2) !important;
+}
+
+.method-card {
+  min-height: 236px;
+}
+
+.method-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.method-item {
+  min-height: 74px;
+  padding: 14px;
+  border: 1px solid rgba(110, 196, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(5, 21, 43, 0.42);
+}
+
+.method-item strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #ffe0a3;
+  font-size: 16px;
+}
+
+.method-item span {
+  color: #c7eaff;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.method-alert {
+  margin-top: 12px;
+}
+
+.topic-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.review-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.review-metrics > div {
+  padding: 16px;
+  border-radius: 8px;
+  background: rgba(245, 63, 63, 0.12);
+}
+
+.review-metrics span {
+  display: block;
+  margin-bottom: 8px;
+  color: #9fd9ff;
+  font-size: 14px;
+}
+
+.review-metrics strong {
+  color: #ffb3b3;
+  font-size: 28px;
 }
 
 .chart-container-large { 
@@ -524,6 +626,28 @@ onUnmounted(() => {
   border-color: rgba(70, 136, 192, 0.26) !important;
 }
 
+:global(body.theme-light .political-security-page .method-item) {
+  border-color: rgba(70, 136, 192, 0.28) !important;
+  background: #f7fbff !important;
+}
+
+:global(body.theme-light .political-security-page .method-item strong) {
+  color: #8a5a10 !important;
+}
+
+:global(body.theme-light .political-security-page .method-item span),
+:global(body.theme-light .political-security-page .review-metrics span) {
+  color: #285b78 !important;
+}
+
+:global(body.theme-light .political-security-page .review-metrics > div) {
+  background: #fff3f3 !important;
+}
+
+:global(body.theme-light .political-security-page .review-metrics strong) {
+  color: #b4232d !important;
+}
+
 :global(body.theme-light .political-security-page .arco-radio-group-button),
 :global(body.theme-light .political-security-page .arco-radio-button) { 
   background-color: rgba(255, 255, 255, 0.5) !important; 
@@ -573,6 +697,8 @@ onUnmounted(() => {
 
 @media (max-width: 768px) {
   .kpi-strip { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .method-grid,
+  .review-metrics { grid-template-columns: 1fr; }
   .kpi-item { flex: none !important; }
   .kpi-item:last-child { grid-column: span 2; }
   .kpi-label { font-size: 22px !important; transform: none !important; text-align: center !important; }

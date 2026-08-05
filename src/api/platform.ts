@@ -1755,21 +1755,21 @@ const mockPoliticalMonthlyTrend: PoliticalMonthlyTrend[] = [
 ]
 
 const mockPoliticalStreetStats: PoliticalStreetStat[] = [
-  { community: '西长安街街道', count: 15, longitude: 116.375, latitude: 39.912 },
-  { community: '新街口街道', count: 12, longitude: 116.370, latitude: 39.945 },
-  { community: '月坛街道', count: 8, longitude: 116.345, latitude: 39.915 },
-  { community: '展览路街道', count: 10, longitude: 116.345, latitude: 39.925 },
-  { community: '德胜街道', count: 9, longitude: 116.378, latitude: 39.955 },
-  { community: '金融街街道', count: 14, longitude: 116.360, latitude: 39.915 },
-  { community: '什刹海街道', count: 18, longitude: 116.392, latitude: 39.938 },
-  { community: '大栅栏街道', count: 7, longitude: 116.395, latitude: 39.895 },
-  { community: '天桥街道', count: 6, longitude: 116.398, latitude: 39.882 },
-  { community: '椿树街道', count: 5, longitude: 116.385, latitude: 39.892 },
-  { community: '陶然亭街道', count: 8, longitude: 116.385, latitude: 39.878 },
-  { community: '广安门内街道', count: 11, longitude: 116.365, latitude: 39.892 },
-  { community: '牛街街道', count: 4, longitude: 116.362, latitude: 39.885 },
-  { community: '白纸坊街道', count: 9, longitude: 116.358, latitude: 39.880 },
-  { community: '广安门外街道', count: 13, longitude: 116.332, latitude: 39.885 }
+  { community: '西长安街街道', count: 15, longitude: 116.375, latitude: 39.912, riskLevel: '高风险', reviewStatus: '人工研判' },
+  { community: '新街口街道', count: 12, longitude: 116.370, latitude: 39.945, riskLevel: '中风险', reviewStatus: '研判确认' },
+  { community: '月坛街道', count: 8, longitude: 116.345, latitude: 39.915, riskLevel: '关注', reviewStatus: '待人工复核' },
+  { community: '展览路街道', count: 10, longitude: 116.345, latitude: 39.925, riskLevel: '中风险', reviewStatus: '人工研判' },
+  { community: '德胜街道', count: 9, longitude: 116.378, latitude: 39.955, riskLevel: '关注', reviewStatus: '研判确认' },
+  { community: '金融街街道', count: 14, longitude: 116.360, latitude: 39.915, riskLevel: '高风险', reviewStatus: '人工研判' },
+  { community: '什刹海街道', count: 18, longitude: 116.392, latitude: 39.938, riskLevel: '中风险', reviewStatus: '纳入统计' },
+  { community: '大栅栏街道', count: 7, longitude: 116.395, latitude: 39.895, riskLevel: '关注', reviewStatus: '待人工复核' },
+  { community: '天桥街道', count: 6, longitude: 116.398, latitude: 39.882, riskLevel: '关注', reviewStatus: '待人工复核' },
+  { community: '椿树街道', count: 5, longitude: 116.385, latitude: 39.892, riskLevel: '关注', reviewStatus: '研判确认' },
+  { community: '陶然亭街道', count: 8, longitude: 116.385, latitude: 39.878, riskLevel: '中风险', reviewStatus: '人工研判' },
+  { community: '广安门内街道', count: 11, longitude: 116.365, latitude: 39.892, riskLevel: '中风险', reviewStatus: '研判确认' },
+  { community: '牛街街道', count: 4, longitude: 116.362, latitude: 39.885, riskLevel: '关注', reviewStatus: '待人工复核' },
+  { community: '白纸坊街道', count: 9, longitude: 116.358, latitude: 39.880, riskLevel: '中风险', reviewStatus: '人工研判' },
+  { community: '广安门外街道', count: 13, longitude: 116.332, latitude: 39.885, riskLevel: '高风险', reviewStatus: '人工研判' }
 ]
 
 export async function fetchPoliticalMonthlyTrend(): Promise<PoliticalMonthlyTrend[]> {
@@ -1798,10 +1798,19 @@ export const POLITICAL_POLYGONS_DATA = [
 export const fetchPoliticalOverview = async (): Promise<PoliticalOverview> => {
   if (useMock) return Promise.resolve({
     totalSignalsThisYear: 142,
-    highIncidenceTypes: '意识形态渗透、涉密风险',
-    riskAlertPushCount: 3,
+    highIncidenceTypes: '涉老权益保护、涉外风险、邻里及相邻关系纠纷',
+    riskAlertPushCount: 26,
     procuratorateSuggestions: 18,
-    majorEventCoupling: '高度耦合(异动提升45%)'
+    majorEventCoupling: '需人工研判',
+    pendingManualReview: 26,
+    highConcernRisks: 18,
+    fourDimensionMethod: [
+      { name: '地点因素', description: '发生地政治属性、敏感程度与核心区属性' },
+      { name: '行为内容', description: '言论、行为、诉求等内容是否涉及政治安全风险' },
+      { name: '涉及主体', description: '主体身份、组织属性、背景关系与关联网络' },
+      { name: '传播影响', description: '传播范围、扩散路径、社会舆情与影响程度' }
+    ],
+    priorityTopics: ['涉老权益保护', '涉外风险', '邻里及相邻关系纠纷']
   })
   const { data } = await http.get<PoliticalOverview>('/political/overview')
   return data
@@ -1852,6 +1861,32 @@ export const createLegalRecommendation = async (data: any): Promise<any> => {
   })
 }
 
+export const updateLegalRecommendation = async (id: number, data: any): Promise<any> => {
+  if (!useMock) {
+    const response = await http.put(`/legal-recommend/v2/recommendations/${id}`, data)
+    return response.data
+  }
+  const idx = memoryLegalPlans.findIndex(p => p.id === id || p.planId === id)
+  if (idx !== -1) {
+    memoryLegalPlans[idx] = { ...memoryLegalPlans[idx], ...data, reviewStatus: '待人工审核', updatedTime: new Date().toISOString().slice(0, 10) }
+    return Promise.resolve(memoryLegalPlans[idx])
+  }
+  return Promise.resolve({ id, ...data, reviewStatus: '待人工审核' })
+}
+
+export const submitLegalRecommendationReview = async (id: number): Promise<any> => {
+  if (!useMock) {
+    const response = await http.post(`/legal-recommend/v2/recommendations/${id}/submit-review`)
+    return response.data
+  }
+  const idx = memoryLegalPlans.findIndex(p => p.id === id || p.planId === id)
+  if (idx !== -1) {
+    memoryLegalPlans[idx] = { ...memoryLegalPlans[idx], reviewStatus: '已提交审核', tags: ['已提交审核'] }
+    return Promise.resolve(memoryLegalPlans[idx])
+  }
+  return Promise.resolve({ id, reviewStatus: '已提交审核' })
+}
+
 // 新增：删除接口
 export const deleteLegalRecommendation = async (id: number): Promise<void> => {
   if (!useMock) {
@@ -1896,7 +1931,7 @@ export async function fetchLegalPlanDetail(id: number): Promise<LegalPlan> {
 }
 // ========== 西城区街道法治风险地图 ==========
 export type StreetMapPeriod = '30d' | 'quarter' | 'year'
-export type StreetMapSummaryKey = 'total' | 'confirmed' | 'pending' | 'crossStreet'
+export type StreetMapSummaryKey = 'total' | 'confirmed' | 'pending' | 'crossStreet' | 'notInStreet'
 
 export interface StreetMapFilters {
   period: StreetMapPeriod
@@ -1916,6 +1951,7 @@ export interface StreetMapOverview {
     confirmedCases: number
     pendingCases: number
     crossStreetCases: number
+    notInStreetCases: number
   }
   streets: StreetMapStreetStat[]
   dataPeriod: string
@@ -1990,6 +2026,7 @@ const STREET_MAP_GOVERNANCE_FACTOR: Record<string, number> = {
 
 const STREET_MAP_PENDING_BASE = 96
 const STREET_MAP_CROSS_STREET_BASE = 28
+const STREET_MAP_NOT_IN_STREET_BASE = 12
 
 const STREET_MAP_INDUSTRIES: Record<string, string[]> = {
   西长安街街道: ['商贸零售', '公共服务场所', '交通出行'],
@@ -2042,18 +2079,20 @@ const buildStreetMapOverview = (input?: Partial<StreetMapFilters>): StreetMapOve
   const confirmedCases = streets.reduce((sum, item) => sum + item.caseCount, 0)
   const pendingCases = Math.max(0, Math.round(STREET_MAP_PENDING_BASE * factor))
   const crossStreetCases = Math.max(0, Math.round(STREET_MAP_CROSS_STREET_BASE * factor))
+  const notInStreetCases = Math.max(0, Math.round(STREET_MAP_NOT_IN_STREET_BASE * factor))
 
   return {
     summary: {
-      totalCases: confirmedCases + pendingCases + crossStreetCases,
+      totalCases: confirmedCases + pendingCases + crossStreetCases + notInStreetCases,
       confirmedCases,
       pendingCases,
-      crossStreetCases
+      crossStreetCases,
+      notInStreetCases
     },
     streets,
     dataPeriod: getStreetMapPeriodLabel(filters),
     updatedAt: getStreetMapUpdatedAt(),
-    statisticalNote: '当前按照平台现有案件去重口径统计'
+    statisticalNote: '已归属街道、待确认、跨街道、不纳入街道统计四类分离；地图只展示已确认唯一街道归属案件。'
   }
 }
 

@@ -102,6 +102,7 @@ export interface LegalPlan {
     riskLevel: string;
   }
   legalBasis?: { type: string; name: string; content?: string }[]
+  reviewStatus?: '待人工审核' | '已提交审核' | '已审核' | '已驳回' | string
 }
 
 export interface PushTask {
@@ -315,6 +316,8 @@ export interface PoliticalStreetStat {
   count: number;
   longitude: number;
   latitude: number;
+  riskLevel?: '关注' | '低风险' | '中风险' | '高风险' | string;
+  reviewStatus?: '待人工复核' | '人工研判' | '研判确认' | '纳入统计' | string;
 }
 
 export interface PoliticalOverview {
@@ -323,4 +326,8 @@ export interface PoliticalOverview {
   riskAlertPushCount: number;
   procuratorateSuggestions: number;
   majorEventCoupling: string;
+  pendingManualReview?: number;
+  highConcernRisks?: number;
+  fourDimensionMethod?: Array<{ name: string; description: string }>;
+  priorityTopics?: string[];
 }

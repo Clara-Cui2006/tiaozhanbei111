@@ -63,13 +63,15 @@
                   <i>{{ formatRate(overview.highConcernRiskRate) }}</i>
                 </div>
               </div>
-              <div class="review-metric-note">
-                <span>识别口径</span>
-                <p>结合案件分类标签、风险规则匹配和人工复核结果综合判断。</p>
+            </div>
+            <div class="recognition-scope" role="note" aria-label="识别口径">
+              <span class="recognition-scope-icon" aria-hidden="true">i</span>
+              <div>
+                <strong>识别口径</strong>
+                <p>结合案件分类标签、风险规则匹配和人工复核结果综合判断。“高风险/高关注”不单纯依据案件数量判断；高发风险类型可按案件数量排序。</p>
               </div>
             </div>
           </div>
-          <a-alert type="info" class="method-alert">“高风险/高关注”不单纯依据案件数量判断，需结合案件分类标签、风险规则匹配和人工复核结果；高发风险类型可按案件数量排序。</a-alert>
         </a-card>
       </a-col>
     </a-row>
@@ -456,10 +458,6 @@ onUnmounted(() => {
   line-height: 1.55;
 }
 
-.method-alert {
-  margin-top: 12px;
-}
-
 .topic-list {
   display: flex;
   flex-wrap: wrap;
@@ -469,7 +467,7 @@ onUnmounted(() => {
 
 .review-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -536,12 +534,40 @@ onUnmounted(() => {
   font-weight: 700;
 }
 
-.review-metric-note {
-  align-items: flex-start !important;
-  justify-content: center !important;
+.recognition-scope {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(88, 177, 235, 0.34);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(24, 92, 151, 0.32), rgba(9, 39, 77, 0.58));
+  box-shadow: inset 0 1px 0 rgba(176, 225, 255, 0.08);
 }
 
-.review-metric-note p {
+.recognition-scope-icon {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #338fd0;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.recognition-scope strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #dff4ff;
+  font-size: 15px;
+}
+
+.recognition-scope p {
   margin: 0;
   color: #c2e8fb;
   font-size: 13px;
@@ -684,7 +710,16 @@ onUnmounted(() => {
   color: #0f4f7b !important;
 }
 
-:global(body.theme-light .political-security-page .review-metric-note p) {
+:global(body.theme-light .political-security-page .recognition-scope) {
+  border-color: rgba(70, 136, 192, 0.32) !important;
+  background: linear-gradient(135deg, #eef8ff, #dcecf9) !important;
+}
+
+:global(body.theme-light .political-security-page .recognition-scope strong) {
+  color: #0a3f68 !important;
+}
+
+:global(body.theme-light .political-security-page .recognition-scope p) {
   color: #285b78 !important;
 }
 

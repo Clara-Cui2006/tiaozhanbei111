@@ -233,9 +233,9 @@
               <button class="xrm-map-ctrl-btn home" title="恢复全区" @click="resetMap">⌂</button>
             </div>
 
-            <div v-if="legendVisible" class="xrm-map-legend">
+            <div v-if="legendVisible" class="xrm-map-legend xrm-color-mode-card">
               <div class="xrm-legend-header">
-                <div class="xrm-legend-title">案件数量区间</div>
+              <div class="xrm-legend-title">地图着色</div>
                 <button
                   type="button"
                   class="xrm-legend-toggle"
@@ -247,19 +247,9 @@
                   <span class="xrm-legend-arrow" aria-hidden="true">▼</span>
                 </button>
               </div>
-              <div class="xrm-legend-gradient"></div>
-              <div class="xrm-legend-scale">
-                <span>数量较少</span>
-                <span>数量较多</span>
-              </div>
-              <div class="xrm-legend-ranges">
-                <span v-for="item in quantityLegendItems" :key="`${item.min}-${item.max}`">
-                  <i :style="{ backgroundColor: item.color }"></i>
-                  {{ item.label }}
-                </span>
-              </div>
-              <p class="xrm-legend-difference">颜色仅表示数量差异</p>
-              <p class="xrm-legend-rule">按当前筛选结果中的街道最大案件数，以 20% 为间隔划分五档</p>
+              <div class="xrm-uniform-mode-sample"><i></i><span>所有街道使用统一浅蓝色</span></div>
+              <p class="xrm-legend-difference">选中街道颜色加深并向上突出</p>
+              <p class="xrm-legend-rule">选中街道使用加深色块和立体阴影标识</p>
             </div>
             <button
               v-else
@@ -547,7 +537,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import * as echarts from 'echarts'
-import 'echarts-gl'
 import type {
   StreetMapDetail,
   StreetMapFilters,
@@ -604,7 +593,6 @@ const EXPECTED_STREETS = [
   '陶然亭街道', '广安门内街道', '牛街街道', '白纸坊街道', '广安门外街道'
 ]
 const EXPECTED_STREET_SET = new Set(EXPECTED_STREETS)
-const QUANTITY_COLORS = ['#DCEEFF', '#BFDDF5', '#96C7E8', '#68ADD9', '#3F93C7']
 
 const STREET_COORDINATES: Record<string, [number, number]> = {
   西长安街街道: [116.375, 39.912],
@@ -793,7 +781,12 @@ const summaryExplanationText = computed(() => {
   return texts[summaryExplanation.value]
 })
 
-const getShortStreetName = (name: string) => String(name || '').replace(/街道$/, '')
+const getShortStreetName = (name: string) => {
+  const streetName = String(name || '').trim()
+  return streetName && !streetName.endsWith('街道') ? `${streetName}街道` : streetName
+}
+
+const formatStreetMapLabel = (name: string) => getShortStreetName(name).replace(/街道$/, '\n街道')
 
 const normalizeStreetName = (rawName: unknown) => {
   const name = String(rawName || '').trim()
@@ -1041,48 +1034,6 @@ const getMaxCaseCount = () => {
   return Math.max(0, ...values)
 }
 
-type QuantityRange = {
-  min: number
-  max: number
-  color: string
-  label: string
-}
-
-const buildQuantityRanges = (maxValue: number): QuantityRange[] => {
-  const normalizedMax = Math.max(0, Math.floor(Number(maxValue) || 0))
-  if (normalizedMax === 0) {
-    return [{ min: 0, max: 0, color: QUANTITY_COLORS[0] ?? '#dbeafe', label: '0 件' }]
-  }
-
-  const starts = [
-    0,
-    Math.ceil(normalizedMax * 0.2),
-    Math.ceil(normalizedMax * 0.4),
-    Math.ceil(normalizedMax * 0.6),
-    Math.ceil(normalizedMax * 0.8)
-  ]
-
-  return starts
-    .map((min, index) => {
-      const nextStart = starts[index + 1] ?? normalizedMax
-      const max = index === starts.length - 1 ? normalizedMax : Math.min(normalizedMax, nextStart - 1)
-      return {
-        min,
-        max,
-        color: QUANTITY_COLORS[index] ?? QUANTITY_COLORS[0] ?? '#dbeafe',
-        label: min === max ? `${min} 件` : `${min}–${max} 件`
-      }
-    })
-    .filter((item) => item.min <= item.max)
-}
-
-const getQuantityColor = (value: number, maxValue: number) => {
-  const normalizedValue = Math.max(0, Math.floor(Number(value) || 0))
-  return buildQuantityRanges(maxValue).find((item) => normalizedValue >= item.min && normalizedValue <= item.max)?.color ?? QUANTITY_COLORS[0] ?? '#dbeafe'
-}
-
-const quantityLegendItems = computed(() => buildQuantityRanges(getMaxCaseCount()))
-
 const getTooltipOption = () => {
   const theme = getChartTheme()
   return {
@@ -1112,38 +1063,42 @@ const renderMap = async () => {
 
   const hasSelection = Boolean(activeStreetName.value)
   const maxCaseCount = getMaxCaseCount()
-  const quantityRanges = buildQuantityRanges(maxCaseCount)
-  const visualMapPieces = quantityRanges.map((item) => ({
-    gte: item.min,
-    lte: item.max,
-    color: item.color,
-    label: item.label
-  }))
   const chartTheme = getChartTheme()
-  const map3DDistance = Math.max(62, 118 / mapZoom.value)
+  const defaultStreetColor = '#EAF4FF'
+  const defaultLabelColor = '#F2F7FF'
+  const uniformSelectedColor = '#B8E4F5'
   const streetData = overview.value.streets.map((item) => {
-    const quantityColor = getQuantityColor(item.caseCount, maxCaseCount)
     const selected = item.streetName === activeStreetName.value
+    const renderedAreaColor = selected ? uniformSelectedColor : defaultStreetColor
     return {
       name: item.streetName,
       value: item.caseCount,
       selected,
-      height: selected ? 9 : 2.4,
-      regionHeight: selected ? 9 : 2.4,
       itemStyle: {
-        color: quantityColor,
-        areaColor: quantityColor,
-        opacity: hasSelection && !selected ? 0.44 : 0.98,
-        borderColor: selected ? '#E6F7FF' : chartTheme.mapBorder,
-        borderWidth: selected ? 2.2 : 1.1
+        areaColor: renderedAreaColor,
+        opacity: 1,
+        borderColor: '#A9C5E8',
+        borderWidth: 1.2,
+        shadowBlur: selected ? 30 : 0,
+        shadowOffsetX: selected ? 5 : 0,
+        shadowOffsetY: selected ? 16 : 0,
+        shadowColor: selected ? 'rgba(45, 92, 147, 0.42)' : 'transparent'
       },
       emphasis: {
-        label: { backgroundColor: quantityColor },
-        itemStyle: { color: quantityColor, areaColor: quantityColor }
+        label: { backgroundColor: selected ? uniformSelectedColor : defaultLabelColor },
+        itemStyle: { areaColor: renderedAreaColor }
       },
       select: {
-        label: { backgroundColor: quantityColor },
-        itemStyle: { color: quantityColor, areaColor: quantityColor }
+        label: { backgroundColor: selected ? uniformSelectedColor : defaultLabelColor },
+        itemStyle: {
+          areaColor: renderedAreaColor,
+          borderColor: '#A9C5E8',
+          borderWidth: 1.2,
+          shadowBlur: 30,
+          shadowOffsetX: 5,
+          shadowOffsetY: 16,
+          shadowColor: 'rgba(45, 92, 147, 0.42)'
+        }
       }
     }
   })
@@ -1159,86 +1114,71 @@ const renderMap = async () => {
           return `<strong>${item.streetName}</strong><br/>案件数量：${item.caseCount} 件<br/><span style="color:${chartTheme.tooltipHint}">点击查看详情</span>`
         }
       },
-      visualMap: {
-        show: false,
-        type: 'piecewise',
-        pieces: visualMapPieces
-      },
       series: [
         {
           id: 'xrm-street-map-series',
-          type: 'map3D',
+          type: 'map',
           map: STREET_MAP_NAME,
           nameProperty: 'name',
-          shading: 'lambert',
-          regionHeight: hasSelection ? 2.2 : 1.8,
-          groundPlane: { show: false },
-          boxHeight: 16,
-          viewControl: {
-            projection: 'perspective',
-            autoRotate: false,
-            alpha: 46,
-            beta: 0,
-            distance: map3DDistance,
-            center: [0, 0, 0],
-            panMouseButton: 'left',
-            rotateMouseButton: 'right'
-          },
-          light: {
-            main: {
-              intensity: isLightTheme.value ? 1.28 : 1.05,
-              shadow: true,
-              shadowQuality: 'medium',
-              alpha: 46,
-              beta: 28
-            },
-            ambient: { intensity: isLightTheme.value ? 0.58 : 0.42 }
-          },
+          roam: true,
+          scaleLimit: { min: 0.9, max: 5 },
+          zoom: mapZoom.value,
+          layoutCenter: ['52%', '51%'],
+          layoutSize: '104%',
           selectedMode: 'single',
-          left: 0,
-          right: 0,
-          top: 8,
-          bottom: 0,
           data: streetData,
           itemStyle: {
-            color: QUANTITY_COLORS[0],
-            areaColor: QUANTITY_COLORS[0],
-            borderColor: chartTheme.mapBorder,
-            borderWidth: 1.1,
-            opacity: 0.96
+            areaColor: defaultStreetColor,
+            borderColor: '#A9C5E8',
+            borderWidth: 1.3,
+            opacity: 0.98,
+            shadowBlur: 0,
+            shadowOffsetX: 0,
+            shadowOffsetY: 0,
+            shadowColor: 'transparent'
           },
           emphasis: {
             label: {
-              color: chartTheme.selectedLabelText,
-              borderColor: chartTheme.selectedLabelBorder,
-              textBorderColor: chartTheme.selectedLabelStroke,
+              color: '#0A3261',
+              backgroundColor: defaultLabelColor,
+              borderColor: '#75CBEA',
+              textBorderColor: 'rgba(255, 255, 255, 0.96)',
               fontWeight: 700
             },
             itemStyle: { borderColor: '#FFFFFF', borderWidth: 2.4 }
           },
           select: {
             label: {
-              color: chartTheme.selectedLabelText,
-              borderColor: chartTheme.selectedLabelBorder,
-              textBorderColor: chartTheme.selectedLabelStroke,
+              color: '#0A3261',
+              backgroundColor: uniformSelectedColor,
+              borderColor: '#A9C5E8',
+              textBorderColor: 'rgba(255, 255, 255, 0.96)',
               fontWeight: 700
             },
-            itemStyle: { borderColor: '#FFFFFF', borderWidth: 3 }
+            itemStyle: {
+              areaColor: uniformSelectedColor,
+              borderColor: '#A9C5E8',
+              borderWidth: 1.2,
+              shadowBlur: 30,
+              shadowOffsetX: 5,
+              shadowOffsetY: 16,
+              shadowColor: 'rgba(45, 92, 147, 0.42)'
+            }
           },
           label: {
             show: true,
-            color: chartTheme.labelText,
-            fontSize: 13,
+            color: '#0A3261',
+            fontSize: 10,
             fontWeight: 600,
-            lineHeight: 15,
-            textBorderColor: chartTheme.labelStroke,
+            lineHeight: 13,
+            textBorderColor: 'rgba(255, 255, 255, 0.98)',
             textBorderWidth: isLightTheme.value ? 2 : 3,
-            backgroundColor: chartTheme.labelBg,
-            borderColor: chartTheme.labelBorder,
+            backgroundColor: defaultLabelColor,
+            borderColor: 'rgba(96, 153, 221, 0.58)',
             borderWidth: 1,
-            borderRadius: 4,
-            padding: [3, 5],
-            formatter: (params: any) => getShortStreetName(String(params.name || ''))
+            borderRadius: 5,
+            padding: [2, 4],
+            formatter: (params: any) => formatStreetMapLabel(String(params.name || ''))
           },
           labelLayout: {
             hideOverlap: true,
@@ -1253,14 +1193,13 @@ const renderMap = async () => {
   const pointData = overview.value.streets.map((item) => {
     const coordinate = STREET_COORDINATES[item.streetName]
     const selected = item.streetName === activeStreetName.value
-    const quantityColor = getQuantityColor(item.caseCount, maxCaseCount)
     const labelConfig = STREET_LABEL_CONFIG[item.streetName] || { position: 'top' as LabelPosition, offset: [0, -4] as [number, number] }
     return {
       name: item.streetName,
       value: coordinate ? [...coordinate, item.caseCount] : [116.366794, 39.915309, item.caseCount],
       symbolSize: selected ? 20 : Math.max(11, Math.min(17, 10 + item.caseCount / Math.max(1, maxCaseCount) * 7)),
       itemStyle: {
-        color: quantityColor,
+        color: selected ? uniformSelectedColor : defaultStreetColor,
         borderColor: selected ? '#ffffff' : chartTheme.pointBorder,
         borderWidth: selected ? 3 : 1.5,
         opacity: hasSelection && !selected ? 0.28 : 0.98,
@@ -1272,16 +1211,16 @@ const renderMap = async () => {
         position: labelConfig.position,
         offset: labelConfig.offset,
         align: labelConfig.align || 'center',
-        formatter: getShortStreetName(item.streetName),
+        formatter: formatStreetMapLabel(item.streetName),
         color: selected ? chartTheme.selectedLabelText : chartTheme.labelText,
-        backgroundColor: selected ? quantityColor : chartTheme.labelBg,
+        backgroundColor: defaultLabelColor,
         borderColor: selected ? chartTheme.selectedLabelBorder : chartTheme.labelBorder,
         textBorderColor: selected ? chartTheme.selectedLabelStroke : chartTheme.labelStroke,
         fontWeight: selected ? 700 : 600
       },
       emphasis: {
-        label: { backgroundColor: quantityColor },
-        itemStyle: { color: quantityColor }
+        label: { backgroundColor: selected ? uniformSelectedColor : defaultStreetColor },
+        itemStyle: { color: selected ? uniformSelectedColor : defaultStreetColor }
       }
     }
   })
@@ -1294,13 +1233,6 @@ const renderMap = async () => {
         if (params.seriesType !== 'scatter') return '西城区'
         return `<strong>${params.name}</strong><br/>案件数量：${params.value?.[2] ?? 0} 件<br/><span style="color:${chartTheme.tooltipHint}">点击查看详情</span>`
       }
-    },
-    visualMap: {
-      show: false,
-      type: 'piecewise',
-      pieces: visualMapPieces,
-      dimension: 2,
-      seriesIndex: 0
     },
     geo: {
       id: 'xrm-district-geo',
@@ -1333,16 +1265,16 @@ const renderMap = async () => {
           show: true,
           distance: 5,
           color: chartTheme.labelText,
-          fontSize: 13,
+          fontSize: 10,
           fontWeight: 600,
-          lineHeight: 15,
+          lineHeight: 13,
           textBorderColor: chartTheme.labelStroke,
           textBorderWidth: isLightTheme.value ? 2 : 3,
           backgroundColor: chartTheme.labelBg,
           borderColor: chartTheme.labelBorder,
           borderWidth: 1,
           borderRadius: 4,
-          padding: [3, 5]
+          padding: [2, 4]
         },
         labelLayout: {
           hideOverlap: true,
@@ -1638,22 +1570,22 @@ onUnmounted(() => {
 .xrm-method-card {
   min-height: 104px;
   padding: 15px;
-  border: 1px solid rgba(111, 188, 232, 0.24);
+  border: 1px solid rgba(112, 164, 211, 0.34);
   border-radius: 8px;
-  background: linear-gradient(135deg, rgba(28, 78, 118, 0.36), rgba(7, 30, 58, 0.68));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background: linear-gradient(145deg, #f9fcff, #e8f3fc);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.96), 0 8px 18px rgba(52, 103, 151, 0.10);
 }
 
 .xrm-method-card strong {
   display: block;
   margin-bottom: 8px;
-  color: var(--text-1);
+  color: #123d66;
   font-size: 17px;
   line-height: 1.35;
 }
 
 .xrm-method-card span {
-  color: var(--text-2);
+  color: #4c6f8f;
   font-size: 13px;
   line-height: 1.6;
 }
@@ -1665,9 +1597,10 @@ onUnmounted(() => {
   align-items: end;
   margin-top: 16px;
   padding: 13px;
-  border: 1px solid rgba(111, 188, 232, 0.18);
+  border: 1px solid rgba(112, 164, 211, 0.32);
   border-radius: 8px;
-  background: rgba(5, 24, 48, 0.28);
+  background: linear-gradient(135deg, #f7fbff, #e4f0fa);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
 .xrm-section-heading,
@@ -2000,7 +1933,9 @@ onUnmounted(() => {
 
 .xrm-map-box {
   width: 100%;
-  filter: drop-shadow(0 20px 22px rgba(0, 14, 36, 0.22));
+  filter:
+    drop-shadow(4px 8px 0 rgba(111, 151, 200, 0.38))
+    drop-shadow(0 19px 22px rgba(37, 76, 129, 0.26));
 }
 
 .xrm-map-state {
@@ -2168,11 +2103,52 @@ onUnmounted(() => {
   flex: 0 0 auto;
 }
 
-.xrm-legend-gradient {
-  height: 8px;
-  margin: 9px 0 5px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #1d4ed8 0%, #0284c7 24%, #059669 48%, #f59e0b 73%, #ea580c 100%);
+.xrm-uniform-mode-sample {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 8px;
+  color: #b8dceb;
+  font-size: 11px;
+}
+
+.xrm-uniform-mode-sample i {
+  width: 28px;
+  height: 18px;
+  border: 1px solid #a9c5e8;
+  border-radius: 4px;
+  background: #b8e4f5;
+  box-shadow: 3px 6px 7px rgba(45, 92, 147, 0.30);
+}
+
+.xrm-map-state-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 10px 0 8px;
+}
+
+.xrm-map-state-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #c1e8f7;
+  font-size: 12px;
+}
+
+.xrm-map-state-legend i {
+  width: 20px;
+  height: 13px;
+  border: 1px solid #78a8e8;
+  border-radius: 3px;
+  background: #f8fbff;
+  box-shadow: 2px 3px 0 #a9c8e8;
+}
+
+.xrm-map-state-legend i.selected {
+  border-color: #21bce8;
+  background: #c9f1ff;
+  box-shadow: 2px 3px 0 #82b8df;
 }
 
 .xrm-legend-scale {
@@ -2940,13 +2916,41 @@ onUnmounted(() => {
 }
 
 :global(body.theme-light) .xrm-method-card {
-  border-color: rgba(70, 136, 192, 0.24);
-  background: linear-gradient(135deg, #f5fbff, #e7f3fd);
+  border-color: rgba(70, 145, 207, 0.38);
+  background: linear-gradient(145deg, #f7fbff, #dcebfa);
 }
 
 :global(body.theme-light) .xrm-political-filter-bar {
-  border-color: rgba(70, 136, 192, 0.22);
-  background: #f5faff;
+  border-color: rgba(70, 145, 207, 0.34);
+  background: linear-gradient(135deg, #edf7ff, #dcecf9);
+}
+
+.xrm-card.xrm-theme-light .xrm-method-card {
+  border-color: rgba(112, 164, 211, 0.34) !important;
+  background: linear-gradient(145deg, #ffffff, #edf6fd) !important;
+  box-shadow: inset 0 1px 0 #ffffff, 0 8px 18px rgba(52, 103, 151, 0.10) !important;
+}
+
+.xrm-card.xrm-theme-light .xrm-method-card strong {
+  color: #123d66 !important;
+}
+
+.xrm-card.xrm-theme-light .xrm-method-card span {
+  color: #4c6f8f !important;
+}
+
+.xrm-card.xrm-theme-light .xrm-political-filter-bar {
+  border-color: rgba(112, 164, 211, 0.32) !important;
+  background: linear-gradient(135deg, #f8fcff, #e7f2fb) !important;
+  box-shadow: inset 0 1px 0 #ffffff !important;
+}
+
+.xrm-card.xrm-theme-light .xrm-map-state-legend span {
+  color: #315f79 !important;
+}
+
+.xrm-card.xrm-theme-light .xrm-uniform-mode-sample {
+  color: #416d86;
 }
 
 :global(body.theme-light) .xrm-detail-header {
@@ -3158,8 +3162,8 @@ onUnmounted(() => {
 
 .xrm-card.xrm-theme-light .xrm-map-stage {
   background:
-    linear-gradient(145deg, #edf7ff 0%, #d8ebfa 68%, #c8e0f3 100%) !important;
-  box-shadow: inset 0 0 34px rgba(54, 126, 173, 0.10), 0 16px 34px rgba(54, 126, 173, 0.12);
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.98), rgba(232, 243, 255, 0.92) 54%, #dceafb 100%) !important;
+  box-shadow: inset 0 0 42px rgba(62, 124, 190, 0.10), 0 18px 38px rgba(49, 96, 151, 0.14);
 }
 
 .xrm-card.xrm-theme-light .xrm-map-ctrl-btn {

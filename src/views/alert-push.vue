@@ -1,7 +1,7 @@
 <template>
   <div class="page-contrast" :class="{ 'theme-light': themeMode === 'light' }">
     <BackHome />
-    <a-page-header title="预警推送管理" subtitle="Alert Push Management" />
+    <a-page-header title="智能预警" subtitle="Intelligent Alert" />
 
     <p class="data-hint">
       下方「风险预警推送次数」与<strong>风险预警态势盘</strong>总览卡片同源；任务列表为近期推送<strong>示例明细</strong>（条数可与累计口径不同，联调时由后端对齐）。

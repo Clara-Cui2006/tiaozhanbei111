@@ -869,8 +869,8 @@ const mockArchiveItems: ArchiveItem[] = [
 ]
 
 const mockSiteFooterInfo: SiteFooterInfo = {
-  recordNo: '京ICP备2026000001号-1',
-  publicSecurityNo: '京公网安备11010202000001号',
+  recordNo: '',
+  publicSecurityNo: '',
   links: [
     { label: '政策法规', url: '#' },
     { label: '政务公开', url: '#' },
@@ -1604,10 +1604,10 @@ const mockEffectTrend: EffectTrendPoint[] = (() => {
     for (let d = 0; d < 3; d++) {
       const day = 5 + d * 10
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-      
+
       // Add small variation to daily values (这里原封不动保留你的原版代码！)
       const jitter = (d - 1) * 2
-      
+
       // 【新增】：政治安全专属伪随机数。打破周期，绝对固定且在2-7之间
       const uniqueIndex = mi * 3 + d;
       const pseudoRandomPol = Math.abs(Math.sin(uniqueIndex * 12.9898 + 78.233)) * 43758.5453;
@@ -1855,11 +1855,11 @@ export const createLegalRecommendation = async (data: any): Promise<any> => {
         pilotCommunities: 0,
         isManual: true, // 核心标识：区分手动和自动
         updatedTime: new Date().toISOString().slice(0, 10),
-        riskContext: { 
-          riskLevel: '中', 
-          trendPortrait: '近期呈上升趋势', 
-          subjectPortrait: data.group, 
-          featureWords: data.scene 
+        riskContext: {
+          riskLevel: '中',
+          trendPortrait: '近期呈上升趋势',
+          subjectPortrait: data.group,
+          featureWords: data.scene
         },
         legalBasis: [{ type: '法律', name: '《民法典》', content: '相关侵权与履约条款' }]
       }

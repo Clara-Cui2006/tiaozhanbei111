@@ -211,10 +211,31 @@
               <span class="xrm-section-kicker">空间分布</span>
               <h3>街道案件数量分布</h3>
             </div>
+            <div class="xrm-map-mode-switch" role="group" aria-label="地图视图切换">
+              <button
+                type="button"
+                :class="{ active: mapViewMode === '3d' }"
+                :disabled="mapBoundaryMode !== 'street'"
+                @click="setMapViewMode('3d')"
+              >3D</button>
+              <button
+                type="button"
+                :class="{ active: mapViewMode === '2d' }"
+                :disabled="mapBoundaryMode !== 'street'"
+                @click="setMapViewMode('2d')"
+              >2D</button>
+            </div>
           </div>
 
           <div class="xrm-map-stage">
-            <div ref="mapRef" class="xrm-map-box" :style="{ height: `${mapDisplayHeight}px` }"></div>
+            <div
+              ref="mapRef"
+              class="xrm-map-box"
+              :style="{ height: `${mapDisplayHeight}px` }"
+              @wheel.capture.prevent.stop="handleMapWheel"
+            ></div>
+
+            <div v-if="mapViewMode === '2d'" class="xrm-map-breath-overlay" aria-hidden="true"></div>
 
             <div v-if="mapLoading || overviewLoading" class="xrm-map-state">
               <a-spin />
@@ -247,7 +268,7 @@
                   <span class="xrm-legend-arrow" aria-hidden="true">▼</span>
                 </button>
               </div>
-              <div class="xrm-legend-gradient"></div>
+              <div class="xrm-legend-gradient" :style="legendGradientStyle"></div>
               <div class="xrm-legend-scale">
                 <span>数量较少</span>
                 <span>数量较多</span>
@@ -291,7 +312,7 @@
                   <h3>{{ activeStreetName }}</h3>
                 </div>
               </div>
-              <button class="xrm-close-button" title="关闭详情" @click="clearSelection">×</button>
+              <button class="xrm-close-button" title="关闭详情" @click="clearSelection()">×</button>
               <div class="xrm-detail-meta">
                 <span class="xrm-detail-filter-summary">
                   <span>统计周期：{{ currentPeriodLabel }}</span>
@@ -548,6 +569,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 import 'echarts-gl'
+import { patchMap3DStreetLift } from './map3d-street-lift'
 import type {
   StreetMapDetail,
   StreetMapFilters,
@@ -558,6 +580,9 @@ import {
   fetchXichengStreetMapDetail,
   fetchXichengStreetMapOverview
 } from '../api/platform'
+
+// 让 map3D 支持“整块平移”而非“拉高”，并为上下表面/侧面补全棱边高光。
+const map3DLiftPatched = patchMap3DStreetLift()
 
 const props = withDefaults(
   defineProps<{
@@ -604,7 +629,34 @@ const EXPECTED_STREETS = [
   '陶然亭街道', '广安门内街道', '牛街街道', '白纸坊街道', '广安门外街道'
 ]
 const EXPECTED_STREET_SET = new Set(EXPECTED_STREETS)
-const QUANTITY_COLORS = ['#DCEEFF', '#BFDDF5', '#96C7E8', '#68ADD9', '#3F93C7']
+const QUANTITY_COLORS = ['#167DBA', '#159BA8', '#B59242', '#D07036', '#D83C4B']
+const HEAT_COLOR_STOPS: Array<[number, [number, number, number]]> = [
+  [0, [64, 205, 143]],
+  [0.48, [232, 196, 74]],
+  [1, [232, 76, 82]]
+]
+const MAP_DEFAULT_DISTANCE = 118
+const STREET_BASE_HEIGHT = 7.2
+// 选中时整个立体块平移的高度，不再改变街道自身厚度。
+const STREET_SELECTED_LIFT = 10
+// 名称锚点贴在块顶（底面高度）；●││● 引线从名称框连到块顶，补丁会自动叠加 offset。
+const STREET_LABEL_ANCHOR = STREET_BASE_HEIGHT
+// 3D/2D 共用的街道名称框样式：黑底、不透明、白字。
+const getStreetLabelBox = (selected: boolean) => ({
+  color: selected ? '#FFFFFF' : '#E9F5F9',
+  backgroundColor: selected ? 'rgba(11, 34, 54, 1)' : 'rgba(7, 22, 38, 0.98)',
+  borderColor: selected ? 'rgba(255, 255, 255, 0.95)' : 'rgba(190, 232, 246, 0.55)',
+  borderWidth: selected ? 1.5 : 1,
+  borderRadius: 7,
+  padding: [5, 10],
+  fontSize: selected ? 15 : 14,
+  fontWeight: 700,
+  lineHeight: 22
+})
+const MAP_MIN_ZOOM = 0.28
+const MAP_MAX_ZOOM = 5
+const MAP_MIN_DISTANCE = 32
+const MAP_MAX_DISTANCE = 420
 
 const STREET_COORDINATES: Record<string, [number, number]> = {
   西长安街街道: [116.375, 39.912],
@@ -681,6 +733,13 @@ const mapErrorMessage = ref('未找到可读取的地图数据文件。')
 const mapBoundaryMode = ref<MapBoundaryMode>('street')
 const loadedMapFileName = ref('')
 const activeStreetName = ref('')
+const mapViewMode = ref<'3d' | '2d'>('3d')
+// 街道多边形质心（2D 名称放在街道内部）与西城区外轮廓折线（2D 外部粗边框）。
+// 两者都直接来自 xicheng_streets.geojson，不依赖其他地图文件。
+const streetCentroids = ref<Record<string, [number, number]>>({})
+const districtOuterPolylines = ref<Array<Array<[number, number]>>>([])
+// 记录上一次完整渲染的视图，用于 2D→3D 切换时清掉 2D 残留。
+let lastRenderedMapMode: '3d' | '2d' | 'district' | null = null
 const detail = ref<StreetMapDetail | null>(null)
 const detailLoading = ref(false)
 const detailError = ref(false)
@@ -701,6 +760,19 @@ let timeTrendChart: echarts.ECharts | null = null
 let mapRegistered = false
 let themeObserver: MutationObserver | null = null
 let mapPanelResizeObserver: ResizeObserver | null = null
+let map3DViewInitialized = false
+let mapEdgeAnimationFrame = 0
+let mapEdgeAnimationStartedAt = 0
+let mapEdgeLastPaintAt = 0
+let lastStreetClickAt = 0
+let mapCameraInteractionUntil = 0
+let glassDetailTexture: HTMLCanvasElement | null = null
+const map3DViewState = {
+  distance: MAP_DEFAULT_DISTANCE,
+  alpha: 46,
+  beta: 0,
+  center: [0, 0, 0] as [number, number, number]
+}
 
 const detectLightTheme = () => {
   if (typeof document === 'undefined') return false
@@ -882,6 +954,11 @@ const loadStreetGeoJson = async () => {
         echarts.registerMap(STREET_MAP_NAME, prepared.geoJson)
         mapBoundaryMode.value = prepared.mode
         loadedMapFileName.value = source.fileName
+        if (mapBoundaryMode.value === 'street') {
+          const geometryData = buildStreetGeometryData(prepared.geoJson)
+          streetCentroids.value = geometryData.centroids
+          districtOuterPolylines.value = geometryData.outerPolylines
+        }
         mapRegistered = true
         return
       } catch (error) {
@@ -905,6 +982,92 @@ const loadStreetGeoJson = async () => {
   } finally {
     mapLoading.value = false
   }
+}
+
+// 从街道 GeoJSON 直接推导：每个街道的质心 + 西城区外轮廓折线。
+// 外轮廓 = 只被一个街道使用的边界边（相邻街道共享边被排除），与街道底图天然对齐。
+const buildStreetGeometryData = (geoJson: any) => {
+  const centroids: Record<string, [number, number]> = {}
+  const ringsOf = (geometry: any) => {
+    if (!geometry) return []
+    if (geometry.type === 'Polygon') return geometry.coordinates
+    if (geometry.type === 'MultiPolygon') return geometry.coordinates.flat()
+    return []
+  }
+  const round = (value: number) => Math.round(value * 1e6) / 1e6
+  const pointKey = (point: [number, number]) => `${round(point[0])},${round(point[1])}`
+  const edgeKey = (a: [number, number], b: [number, number]) => {
+    const pa = pointKey(a)
+    const pb = pointKey(b)
+    return pa <= pb ? `${pa}|${pb}` : `${pb}|${pa}`
+  }
+
+  const edgeCounts = new Map<string, number>()
+  const segments: Array<[[number, number], [number, number]]> = []
+
+  geoJson.features?.forEach((feature: any) => {
+    const name = feature?.properties?.name
+    const rings = ringsOf(feature?.geometry)
+    const exterior = rings.reduce(
+      (largest: any, ring: any) => (ring.length >= largest.length ? ring : largest),
+      rings[0] || []
+    )
+    if (exterior.length) {
+      const cx = exterior.reduce((sum: number, point: any) => sum + Number(point?.[0] ?? 0), 0) / exterior.length
+      const cy = exterior.reduce((sum: number, point: any) => sum + Number(point?.[1] ?? 0), 0) / exterior.length
+      if (Number.isFinite(cx) && Number.isFinite(cy)) centroids[name] = [cx, cy]
+    }
+
+    rings.forEach((ring: any) => {
+      for (let i = 0; i < ring.length - 1; i++) {
+        const a: [number, number] = [Number(ring[i]?.[0]), Number(ring[i]?.[1])]
+        const b: [number, number] = [Number(ring[i + 1]?.[0]), Number(ring[i + 1]?.[1])]
+        if (!Number.isFinite(a[0]) || !Number.isFinite(b[0])) continue
+        const key = edgeKey(a, b)
+        edgeCounts.set(key, (edgeCounts.get(key) || 0) + 1)
+        segments.push([a, b])
+      }
+    })
+  })
+
+  const outerEdges = new Set<string>()
+  edgeCounts.forEach((count, key) => {
+    if (count === 1) outerEdges.add(key)
+  })
+
+  const outerSegments = segments.filter(([a, b]) => outerEdges.has(edgeKey(a, b)))
+  const vertexEdges = new Map<string, number[]>()
+  outerSegments.forEach((segment, index) => {
+    const keys = [pointKey(segment[0]), pointKey(segment[1])]
+    keys.forEach((key) => vertexEdges.set(key, [...(vertexEdges.get(key) || []), index]))
+  })
+
+  const polylines: Array<Array<[number, number]>> = []
+  const used = new Set<number>()
+  outerSegments.forEach((segment, startIndex) => {
+    if (used.has(startIndex)) return
+    used.add(startIndex)
+    const line: Array<[number, number]> = [[...segment[0]], [...segment[1]]]
+    let current = pointKey(segment[1])
+    let currentSegment = startIndex
+    const startKey = pointKey(segment[0])
+
+    for (let guard = 0; guard < outerSegments.length; guard++) {
+      if (current === startKey) break
+      const candidates = (vertexEdges.get(current) || []).filter((index) => !used.has(index))
+      if (!candidates.length) break
+      const next = candidates[0]!
+      used.add(next)
+      const seg = outerSegments[next]!
+      const nextPoint = pointKey(seg[0]) === current ? seg[1]! : seg[0]!
+      line.push([...nextPoint])
+      current = pointKey(nextPoint)
+      currentSegment = next
+    }
+    if (line.length >= 3) polylines.push(line)
+  })
+
+  return { centroids, outerPolylines: polylines }
 }
 
 const loadOverview = async () => {
@@ -1081,7 +1244,51 @@ const getQuantityColor = (value: number, maxValue: number) => {
   return buildQuantityRanges(maxValue).find((item) => normalizedValue >= item.min && normalizedValue <= item.max)?.color ?? QUANTITY_COLORS[0] ?? '#dbeafe'
 }
 
-const quantityLegendItems = computed(() => buildQuantityRanges(getMaxCaseCount()))
+// 2D 热力图使用 绿→黄→红 的渐变填色，颜色保持清透。
+const getHeatColor = (value: number, maxValue: number, alpha = 0.88) => {
+  const normalizedMax = Math.max(1, Number(maxValue) || 1)
+  const ratio = Math.max(0, Math.min(1, (Number(value) || 0) / normalizedMax))
+
+  let lower = HEAT_COLOR_STOPS[0]!
+  let upper = HEAT_COLOR_STOPS[HEAT_COLOR_STOPS.length - 1]!
+  for (let i = 0; i < HEAT_COLOR_STOPS.length - 1; i++) {
+    const from = HEAT_COLOR_STOPS[i]!
+    const to = HEAT_COLOR_STOPS[i + 1]!
+    if (ratio >= from[0] && ratio <= to[0]) {
+      lower = from
+      upper = to
+      break
+    }
+  }
+
+  const span = Math.max(0.0001, upper[0] - lower[0])
+  const t = (ratio - lower[0]) / span
+  const lowerRgb = lower[1]
+  const upperRgb = upper[1]
+  const rgb = lowerRgb.map((channel, index) =>
+    Math.round(channel + (upperRgb[index]! - channel) * t)
+  )
+  return `rgba(${rgb[0]!}, ${rgb[1]!}, ${rgb[2]!}, ${alpha})`
+}
+
+const getLegendColor = (value: number, maxValue: number) =>
+  mapViewMode.value === '2d'
+    ? getHeatColor(value, maxValue)
+    : getQuantityColor(value, maxValue)
+
+const quantityLegendItems = computed(() => {
+  const maxCaseCount = getMaxCaseCount()
+  return buildQuantityRanges(maxCaseCount).map((item) => ({
+    ...item,
+    color: getLegendColor(item.max, maxCaseCount)
+  }))
+})
+
+const legendGradientStyle = computed(() => ({
+  background: mapViewMode.value === '2d'
+    ? 'linear-gradient(90deg, #40CD8F 0%, #E8C44A 48%, #E84C52 100%)'
+    : 'linear-gradient(90deg, #167DBA 0%, #159BA8 25%, #B59242 50%, #D07036 75%, #D83C4B 100%)'
+}))
 
 const getTooltipOption = () => {
   const theme = getChartTheme()
@@ -1095,6 +1302,403 @@ const getTooltipOption = () => {
   }
 }
 
+const getFluorescentLabelFormatter = (name: string, _selected = false) => {
+  // 名称 + 引线（●││● 竖线），整组作为同一张精灵图，随块一起升降。
+  return `{name|${getShortStreetName(name)}}\n{topDot|●}\n{stem|│}\n{stem|│}\n{bottomDot|●}`
+}
+
+const getFluorescentLabelRich = (selected = false) => {
+  const darkMode = !isLightTheme.value
+  const labelWidth = 88
+  return {
+    // 名称黑底（与 2D 相同样式）；opacity:1 保证精灵整体不透明。
+    name: {
+      color: darkMode ? (selected ? '#F1F7F9' : '#E3F1F5') : (selected ? '#FFFFFF' : '#EAF6FA'),
+      fontSize: 15,
+      fontWeight: 700,
+      lineHeight: 24,
+      width: labelWidth,
+      align: 'center',
+      backgroundColor: selected ? 'rgba(11, 34, 54, 1)' : 'rgba(7, 22, 38, 0.98)',
+      borderColor: selected ? 'rgba(255, 255, 255, 0.95)' : 'rgba(190, 232, 246, 0.55)',
+      borderWidth: selected ? 1.5 : 1,
+      borderRadius: 7,
+      padding: [5, 10]
+    },
+    // 引线：与名称框同宽并居中，形成一根正对名称中心的竖直线。
+    topDot: {
+      color: selected ? '#FFFFFF' : '#D9FBFF',
+      fontSize: 9,
+      fontWeight: 900,
+      lineHeight: 8,
+      width: labelWidth,
+      align: 'center',
+      textShadowColor: selected ? 'rgba(255,255,255,1)' : 'rgba(58,226,255,0.96)',
+      textShadowBlur: selected ? 16 : 11
+    },
+    stem: {
+      color: selected ? '#FFFFFF' : '#B8F4FF',
+      fontSize: 16,
+      fontWeight: 900,
+      lineHeight: 9,
+      width: labelWidth,
+      align: 'center',
+      textShadowColor: selected ? 'rgba(255, 255, 255, 1)' : 'rgba(45, 221, 255, 0.98)',
+      textShadowBlur: selected ? 16 : 11
+    },
+    bottomDot: {
+      color: selected ? '#FFFFFF' : '#D9FBFF',
+      fontSize: 9,
+      fontWeight: 900,
+      lineHeight: 8,
+      width: labelWidth,
+      align: 'center',
+      textShadowColor: selected ? 'rgba(255,255,255,1)' : 'rgba(58,226,255,0.96)',
+      textShadowBlur: selected ? 16 : 11
+    }
+  }
+}
+
+const getGlassDetailTexture = () => {
+  if (glassDetailTexture || typeof document === 'undefined') return glassDetailTexture
+  const canvas = document.createElement('canvas')
+  canvas.width = 192
+  canvas.height = 192
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+
+  // detailTexture 会与案件颜色相乘。纹理提高到“能看见但不抢色”的强度：
+  // 淡斜纹 + 反向细纹 + 极弱颗粒，强化玻璃内部的细微纹路。
+  ctx.fillStyle = 'rgb(212, 221, 225)'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+  ctx.lineWidth = 1.2
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.34)'
+  for (let offset = -192; offset < 384; offset += 22) {
+    ctx.beginPath()
+    ctx.moveTo(offset, 0)
+    ctx.lineTo(offset + 192, 192)
+    ctx.stroke()
+  }
+
+  ctx.lineWidth = 1
+  ctx.strokeStyle = 'rgba(44, 72, 88, 0.17)'
+  for (let offset = -192; offset < 384; offset += 44) {
+    ctx.beginPath()
+    ctx.moveTo(offset, 192)
+    ctx.lineTo(offset + 192, 0)
+    ctx.stroke()
+  }
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)'
+  for (let y = 12; y < 192; y += 32) {
+    ctx.beginPath()
+    ctx.moveTo(0, y)
+    ctx.lineTo(192, y + 5)
+    ctx.stroke()
+  }
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.12)'
+  for (let y = 9; y < 192; y += 26) {
+    for (let x = (Math.floor(y / 26) % 2) ? 15 : 5; x < 192; x += 28) {
+      ctx.fillRect(x, y, 1, 1)
+    }
+  }
+
+  glassDetailTexture = canvas
+  return glassDetailTexture
+}
+
+const buildStreetMapData = () => {
+  if (!overview.value) return []
+  const hasSelection = Boolean(activeStreetName.value)
+  const maxCaseCount = getMaxCaseCount()
+
+  return overview.value.streets.map((item) => {
+    const quantityColor = getQuantityColor(item.caseCount, maxCaseCount)
+    const selected = item.streetName === activeStreetName.value
+    return {
+      name: item.streetName,
+      value: item.caseCount,
+      selected,
+      // 所有街道保持相同的基准厚度；选中时整块向上平移（offset 由本地补丁读取）。
+      // echarts-gl 2.x 会读取 regionHeight；保留 height 兼容旧实现。
+      height: STREET_BASE_HEIGHT,
+      regionHeight: STREET_BASE_HEIGHT,
+      ...(selected ? { offset: STREET_SELECTED_LIFT } : {}),
+      itemStyle: {
+        color: quantityColor,
+        areaColor: quantityColor,
+        // 玻璃块保持较深色相，但提高透明度，避免“浑浊实心块”。
+        opacity: hasSelection && !selected ? 0.25 : selected ? 0.66 : 0.46,
+        ...(selected
+          ? {
+              borderColor: 'rgba(250, 255, 255, 1)',
+              borderWidth: 4.2
+            }
+          : {})
+      },
+      label: {
+        show: true,
+        position: 'top',
+        // 补丁会把标签锚点随 offset 一起抬起；未打补丁时用旧公式补偿。
+        distance: map3DLiftPatched
+          ? STREET_LABEL_ANCHOR
+          : STREET_LABEL_ANCHOR + (selected ? STREET_SELECTED_LIFT : 0),
+        formatter: getFluorescentLabelFormatter(item.streetName, selected),
+        rich: getFluorescentLabelRich(selected),
+        // opacity:1 防止标签继承街道块的半透明，保证黑底名称框不透明。
+        opacity: 1,
+        shadowBlur: selected ? 12 : 4,
+        shadowColor: selected ? 'rgba(120, 220, 255, 0.5)' : 'rgba(0, 0, 0, 0.35)'
+      },
+      emphasis: {
+        label: {
+          formatter: getFluorescentLabelFormatter(item.streetName, true),
+          rich: getFluorescentLabelRich(true)
+        },
+        itemStyle: {
+          color: quantityColor,
+          areaColor: quantityColor,
+          opacity: selected ? 0.70 : 0.56,
+          borderColor: '#FFFFFF',
+          borderWidth: selected ? 4.2 : 2.8
+        }
+      },
+      select: {
+        label: {
+          formatter: getFluorescentLabelFormatter(item.streetName, true),
+          rich: getFluorescentLabelRich(true)
+        },
+        itemStyle: {
+          color: quantityColor,
+          areaColor: quantityColor,
+          opacity: 0.68,
+          borderColor: '#FFFFFF',
+          borderWidth: 4.6
+        }
+      }
+    }
+  })
+}
+
+const clampMapZoom = (value: number) => Math.max(MAP_MIN_ZOOM, Math.min(MAP_MAX_ZOOM, value))
+
+const syncMap3DViewStateFromChart = () => {
+  if (!chart || mapBoundaryMode.value !== 'street' || mapViewMode.value !== '3d') return
+  try {
+    const model = (chart as any).getModel?.()
+    const seriesModel = model?.getSeries?.().find((item: any) => item?.id === 'xrm-street-map-series')
+    const viewModel = seriesModel?.getModel?.('viewControl')
+    if (!viewModel) return
+
+    const distance = Number(viewModel.get?.('distance'))
+    const alpha = Number(viewModel.get?.('alpha'))
+    const beta = Number(viewModel.get?.('beta'))
+    const center = viewModel.get?.('center')
+
+    if (Number.isFinite(distance) && distance > 0) {
+      map3DViewState.distance = distance
+      mapZoom.value = clampMapZoom(MAP_DEFAULT_DISTANCE / distance)
+    }
+    if (Number.isFinite(alpha)) map3DViewState.alpha = alpha
+    if (Number.isFinite(beta)) map3DViewState.beta = beta
+    if (Array.isArray(center) && center.length >= 3) {
+      map3DViewState.center = [Number(center[0]) || 0, Number(center[1]) || 0, Number(center[2]) || 0]
+    }
+  } catch {
+    // 某些 echarts-gl 构建未暴露 model 读取接口时，继续使用事件同步到的状态。
+  }
+}
+
+const getCurrentMap3DViewControl = () => ({
+  projection: 'perspective',
+  autoRotate: false,
+  alpha: map3DViewState.alpha,
+  beta: map3DViewState.beta,
+  distance: Math.max(MAP_MIN_DISTANCE, Math.min(MAP_MAX_DISTANCE, map3DViewState.distance)),
+  center: [...map3DViewState.center],
+  minDistance: MAP_MIN_DISTANCE,
+  maxDistance: MAP_MAX_DISTANCE,
+  panMouseButton: 'left',
+  rotateMouseButton: 'right',
+  zoomSensitivity: 0
+})
+
+const updateStreetMapSelectionVisuals = () => {
+  if (!chart || mapBoundaryMode.value !== 'street' || mapViewMode.value !== '3d' || !overview.value) return
+  // map3DViewState 由相机事件和本组件的缩放逻辑维护；这里不再从 model 反读，
+  // 避免 model 尚未提交最新缩放时把 distance 覆盖成旧值。
+  chart.setOption({
+    series: [{
+      id: 'xrm-street-map-series',
+      viewControl: getCurrentMap3DViewControl(),
+      data: buildStreetMapData()
+    }]
+  }, { notMerge: false, lazyUpdate: true })
+}
+
+const stopMapEdgeAnimation = () => {
+  if (mapEdgeAnimationFrame) cancelAnimationFrame(mapEdgeAnimationFrame)
+  mapEdgeAnimationFrame = 0
+  mapEdgeAnimationStartedAt = 0
+  mapEdgeLastPaintAt = 0
+}
+
+const startMapEdgeAnimation = () => {
+  stopMapEdgeAnimation()
+  if (typeof window === 'undefined') return
+  mapEdgeAnimationStartedAt = performance.now()
+
+  const tick = (now: number) => {
+    if (!chart || mapBoundaryMode.value !== 'street' || mapViewMode.value !== '3d') {
+      mapEdgeAnimationFrame = requestAnimationFrame(tick)
+      return
+    }
+
+    // 约 4–5fps 更新边缘参数，并在用户缩放/旋转时暂停，避免动态描边抢占相机交互。
+    if (now >= mapCameraInteractionUntil && now - mapEdgeLastPaintAt > 220) {
+      mapEdgeLastPaintAt = now
+      const phase = (now - mapEdgeAnimationStartedAt) / 1650
+      const pulse = 0.5 + Math.sin(phase * Math.PI * 2) * 0.5
+      const alpha = 0.78 + pulse * 0.18
+      const width = 1.8 + pulse * 0.8
+      chart.setOption({
+        series: [{
+          id: 'xrm-street-map-series',
+          itemStyle: {
+            borderColor: `rgba(184, 239, 255, ${alpha.toFixed(3)})`,
+            borderWidth: Number(width.toFixed(2))
+          }
+        }]
+      }, { notMerge: false, lazyUpdate: true })
+    }
+
+    mapEdgeAnimationFrame = requestAnimationFrame(tick)
+  }
+
+  mapEdgeAnimationFrame = requestAnimationFrame(tick)
+}
+
+const renderMap2D = () => {
+  if (!chart || !overview.value) return
+  const hasSelection = Boolean(activeStreetName.value)
+  const maxCaseCount = getMaxCaseCount()
+  const chartTheme = getChartTheme()
+
+  const geoRegions = overview.value.streets.map((item) => {
+    const selected = item.streetName === activeStreetName.value
+    return {
+      name: item.streetName,
+      itemStyle: {
+        // 绿→红热力填色，透明度高一些保持清透。
+        areaColor: getHeatColor(item.caseCount, maxCaseCount, selected ? 0.96 : 0.86),
+        borderColor: selected ? 'rgba(255, 255, 255, 0.96)' : 'rgba(198, 238, 255, 0.52)',
+        borderWidth: selected ? 1.8 : 0.55,
+        shadowBlur: selected ? 18 : 4,
+        shadowColor: selected ? 'rgba(130, 228, 255, 0.85)' : 'rgba(70, 190, 235, 0.16)',
+        opacity: hasSelection && !selected ? 0.34 : 1
+      }
+    }
+  })
+
+  const labelData = overview.value.streets.map((item) => {
+    // 名称放在街道多边形内部：优先使用街道质心（来自 xicheng_streets.geojson）。
+    const coordinate = streetCentroids.value[item.streetName] || STREET_COORDINATES[item.streetName]
+    const selected = item.streetName === activeStreetName.value
+    return {
+      name: item.streetName,
+      value: coordinate ? [...coordinate, item.caseCount] : [116.366794, 39.915309, item.caseCount],
+      symbolSize: 0,
+      itemStyle: { color: 'rgba(0, 0, 0, 0)' },
+      label: {
+        show: true,
+        position: 'inside',
+        offset: [0, 0],
+        align: 'center',
+        verticalAlign: 'middle',
+        formatter: getShortStreetName(item.streetName),
+        // 与 3D 相同的黑底名称框。
+        ...getStreetLabelBox(selected),
+        shadowBlur: selected ? 10 : 3,
+        shadowColor: selected ? 'rgba(120, 220, 255, 0.55)' : 'rgba(0, 0, 0, 0.35)'
+      },
+      emphasis: {
+        label: { backgroundColor: 'rgba(12, 36, 58, 1)' },
+        itemStyle: { color: 'rgba(0, 0, 0, 0)' }
+      },
+      z: 10
+    }
+  })
+
+  const linesData = districtOuterPolylines.value.map((coords) => ({ coords }))
+
+  chart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      ...getTooltipOption(),
+      formatter: (params: any) => {
+        const item = overview.value?.streets.find((street) => street.streetName === params.name)
+        if (!item) return params.name || ''
+        return `<strong>${item.streetName}</strong><br/>案件数量：${item.caseCount} 件<br/><span style="color:${chartTheme.tooltipHint}">点击查看详情</span>`
+      }
+    },
+    geo: {
+      id: 'xrm-street-map-2d-geo',
+      map: STREET_MAP_NAME,
+      roam: true,
+      scaleLimit: { min: MAP_MIN_ZOOM, max: MAP_MAX_ZOOM },
+      zoom: mapZoom.value,
+      layoutCenter: ['50%', '50%'],
+      layoutSize: '98%',
+      silent: false,
+      itemStyle: {
+        areaColor: 'rgba(12, 46, 68, 0.45)',
+        borderColor: 'rgba(198, 238, 255, 0.52)',
+        borderWidth: 0.55
+      },
+      emphasis: {
+        disabled: false,
+        label: { show: false },
+        itemStyle: { shadowBlur: 16, shadowColor: 'rgba(130, 228, 255, 0.7)' }
+      },
+      label: { show: false },
+      regions: geoRegions
+    },
+    series: [
+      ...(linesData.length
+        ? [{
+            id: 'xrm-district-outline-lines',
+            type: 'lines',
+            coordinateSystem: 'geo',
+            polyline: true,
+            silent: true,
+            z: 6,
+            data: linesData,
+            lineStyle: {
+              color: '#BDF3FF',
+              width: 3.2,
+              opacity: 0.95,
+              shadowBlur: 14,
+              shadowColor: 'rgba(125, 226, 255, 0.85)',
+              cap: 'round' as const
+            }
+          }]
+        : []),
+      {
+        id: 'xrm-street-map-2d-labels',
+        type: 'scatter',
+        coordinateSystem: 'geo',
+        data: labelData,
+        symbol: 'circle',
+        z: 10,
+        itemStyle: { color: 'rgba(0, 0, 0, 0)' },
+        labelLayout: { hideOverlap: false }
+      }
+    ]
+  }, { notMerge: true })
+}
+
 const renderMap = async () => {
   await nextTick()
   if (!mapRef.value || !mapRegistered || !overview.value) return
@@ -1103,10 +1707,45 @@ const renderMap = async () => {
     chart = echarts.init(mapRef.value)
     chart.on('click', (params: any) => {
       const name = normalizeStreetName(params?.name ?? params?.data?.name)
-      if (EXPECTED_STREET_SET.has(name)) selectStreet(name)
+      if (EXPECTED_STREET_SET.has(name)) {
+        lastStreetClickAt = performance.now()
+        selectStreet(name)
+      }
+    })
+    chart.on('map3dcamerachanged' as any, (params: any) => {
+      const distance = Number(params?.distance)
+      const alpha = Number(params?.alpha)
+      const beta = Number(params?.beta)
+      const center = params?.center
+      if (Number.isFinite(distance) && distance > 0) {
+        map3DViewState.distance = distance
+        mapZoom.value = clampMapZoom(MAP_DEFAULT_DISTANCE / distance)
+      }
+      if (Number.isFinite(alpha)) map3DViewState.alpha = alpha
+      if (Number.isFinite(beta)) map3DViewState.beta = beta
+      if (Array.isArray(center) && center.length >= 3) {
+        map3DViewState.center = [Number(center[0]) || 0, Number(center[1]) || 0, Number(center[2]) || 0]
+      }
     })
     chart.getZr().on('click', (event: any) => {
-      if (!event.target) clearSelection()
+      requestAnimationFrame(() => {
+        // WebGL 区域点击时 zrender 的 target 可能为空，因此不能把“target 为空”直接当作空白点击。
+        // 给 map3D 的 picking 事件留一帧时间，且空白点击只清选中，不重置相机。
+        if (performance.now() - lastStreetClickAt < 120) return
+        if (!event.target) clearSelection(false)
+      })
+    })
+    const markCameraInteraction = () => {
+      mapCameraInteractionUntil = performance.now() + 520
+      requestAnimationFrame(syncMap3DViewStateFromChart)
+    }
+    chart.getZr().on('mousedown', markCameraInteraction as any)
+    chart.getZr().on('mousemove', (event: any) => {
+      if (event?.event?.buttons) markCameraInteraction()
+    })
+    chart.getZr().on('mouseup', () => {
+      mapCameraInteractionUntil = performance.now() + 220
+      requestAnimationFrame(syncMap3DViewStateFromChart)
     })
   }
 
@@ -1120,35 +1759,20 @@ const renderMap = async () => {
     label: item.label
   }))
   const chartTheme = getChartTheme()
-  const map3DDistance = Math.max(62, 118 / mapZoom.value)
-  const streetData = overview.value.streets.map((item) => {
-    const quantityColor = getQuantityColor(item.caseCount, maxCaseCount)
-    const selected = item.streetName === activeStreetName.value
-    return {
-      name: item.streetName,
-      value: item.caseCount,
-      selected,
-      height: selected ? 9 : 2.4,
-      regionHeight: selected ? 9 : 2.4,
-      itemStyle: {
-        color: quantityColor,
-        areaColor: quantityColor,
-        opacity: hasSelection && !selected ? 0.44 : 0.98,
-        borderColor: selected ? '#E6F7FF' : chartTheme.mapBorder,
-        borderWidth: selected ? 2.2 : 1.1
-      },
-      emphasis: {
-        label: { backgroundColor: quantityColor },
-        itemStyle: { color: quantityColor, areaColor: quantityColor }
-      },
-      select: {
-        label: { backgroundColor: quantityColor },
-        itemStyle: { color: quantityColor, areaColor: quantityColor }
-      }
-    }
-  })
+  const map3DDistance = Math.max(MAP_MIN_DISTANCE, Math.min(MAP_MAX_DISTANCE, MAP_DEFAULT_DISTANCE / clampMapZoom(mapZoom.value)))
+  const streetData = buildStreetMapData()
+
+  if (mapBoundaryMode.value === 'street' && mapViewMode.value === '2d') {
+    stopMapEdgeAnimation()
+    if (lastRenderedMapMode !== '2d') chart.clear()
+    renderMap2D()
+    lastRenderedMapMode = '2d'
+    return
+  }
 
   if (mapBoundaryMode.value === 'street') {
+    // 从 2D 切回 3D 时先清空图表，避免 2D 的 geo/lines/scatter 残留。
+    if (lastRenderedMapMode !== '3d') chart.clear()
     chart.setOption({
       backgroundColor: 'transparent',
       tooltip: {
@@ -1170,29 +1794,39 @@ const renderMap = async () => {
           type: 'map3D',
           map: STREET_MAP_NAME,
           nameProperty: 'name',
-          shading: 'lambert',
-          regionHeight: hasSelection ? 2.2 : 1.8,
+          shading: 'realistic',
+          regionHeight: STREET_BASE_HEIGHT,
           groundPlane: { show: false },
-          boxHeight: 16,
+          boxHeight: 26,
+          realisticMaterial: {
+            detailTexture: getGlassDetailTexture(),
+            textureTiling: 2.2,
+            roughness: 0.075,
+            metalness: 0.20
+          },
+          postEffect: {
+            enable: true,
+            bloom: { enable: true, bloomIntensity: 0.98 },
+            SSAO: { enable: true, quality: 'medium', radius: 1.5, intensity: 0.34 },
+            FXAA: { enable: true },
+            colorCorrection: { enable: true, saturation: 1.08, contrast: 1.04, exposure: 0.08 }
+          },
+          // 滚轮缩放由容器 capture 事件统一接管，禁用 echarts-gl 自带滚轮缩放，
+          // 这样地图区域内滚轮绝不会继续冒泡成页面上下滚动，也不会出现双重缩放。
           viewControl: {
-            projection: 'perspective',
-            autoRotate: false,
-            alpha: 46,
-            beta: 0,
-            distance: map3DDistance,
-            center: [0, 0, 0],
-            panMouseButton: 'left',
-            rotateMouseButton: 'right'
+            ...getCurrentMap3DViewControl(),
+            distance: map3DViewInitialized ? map3DViewState.distance : map3DDistance,
+            zoomSensitivity: 0
           },
           light: {
             main: {
-              intensity: isLightTheme.value ? 1.28 : 1.05,
+              intensity: isLightTheme.value ? 1.52 : 1.62,
               shadow: true,
               shadowQuality: 'medium',
-              alpha: 46,
-              beta: 28
+              alpha: 48,
+              beta: 24
             },
-            ambient: { intensity: isLightTheme.value ? 0.58 : 0.42 }
+            ambient: { intensity: isLightTheme.value ? 0.50 : 0.36 }
           },
           selectedMode: 'single',
           left: 0,
@@ -1200,56 +1834,73 @@ const renderMap = async () => {
           top: 8,
           bottom: 0,
           data: streetData,
+          // regions 再写一层几何级边界样式。对选中区域同时提高顶面轮廓和挤出侧壁轮廓的亮度；
+          // 与 data.itemStyle 叠加后，echarts-gl 在不同显卡/抗锯齿路径下都能得到更完整的立体边缘。
+          regions: streetData.map((item: any) => ({
+            name: item.name,
+            regionHeight: item.regionHeight,
+            itemStyle: item.selected
+              ? {
+                  color: item.itemStyle.color,
+                  areaColor: item.itemStyle.areaColor,
+                  opacity: 0.69,
+                  borderColor: '#FFFFFF',
+                  borderWidth: 4.6
+                }
+              : {
+                  color: item.itemStyle.color,
+                  areaColor: item.itemStyle.areaColor,
+                  opacity: item.itemStyle.opacity,
+                  borderColor: 'rgba(215, 248, 255, 0.95)',
+                  borderWidth: 2.0
+                },
+            emphasis: item.selected
+              ? { itemStyle: { borderColor: '#FFFFFF', borderWidth: 4.9, opacity: 0.72 } }
+              : undefined
+          })),
           itemStyle: {
             color: QUANTITY_COLORS[0],
             areaColor: QUANTITY_COLORS[0],
-            borderColor: chartTheme.mapBorder,
-            borderWidth: 1.1,
-            opacity: 0.96
+            borderColor: 'rgba(210, 245, 255, 0.95)',
+            borderWidth: 2.0,
+            opacity: 0.46
           },
           emphasis: {
-            label: {
-              color: chartTheme.selectedLabelText,
-              borderColor: chartTheme.selectedLabelBorder,
-              textBorderColor: chartTheme.selectedLabelStroke,
-              fontWeight: 700
-            },
-            itemStyle: { borderColor: '#FFFFFF', borderWidth: 2.4 }
+            label: { rich: getFluorescentLabelRich(false) },
+            itemStyle: { borderColor: '#FFFFFF', borderWidth: 3.4, opacity: 0.60 }
           },
           select: {
-            label: {
-              color: chartTheme.selectedLabelText,
-              borderColor: chartTheme.selectedLabelBorder,
-              textBorderColor: chartTheme.selectedLabelStroke,
-              fontWeight: 700
-            },
-            itemStyle: { borderColor: '#FFFFFF', borderWidth: 3 }
+            label: { rich: getFluorescentLabelRich(true) },
+            itemStyle: { borderColor: 'rgba(255, 255, 255, 1)', borderWidth: 4.6, opacity: 0.70 }
           },
           label: {
             show: true,
             color: chartTheme.labelText,
-            fontSize: 13,
-            fontWeight: 600,
-            lineHeight: 15,
-            textBorderColor: chartTheme.labelStroke,
-            textBorderWidth: isLightTheme.value ? 2 : 3,
-            backgroundColor: chartTheme.labelBg,
-            borderColor: chartTheme.labelBorder,
-            borderWidth: 1,
-            borderRadius: 4,
-            padding: [3, 5],
-            formatter: (params: any) => getShortStreetName(String(params.name || ''))
+            fontSize: 12,
+            fontWeight: 700,
+            lineHeight: 12,
+            backgroundColor: 'transparent',
+            borderWidth: 0,
+            padding: 0,
+            formatter: (params: any) => getFluorescentLabelFormatter(String(params.name || '')),
+            rich: getFluorescentLabelRich(false)
           },
+          animationDurationUpdate: 360,
+          animationEasingUpdate: 'cubicOut',
           labelLayout: {
-            hideOverlap: true,
-            moveOverlap: 'shiftY'
+            hideOverlap: false
           }
         }
       ]
-    }, { notMerge: true })
+    }, { notMerge: false, lazyUpdate: true })
+    map3DViewInitialized = true
+    startMapEdgeAnimation()
+    lastRenderedMapMode = '3d'
     return
   }
 
+  stopMapEdgeAnimation()
+  if (lastRenderedMapMode !== 'district') chart.clear()
   const pointData = overview.value.streets.map((item) => {
     const coordinate = STREET_COORDINATES[item.streetName]
     const selected = item.streetName === activeStreetName.value
@@ -1272,7 +1923,7 @@ const renderMap = async () => {
         position: labelConfig.position,
         offset: labelConfig.offset,
         align: labelConfig.align || 'center',
-        formatter: getShortStreetName(item.streetName),
+        formatter: getFluorescentLabelFormatter(item.streetName),
         color: selected ? chartTheme.selectedLabelText : chartTheme.labelText,
         backgroundColor: selected ? quantityColor : chartTheme.labelBg,
         borderColor: selected ? chartTheme.selectedLabelBorder : chartTheme.labelBorder,
@@ -1306,7 +1957,7 @@ const renderMap = async () => {
       id: 'xrm-district-geo',
       map: STREET_MAP_NAME,
       roam: true,
-      scaleLimit: { min: 0.9, max: 5 },
+      scaleLimit: { min: MAP_MIN_ZOOM, max: MAP_MAX_ZOOM },
       zoom: mapZoom.value,
       layoutCenter: ['55%', '50%'],
       layoutSize: '105%',
@@ -1333,16 +1984,13 @@ const renderMap = async () => {
           show: true,
           distance: 5,
           color: chartTheme.labelText,
-          fontSize: 13,
-          fontWeight: 600,
-          lineHeight: 15,
-          textBorderColor: chartTheme.labelStroke,
-          textBorderWidth: isLightTheme.value ? 2 : 3,
-          backgroundColor: chartTheme.labelBg,
-          borderColor: chartTheme.labelBorder,
-          borderWidth: 1,
-          borderRadius: 4,
-          padding: [3, 5]
+          fontSize: 12,
+          fontWeight: 700,
+          lineHeight: 12,
+          backgroundColor: 'transparent',
+          borderWidth: 0,
+          padding: 0,
+          rich: getFluorescentLabelRich(false)
         },
         labelLayout: {
           hideOverlap: true,
@@ -1350,17 +1998,13 @@ const renderMap = async () => {
         },
         emphasis: {
           scale: 1.18,
-          label: {
-            color: chartTheme.selectedLabelText,
-            borderColor: chartTheme.selectedLabelBorder,
-            textBorderColor: chartTheme.selectedLabelStroke,
-            fontWeight: 700
-          },
+          label: { rich: getFluorescentLabelRich(true) },
           itemStyle: { borderColor: '#ffffff', borderWidth: 2.5 }
         }
       }
     ]
   }, { notMerge: true })
+  lastRenderedMapMode = 'district'
 }
 
 const selectStreet = (streetName: string) => {
@@ -1368,12 +2012,28 @@ const selectStreet = (streetName: string) => {
   summaryExplanation.value = ''
 }
 
-const clearSelection = () => {
+const clearSelection = (resetView = false) => {
   activeStreetName.value = ''
   detail.value = null
   detailError.value = false
-  mapZoom.value = 1
-  renderMap()
+  // 清除选中默认只改变街道状态，不动相机；只有显式 resetView 才恢复全区视角。
+  if (resetView) {
+    mapZoom.value = 1
+    map3DViewState.distance = MAP_DEFAULT_DISTANCE
+    map3DViewState.alpha = 46
+    map3DViewState.beta = 0
+    map3DViewState.center = [0, 0, 0]
+    if (chart && mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') {
+      chart.setOption({
+        series: [{
+          id: 'xrm-street-map-series',
+          viewControl: getCurrentMap3DViewControl()
+        }]
+      }, { notMerge: false, lazyUpdate: true })
+    } else if (chart && mapBoundaryMode.value === 'street' && mapViewMode.value === '2d') {
+      chart.setOption({ geo: { id: 'xrm-street-map-2d-geo', zoom: 1, center: undefined } })
+    }
+  }
 }
 
 const showSummaryExplanation = (key: StreetMapSummaryKey) => {
@@ -1381,29 +2041,90 @@ const showSummaryExplanation = (key: StreetMapSummaryKey) => {
   if (key === 'total') clearSelection()
 }
 
-const applyMapZoom = (nextZoom: number) => {
-  if (!chart) return
-  mapZoom.value = Math.max(0.9, Math.min(5, nextZoom))
-  if (mapBoundaryMode.value === 'street') {
-    chart.setOption({
-      series: [{
-        id: 'xrm-street-map-series',
-        viewControl: { distance: Math.max(62, 118 / mapZoom.value) }
-      }]
-    })
-  } else {
-    chart.setOption({ geo: { id: 'xrm-district-geo', zoom: mapZoom.value } })
-  }
-  requestAnimationFrame(() => chart?.resize())
+const applyMap3DDistance = (nextDistance: number) => {
+  if (!chart || mapBoundaryMode.value !== 'street') return
+  const distance = Math.max(MAP_MIN_DISTANCE, Math.min(MAP_MAX_DISTANCE, nextDistance))
+  map3DViewState.distance = distance
+  mapZoom.value = clampMapZoom(MAP_DEFAULT_DISTANCE / distance)
+  mapCameraInteractionUntil = performance.now() + 260
+  chart.setOption({
+    series: [{
+      id: 'xrm-street-map-series',
+      viewControl: getCurrentMap3DViewControl()
+    }]
+  }, { notMerge: false, lazyUpdate: false })
 }
 
-const zoomIn = () => applyMapZoom(mapZoom.value * 1.2)
-const zoomOut = () => applyMapZoom(mapZoom.value / 1.2)
+const applyMapZoom = (nextZoom: number) => {
+  if (!chart) return
+  mapZoom.value = clampMapZoom(nextZoom)
+  if (mapBoundaryMode.value === 'street' && mapViewMode.value === '2d') {
+    chart.setOption({ geo: { id: 'xrm-street-map-2d-geo', zoom: mapZoom.value } })
+    requestAnimationFrame(() => chart?.resize())
+  } else if (mapBoundaryMode.value === 'street') {
+    applyMap3DDistance(MAP_DEFAULT_DISTANCE / mapZoom.value)
+  } else {
+    chart.setOption({ geo: { id: 'xrm-district-geo', zoom: mapZoom.value } })
+    requestAnimationFrame(() => chart?.resize())
+  }
+}
+
+const handleMapWheel = (event: WheelEvent) => {
+  if (!chart) return
+  // capture 阶段拦截，防止触控板/滚轮在 WebGL canvas 上偶发穿透为页面滚动。
+  event.preventDefault()
+  event.stopPropagation()
+  event.stopImmediatePropagation?.()
+
+  if (mapBoundaryMode.value !== 'street' || mapViewMode.value === '2d') {
+    const delta = event.deltaY > 0 ? 0.90 : 1.11
+    applyMapZoom(mapZoom.value * delta)
+    return
+  }
+
+  const modeScale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? mapDisplayHeight.value : 1
+  const deltaPixels = event.deltaY * modeScale
+  if (!Number.isFinite(deltaPixels) || deltaPixels === 0) return
+  // 指数曲线兼顾鼠标滚轮与触控板：小幅滑动细腻，大幅滑动仍可快速缩放。
+  const exponent = Math.max(-0.34, Math.min(0.34, deltaPixels * 0.00175))
+  applyMap3DDistance(map3DViewState.distance * Math.exp(exponent))
+}
+
+const zoomIn = () => {
+  if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') applyMap3DDistance(map3DViewState.distance * 0.82)
+  else applyMapZoom(mapZoom.value * 1.22)
+}
+const zoomOut = () => {
+  if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') applyMap3DDistance(map3DViewState.distance * 1.22)
+  else applyMapZoom(mapZoom.value / 1.22)
+}
 const resetMap = () => {
   activeStreetName.value = ''
   detail.value = null
   detailError.value = false
   mapZoom.value = 1
+  map3DViewState.distance = MAP_DEFAULT_DISTANCE
+  map3DViewState.alpha = 46
+  map3DViewState.beta = 0
+  map3DViewState.center = [0, 0, 0]
+  if (chart && mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') {
+    chart.setOption({
+      series: [{
+        id: 'xrm-street-map-series',
+        viewControl: getCurrentMap3DViewControl()
+      }]
+    }, { notMerge: false, lazyUpdate: true })
+  } else if (chart && mapBoundaryMode.value === 'street' && mapViewMode.value === '2d') {
+    chart.setOption({ geo: { id: 'xrm-street-map-2d-geo', zoom: 1, center: undefined } })
+  } else if (chart) {
+    chart.setOption({ geo: { id: 'xrm-district-geo', zoom: 1, center: undefined } })
+  }
+}
+
+const setMapViewMode = (mode: '3d' | '2d') => {
+  if (mode === '2d' && mapBoundaryMode.value !== 'street') return
+  if (mapViewMode.value === mode) return
+  mapViewMode.value = mode
   renderMap()
 }
 
@@ -1454,7 +2175,14 @@ watch(filters, async () => {
 }, { deep: true })
 
 watch(activeStreetName, async () => {
-  await renderMap()
+  await nextTick()
+  if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') {
+    // 选中/取消选中时同步真实相机状态，再连同 data 一起写回。
+    // 这样 map3D 重绘不会读取旧 distance，从而避免缩小后点击街道自动放大。
+    updateStreetMapSelectionVisuals()
+  } else {
+    await renderMap()
+  }
   await loadStreetDetail()
 })
 
@@ -1504,8 +2232,10 @@ onUnmounted(() => {
   themeObserver = null
   mapPanelResizeObserver?.disconnect()
   mapPanelResizeObserver = null
+  stopMapEdgeAnimation()
   chart?.dispose()
   chart = null
+  map3DViewInitialized = false
   disposeDetailCharts()
 })
 </script>
@@ -1966,6 +2696,70 @@ onUnmounted(() => {
   align-items: center;
 }
 
+.xrm-map-mode-switch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid rgba(113, 216, 240, 0.30);
+  border-radius: 10px;
+  background: rgba(6, 25, 48, 0.78);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.30);
+}
+
+.xrm-map-mode-switch button {
+  min-width: 54px;
+  padding: 5px 13px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #9ccbde;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.xrm-map-mode-switch button:hover:not(:disabled):not(.active) {
+  background: rgba(43, 130, 172, 0.35);
+  color: #e5f9ff;
+}
+
+.xrm-map-mode-switch button.active {
+  background: linear-gradient(180deg, rgba(41, 141, 190, 0.98), rgba(13, 76, 118, 0.98));
+  color: #ffffff;
+  box-shadow:
+    0 0 12px rgba(74, 190, 240, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.xrm-map-mode-switch button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.xrm-card.xrm-theme-light .xrm-map-mode-switch {
+  border-color: rgba(38, 120, 160, 0.40);
+  background: rgba(240, 249, 255, 0.95);
+  box-shadow: inset 0 1px 2px rgba(30, 90, 125, 0.14);
+}
+
+.xrm-card.xrm-theme-light .xrm-map-mode-switch button {
+  color: #36728f;
+}
+
+.xrm-card.xrm-theme-light .xrm-map-mode-switch button:hover:not(:disabled):not(.active) {
+  background: rgba(106, 192, 230, 0.25);
+  color: #0b5f8c;
+}
+
+.xrm-card.xrm-theme-light .xrm-map-mode-switch button.active {
+  background: linear-gradient(180deg, #2f9bd0, #16638f);
+  color: #ffffff;
+}
+
 .xrm-map-source {
   display: flex;
   max-width: 260px;
@@ -1990,17 +2784,80 @@ onUnmounted(() => {
 .xrm-map-stage {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(95, 193, 255, 0.32);
+  border: 1px solid rgba(95, 193, 255, 0.34);
   border-radius: 10px;
   background:
-    linear-gradient(145deg, rgba(20, 57, 92, 0.96), rgba(7, 24, 45, 0.98) 72%),
-    #07182e;
-  box-shadow: inset 0 0 42px rgba(92, 165, 217, 0.09), 0 16px 36px rgba(0, 17, 38, 0.2);
+    radial-gradient(circle at 50% 45%, rgba(32, 132, 211, 0.12), transparent 34%),
+    radial-gradient(circle at 50% 92%, rgba(25, 106, 172, 0.10), transparent 42%),
+    linear-gradient(145deg, rgba(12, 38, 68, 0.96), rgba(4, 18, 36, 0.99) 72%),
+    #06162a;
+  box-shadow:
+    inset 0 0 72px rgba(74, 180, 238, 0.10),
+    inset 0 1px 0 rgba(208, 245, 255, 0.08),
+    0 16px 36px rgba(0, 17, 38, 0.24);
+}
+
+.xrm-map-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.24;
+  background-image:
+    linear-gradient(rgba(92, 185, 232, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(92, 185, 232, 0.08) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(circle at 50% 55%, #000 18%, transparent 72%);
+}
+
+.xrm-map-stage::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -40%;
+  z-index: 0;
+  width: 84%;
+  aspect-ratio: 1;
+  pointer-events: none;
+  border: 1px solid rgba(95, 212, 255, 0.13);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 26px rgba(74, 178, 232, 0.035),
+    0 0 0 58px rgba(74, 178, 232, 0.028),
+    0 0 60px rgba(50, 170, 235, 0.12);
+  transform: translateX(-50%) scaleY(0.42);
 }
 
 .xrm-map-box {
+  position: relative;
+  z-index: 1;
   width: 100%;
-  filter: drop-shadow(0 20px 22px rgba(0, 14, 36, 0.22));
+  touch-action: none;
+  overscroll-behavior: contain;
+  -webkit-user-select: none;
+  user-select: none;
+  filter: drop-shadow(0 18px 18px rgba(0, 14, 36, 0.22));
+}
+
+.xrm-map-breath-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(2, 10, 22, 0.26), rgba(4, 16, 32, 0.48) 62%, rgba(2, 10, 22, 0.70));
+  animation: xrm-map-breath 5.2s ease-in-out infinite;
+}
+
+@keyframes xrm-map-breath {
+  0%, 100% {
+    opacity: 0.14;
+  }
+  50% {
+    opacity: 0.52;
+  }
 }
 
 .xrm-map-state {
@@ -2172,7 +3029,7 @@ onUnmounted(() => {
   height: 8px;
   margin: 9px 0 5px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #1d4ed8 0%, #0284c7 24%, #059669 48%, #f59e0b 73%, #ea580c 100%);
+  background: linear-gradient(90deg, #167DBA 0%, #159BA8 25%, #B59242 50%, #D07036 75%, #D83C4B 100%);
 }
 
 .xrm-legend-scale {

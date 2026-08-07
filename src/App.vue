@@ -80,7 +80,12 @@ const router = useRouter()
 const route = useRoute()
 type ThemeMode = 'dark' | 'light'
 const themeStorageKey = 'platform:theme-mode'
-const theme = ref<ThemeMode>('light')
+const getInitialTheme = (): ThemeMode => {
+  if (typeof window === 'undefined') return 'dark'
+  const savedTheme = localStorage.getItem(themeStorageKey)
+  return savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'dark'
+}
+const theme = ref<ThemeMode>(getInitialTheme())
 const selectedKeys = ref<string[]>([route.path])
 const footerInfo = ref<SiteFooterInfo>({
   recordNo: '备案信息加载中',
@@ -92,10 +97,10 @@ const allMenuItems: MenuItem[] = [
   { key: '/', label: '主页' },
   { key: '/dashboard', label: '风险预警态势盘', permissions: ['dashboard:read'] },
   { key: '/risk-analysis', label: '风险分析管理', permissions: ['case:read:department', 'case:read:all', 'case:read:metadata'] },
-  { key: '/alert-push', label: '预警推送', permissions: ['dashboard:read'] },
+  { key: '/political-security', label: '政治安全', permissions: ['political:read'] },
+  { key: '/alert-push', label: '智能预警', permissions: ['dashboard:read'] },
   { key: '/procuratorate-suggestion', label: '检察建议', permissions: ['case:read:department', 'case:read:all'] },
   { key: '/legal-recommend', label: '普法方案', permissions: ['dashboard:read'] },
-  { key: '/political-security', label: '政治安全', permissions: ['political:read'] },
   { key: '/effect-stats', label: '效果评估统计', permissions: ['dashboard:read'] },
   { key: '/data-management', label: '数据导入', permissions: ['data:import'] },
   { key: '/access-management', label: '权限审计', permissions: ['user:manage'] },
@@ -171,13 +176,7 @@ watch(
 )
 
 onMounted(async () => {
-  const savedTheme = localStorage.getItem(themeStorageKey)
-  if (savedTheme === 'dark' || savedTheme === 'light') {
-    theme.value = savedTheme
-  } else {
-    // 改为默认浅色，不再跟随系统偏好
-    theme.value = 'light'
-  }
+  // 优化需求：首次进入平台默认采用深色模式；用户主动切换后的选择仍会被保留。
   footerInfo.value = await fetchSiteFooterInfo()
 })
 </script>

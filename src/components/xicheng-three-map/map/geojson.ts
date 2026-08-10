@@ -38,6 +38,11 @@ function assertFeature(value: unknown, index: number): asserts value is StreetFe
     if (!Array.isArray(ring) || ring.length < 4 || !ring.every(isPosition)) {
       throw new Error(`${properties.name}包含无效坐标环`)
     }
+    const first = ring[0]
+    const last = ring.at(-1)
+    if (!first || !last || first[0] !== last[0] || first[1] !== last[1]) {
+      throw new Error(`${properties.name}的坐标环必须闭合`)
+    }
   }
 }
 

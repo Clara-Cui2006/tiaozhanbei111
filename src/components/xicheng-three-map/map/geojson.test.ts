@@ -28,6 +28,15 @@ describe('validateStreetCollection', () => {
     expect(() => validateStreetCollection(duplicated)).toThrow('行政代码必须唯一')
   })
 
+  it('拒绝首尾坐标不一致的未闭合坐标环', () => {
+    const unclosed = structuredClone(raw)
+    const ring = unclosed.features[0].geometry.coordinates[0]
+    const [longitude, latitude] = ring[0]
+    ring[ring.length - 1] = [longitude + 0.0001, latitude]
+
+    expect(() => validateStreetCollection(unclosed)).toThrow('坐标环必须闭合')
+  })
+
   it('从网址加载并校验街道数据', async () => {
     const url = `data:application/json,${encodeURIComponent(JSON.stringify(raw))}`
 

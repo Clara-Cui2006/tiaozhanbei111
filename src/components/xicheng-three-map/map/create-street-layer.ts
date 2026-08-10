@@ -3,7 +3,7 @@ import type { StreetCaseMetric } from '../case-count-metrics'
 import type { MapSelectionState, StreetFeatureCollection } from '../types'
 import { disposeObject3D } from './dispose'
 import { featureToShape, projectRing } from './geometry'
-import { createOutlineMaterial, createSideMaterial, createTopMaterial, LEVEL_COLORS } from './materials'
+import { createOutlineMaterial, createSideMaterial, createTopMaterial } from './materials'
 import type { LocalProjection } from './projection'
 
 interface StreetLayerOptions {
@@ -61,8 +61,8 @@ export function createStreetLayer(options: StreetLayerOptions): StreetLayerHandl
       curveSegments: 2,
     })
     geometry.computeVertexNormals()
-    const topMaterial = createTopMaterial(metric.level)
-    const sideMaterial = createSideMaterial(metric.level, EXTRUDE_DEPTH)
+    const topMaterial = createTopMaterial(metric.color)
+    const sideMaterial = createSideMaterial(metric.color, EXTRUDE_DEPTH)
     const mesh = new THREE.Mesh(geometry, [topMaterial, sideMaterial])
     mesh.name = `${name}-mesh`
     mesh.userData = { adcode, name }
@@ -74,7 +74,7 @@ export function createStreetLayer(options: StreetLayerOptions): StreetLayerHandl
     if (!firstOutlinePoint) throw new Error(`${name}缺少有效外环`)
     const outlineGeometry = new THREE.BufferGeometry().setFromPoints([...outlinePoints, firstOutlinePoint])
     const crispMaterial = createOutlineMaterial(0xe8fbff, 0.96)
-    const glowMaterial = createOutlineMaterial(LEVEL_COLORS[metric.level], 0.72)
+    const glowMaterial = createOutlineMaterial(metric.color, 0.72)
     const crisp = new THREE.Line(outlineGeometry, crispMaterial)
     const glow = new THREE.Line(outlineGeometry.clone(), glowMaterial)
     glow.scale.setScalar(1.002)
@@ -118,12 +118,12 @@ export function createStreetLayer(options: StreetLayerOptions): StreetLayerHandl
       metrics = nextMetrics
       for (const [adcode, visual] of visuals) {
         const metric = metrics[adcode]!
-        const color = LEVEL_COLORS[metric.level]
-        visual.topMaterial.color.setHex(color)
-        visual.topMaterial.emissive.setHex(color).multiplyScalar(0.24)
+        const color = new THREE.Color(metric.color)
+        visual.topMaterial.color.copy(color)
+        visual.topMaterial.emissive.copy(color).multiplyScalar(0.24)
         const sideColor = visual.sideMaterial.uniforms.uColor?.value as THREE.Color | undefined
-        sideColor?.setHex(color)
-        visual.glowMaterial.color.setHex(color)
+        sideColor?.copy(color)
+        visual.glowMaterial.color.copy(color)
       }
     },
     getMetric: (adcode) => metrics[adcode],

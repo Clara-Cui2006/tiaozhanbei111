@@ -1,13 +1,4 @@
 import * as THREE from 'three'
-import type { StreetCaseMetric } from '../case-count-metrics'
-
-export const LEVEL_COLORS: Record<StreetCaseMetric['level'], number> = {
-  1: 0x0877d9,
-  2: 0x06d6d0,
-  3: 0xffd45a,
-  4: 0xff8a3d,
-  5: 0xff355d,
-}
 
 const SIDE_GRADIENT = {
   bottomFactor: 0.42,
@@ -23,7 +14,7 @@ export interface SideGradientSample {
 }
 
 export function sampleSideGradient(
-  level: StreetCaseMetric['level'],
+  color: THREE.ColorRepresentation,
   normalizedHeight: number,
   intensity: number,
 ): SideGradientSample {
@@ -34,13 +25,13 @@ export function sampleSideGradient(
   const factor = THREE.MathUtils.lerp(SIDE_GRADIENT.bottomFactor, topFactor, smoothHeight)
 
   return {
-    color: new THREE.Color(LEVEL_COLORS[level]).multiplyScalar(factor),
+    color: new THREE.Color(color).multiplyScalar(factor),
     opacity: THREE.MathUtils.lerp(SIDE_GRADIENT.bottomOpacity, SIDE_GRADIENT.topOpacity, height),
   }
 }
 
-export function createTopMaterial(level: StreetCaseMetric['level']): THREE.MeshStandardMaterial {
-  const color = new THREE.Color(LEVEL_COLORS[level])
+export function createTopMaterial(colorValue: THREE.ColorRepresentation): THREE.MeshStandardMaterial {
+  const color = new THREE.Color(colorValue)
   return new THREE.MeshStandardMaterial({
     color,
     emissive: color.clone().multiplyScalar(0.24),
@@ -53,14 +44,14 @@ export function createTopMaterial(level: StreetCaseMetric['level']): THREE.MeshS
 }
 
 export function createSideMaterial(
-  level: StreetCaseMetric['level'],
+  color: THREE.ColorRepresentation,
   depth: number,
 ): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     transparent: true,
     side: THREE.DoubleSide,
     uniforms: {
-      uColor: { value: new THREE.Color(LEVEL_COLORS[level]) },
+      uColor: { value: new THREE.Color(color) },
       uDepth: { value: depth },
       uIntensity: { value: 1 },
       uBottomFactor: { value: SIDE_GRADIENT.bottomFactor },
@@ -97,7 +88,10 @@ export function createSideMaterial(
   })
 }
 
-export function createOutlineMaterial(color: number, opacity: number): THREE.LineBasicMaterial {
+export function createOutlineMaterial(
+  color: THREE.ColorRepresentation,
+  opacity: number,
+): THREE.LineBasicMaterial {
   return new THREE.LineBasicMaterial({
     color,
     transparent: true,

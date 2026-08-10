@@ -2,10 +2,9 @@
 import { readFileSync } from 'node:fs'
 import * as THREE from 'three'
 import { describe, expect, it, vi } from 'vitest'
-import type { StreetCaseMetric } from '../case-count-metrics'
+import { QUANTITY_COLORS, type StreetCaseMetric } from '../case-count-metrics'
 import { createStreetLayer } from './create-street-layer'
 import { validateStreetCollection } from './geojson'
-import { LEVEL_COLORS } from './materials'
 import { createLocalProjection } from './projection'
 
 const streetCollection = validateStreetCollection(JSON.parse(
@@ -15,7 +14,13 @@ const streetCollection = validateStreetCollection(JSON.parse(
 function metricsFor(level: StreetCaseMetric['level']): Record<string, StreetCaseMetric> {
   return Object.fromEntries(streetCollection.features.map(({ properties }, index) => [
     properties.adcode,
-    { adcode: properties.adcode, name: properties.name, caseCount: index, level, color: '#1689C4' },
+    {
+      adcode: properties.adcode,
+      name: properties.name,
+      caseCount: index,
+      level,
+      color: QUANTITY_COLORS[level - 1]!,
+    },
   ]))
 }
 
@@ -54,13 +59,14 @@ describe('createStreetLayer', () => {
 
     const [top, side] = mesh.material as [THREE.MeshStandardMaterial, THREE.ShaderMaterial]
     const streetGroup = layer.groupsByAdcode.get('110102011')
+    const expectedColor = new THREE.Color(updatedMetrics['110102011']!.color).getHex()
     const glow = streetGroup?.children.find((child) => child instanceof THREE.Line
-      && (child.material as THREE.LineBasicMaterial).color.getHex() === LEVEL_COLORS[5]) as THREE.Line | undefined
+      && (child.material as THREE.LineBasicMaterial).color.getHex() === expectedColor) as THREE.Line | undefined
     expect(layer.getMetric('110102011')?.caseCount).toBe(28)
     expect(mesh.geometry).toBe(originalGeometry)
     expect(streetGroup?.position).toEqual(originalPosition)
-    expect(top.color.getHex()).toBe(LEVEL_COLORS[5])
-    expect((side.uniforms.uColor?.value as THREE.Color).getHex()).toBe(LEVEL_COLORS[5])
+    expect(top.color.getHex()).toBe(expectedColor)
+    expect((side.uniforms.uColor?.value as THREE.Color).getHex()).toBe(expectedColor)
     expect(glow).toBeTruthy()
     layer.update(0.2)
     expect(streetGroup?.position.y).toBeGreaterThan(0)

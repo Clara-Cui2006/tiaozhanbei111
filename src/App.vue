@@ -20,19 +20,6 @@
             {{ item.label }}
           </button>
 
-          <!-- 桌面端直接展示次级导航，不再显示“更多” -->
-          <button
-            v-for="item in moreMenuItems"
-            :key="`desktop-${item.key}`"
-            type="button"
-            class="nav-link nav-secondary-direct"
-            :class="{ 'nav-link--active': isNavActive(item.key) }"
-            @click="goTo(item.key)"
-          >
-            {{ item.label }}
-          </button>
-
-          <!-- 仅手机端将次级导航收进“更多” -->
           <div v-if="moreMenuItems.length" class="more-nav" @click.stop>
             <button
               type="button"
@@ -62,11 +49,7 @@
           </div>
         </nav>
 
-        <div
-          class="account-slot"
-          :class="{ 'account-slot--hero': isHomeRoute }"
-          @click.stop
-        >
+        <div class="account-slot" @click.stop>
           <button
             type="button"
             class="account-trigger"
@@ -592,8 +575,8 @@ onBeforeUnmount(() => {
       transparent 0%,
       transparent 46%,
       rgba(121, 224, 255, 0.08) 48.5%,
-      rgba(246, 211, 139, 0.28) 50%,
-      rgba(208, 235, 245, 0.12) 51.5%,
+      rgba(95, 142, 255, 0.24) 50%,
+      rgba(196, 221, 255, 0.12) 51.5%,
       transparent 54%,
       transparent 100%
     );
@@ -1113,9 +1096,9 @@ onBeforeUnmount(() => {
   height: 86px !important;
   min-height: 86px;
   display: grid !important;
-  grid-template-columns: 240px minmax(0, 1fr) auto !important;
+  grid-template-columns: 250px minmax(0, 1fr) 300px !important;
   align-items: center;
-  gap: 20px !important;
+  gap: 22px !important;
   padding: 0 42px !important;
   overflow: visible;
   background: rgba(2, 9, 22, 0.97) !important;
@@ -1156,7 +1139,7 @@ onBeforeUnmount(() => {
   height: 100%;
   align-items: center;
   justify-content: flex-start;
-  gap: clamp(18px, 1.55vw, 30px);
+  gap: clamp(14px, 1.1vw, 22px);
   white-space: nowrap;
 }
 
@@ -1169,10 +1152,10 @@ onBeforeUnmount(() => {
   border-radius: 0;
   color: rgba(255, 255, 255, 0.88);
   font-family: "Microsoft YaHei UI", "PingFang SC", sans-serif;
-  font-size: clamp(16px, 0.98vw, 19px);
-  font-weight: 600;
+  font-size: clamp(16px, 1vw, 18px);
+  font-weight: 700;
   line-height: 86px;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
   cursor: pointer;
   background: transparent;
   transition: color 0.18s ease, text-shadow 0.18s ease;
@@ -1201,16 +1184,16 @@ onBeforeUnmount(() => {
 }
 
 .nav-link--active::after {
-  width: 40px;
+  width: 32px;
 }
 
 .nav-secondary-direct {
-  display: inline-flex;
+  display: none;
 }
 
 .more-nav {
   position: relative;
-  display: none;
+  display: block;
   height: 100%;
 }
 
@@ -1244,9 +1227,9 @@ onBeforeUnmount(() => {
 }
 
 .more-menu {
-  top: 72px;
+  top: 70px;
   left: 50%;
-  min-width: 168px;
+  min-width: 176px;
   transform: translateX(-50%);
 }
 
@@ -1262,8 +1245,8 @@ onBeforeUnmount(() => {
 }
 
 .more-menu-item {
-  padding: 11px 14px;
-  font-size: 15px;
+  padding: 10px 14px;
+  font-size: 14px;
   border-radius: 2px;
 }
 
@@ -1282,9 +1265,9 @@ onBeforeUnmount(() => {
 }
 
 .account-slot--hero {
-  position: fixed;
-  top: 122px;
-  right: 38px;
+  position: relative;
+  top: auto;
+  right: auto;
 }
 
 .account-trigger {
@@ -1295,8 +1278,8 @@ onBeforeUnmount(() => {
   padding: 6px 2px;
   border: 0;
   color: rgba(244, 249, 253, 0.9);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
   background: transparent;
   text-shadow: 0 1px 5px rgba(0, 0, 0, 0.7);
@@ -1469,7 +1452,7 @@ onBeforeUnmount(() => {
 }
 
 /* 首页右上用户信息位于深色主视觉上，浅色模式下给它独立的浅色玻璃底。 */
-.app-container.theme-light .account-slot--hero .account-trigger {
+.app-container.theme-light .account-trigger {
   padding: 7px 11px !important;
   border: 1px solid rgba(132, 209, 235, 0.58) !important;
   border-radius: 18px !important;
@@ -1479,15 +1462,10 @@ onBeforeUnmount(() => {
   text-shadow: none !important;
 }
 
-.app-container.theme-light .account-slot--hero .account-trigger:hover,
-.app-container.theme-light .account-slot--hero .account-trigger:focus-visible {
+.app-container.theme-light .account-trigger:hover,
+.app-container.theme-light .account-trigger:focus-visible {
   color: #075f84 !important;
   background: rgba(248, 253, 255, 0.96) !important;
-}
-
-.app-container.theme-light .account-slot:not(.account-slot--hero) .account-trigger {
-  color: #234b69 !important;
-  text-shadow: none !important;
 }
 
 .app-container.theme-light .account-icon {
@@ -1554,7 +1532,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1500px) {
   .header {
-    grid-template-columns: 205px minmax(0, 1fr) auto !important;
+    grid-template-columns: 205px minmax(0, 1fr) 270px !important;
     gap: 14px !important;
     padding: 0 28px !important;
   }
@@ -1564,15 +1542,15 @@ onBeforeUnmount(() => {
   }
 
   .top-nav {
-    gap: 18px;
+    gap: 12px;
   }
 
   .nav-link {
-    font-size: 16px;
+    font-size: 15px;
   }
 
   .account-org {
-    max-width: 190px;
+    max-width: 220px;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -1590,7 +1568,7 @@ onBeforeUnmount(() => {
   }
 
   .top-nav {
-    gap: 14px;
+    gap: 10px;
     overflow-x: auto;
     scrollbar-width: none;
   }
@@ -1604,7 +1582,7 @@ onBeforeUnmount(() => {
     font-size: 14px;
   }
 
-  .account-slot:not(.account-slot--hero) .account-org {
+  .account-slot .account-org {
     display: none;
   }
 }
@@ -1652,13 +1630,7 @@ onBeforeUnmount(() => {
     display: block !important;
   }
 
-  .account-slot--hero {
-    top: 86px;
-    right: 16px;
-  }
-
-  .account-slot--hero .account-org,
-  .account-slot:not(.account-slot--hero) .account-org {
+  .account-slot .account-org {
     display: none;
   }
 

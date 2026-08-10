@@ -501,7 +501,7 @@ const renderDonutChart = () => {
         center,
         z: 20,
         selectedMode: 'single',
-        selectedOffset: 12,
+        selectedOffset: 0,
         padAngle: 3,
         avoidLabelOverlap: true,
         label: { color: light ? '#123f66' : '#dff6ff', fontSize: 11, textBorderWidth: 2, textBorderColor: light ? '#fff' : '#06162d' },

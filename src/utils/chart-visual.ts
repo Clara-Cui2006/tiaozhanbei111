@@ -9,8 +9,8 @@ export type ChartDatum = {
 
 export const CHART_PALETTES = {
   rainbow: ['#f0445e', '#ff7a1a', '#ffc62e', '#69d35d', '#20d0a5', '#20bfe8'],
-  governance: ['#ff5f55', '#ff9f43', '#ffd166', '#56d364', '#25c7a2'],
-  political: ['#ef4058', '#ff7b35', '#f7c948', '#21c9a6', '#27a5ed'],
+  governance: ['#2a82ff', '#35b8ff', '#4fd6ff', '#6d7cff', '#9274ff'],
+  political: ['#276dff', '#2aa8ff', '#46d0ff', '#6a82ff', '#9072ff'],
   caseBlue: ['#0d5bd7', '#117be6', '#169fe8', '#38bee9', '#75d8ee'],
   violetCyan: ['#7758e8', '#9c62f0', '#b65ede', '#3cc8ec', '#28a9e0'],
   amberTeal: ['#e8a43e', '#f6c85f', '#69cf8e', '#28b8a5', '#2f8fcb']
@@ -48,7 +48,7 @@ export const areaGradient = (color: string, alpha = 0.36) => new echarts.graphic
   { offset: 1, color: rgbaHex(color, 0.01) }
 ])
 
-export const metallicBorder = (index: number) => index % 2 === 0 ? '#f3d28a' : '#d8edf8'
+export const metallicBorder = (index: number) => index % 2 === 0 ? '#a9dcff' : '#d1caff'
 
 const offsetPercent = (value: string, delta: number) => `${Number.parseFloat(value) + delta}%`
 
@@ -64,16 +64,16 @@ export const raisedBarStyle = (color: string, index = 0) => ({
 
 export const raisedPieStyle = (color: string, index = 0) => ({
   color: new echarts.graphic.RadialGradient(0.32, 0.24, 0.88, [
-    { offset: 0, color: shadeHex(color, 64) },
+    { offset: 0, color: shadeHex(color, 70) },
     { offset: 0.34, color },
-    { offset: 1, color: shadeHex(color, -62) }
+    { offset: 1, color: shadeHex(color, -72) }
   ]),
   borderColor: metallicBorder(index),
-  borderWidth: 1.4,
-  borderRadius: 8,
-  shadowBlur: 20,
-  shadowOffsetY: 10,
-  shadowColor: rgbaHex(color, 0.52)
+  borderWidth: 1.25,
+  borderRadius: 4,
+  shadowBlur: 24,
+  shadowOffsetY: 12,
+  shadowColor: rgbaHex(color, 0.62)
 })
 
 export const buildPieDepthLayers = (
@@ -102,8 +102,8 @@ export const buildPieDepthLayers = (
     return {
       ...item,
       itemStyle: {
-        color: shadeHex(baseColor, -46 + layer * 2),
-        opacity: 0.92
+        color: shadeHex(baseColor, -56 + layer * 2),
+        opacity: 0.9
       }
     }
   })

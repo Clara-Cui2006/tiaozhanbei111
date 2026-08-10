@@ -259,7 +259,7 @@ const renderPie = (
         center,
         z: 20,
         selectedMode: 'single',
-        selectedOffset: 11,
+        selectedOffset: 0,
         padAngle: 2.5,
         minShowLabelAngle: 4,
         avoidLabelOverlap: true,

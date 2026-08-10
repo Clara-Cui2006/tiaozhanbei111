@@ -100,7 +100,7 @@ export const HOME_BUSINESS_ITEMS: readonly NavigationItem[] = [
   },
   {
     key: '/alert-push',
-    label: '智能预警',
+    label: '预警推送',
     ...PERMISSION_RULES.dashboardRead,
     homeCard: { icon: 'alert', descriptions: ['预警信息及时送达', '联动处置高效响应'] }
   },

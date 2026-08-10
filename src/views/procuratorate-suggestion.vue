@@ -205,7 +205,7 @@ const initPieChart = () => {
         center,
         z: 20,
         selectedMode: 'single',
-        selectedOffset: 10,
+        selectedOffset: 0,
         padAngle: 3,
         label: { color: light ? '#173f60' : '#e5f6ff', fontSize: 12, textBorderWidth: 2, textBorderColor: light ? '#fff' : '#07162c' },
         labelLine: { length: 8, length2: 6, smooth: 0.2 },

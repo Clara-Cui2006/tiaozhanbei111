@@ -1284,7 +1284,7 @@ const mockCaseDetails: CaseDetail[] = [
   { id: 1, caseName: '白某盗窃案', procedureType: '一审', caseNumber: '(2025)京0102刑初716号', keywords: '非法占有, 自首, 罚金, 拘役, 返还', judgmentReason: '被告人行为构成盗窃罪，数额较大；如实供述、认罪认罚、赃物发还，从轻处罚。', category: '侵财类犯罪' },
   { id: 2, caseName: '侯某行贿案', procedureType: '一审', caseNumber: '(2025)京0102刑初272号', keywords: '违法所得, 自首, 罚金, 减轻处罚, 没收', judgmentReason: '行贿情节特别严重；自首减轻处罚，判六年。', category: '妨害社会管理类犯罪' },
   { id: 3, caseName: '孔某危险驾驶案', procedureType: '一审', caseNumber: '(2025)京0102刑初639号', keywords: '拘役, 罚金, 程序合法, 减轻处罚', judgmentReason: '构成危险驾驶罪；认罪认罚，适用缓刑。', category: '危害公共安全类犯罪' },
-  { id: 4, caseName: '李某诈骗案', procedureType: '一审', caseNumber: '(2025)京0102刑初731号', keywords: '非法占有, 罚金, 故意犯, 共同犯罪（漏罪并罚）', judgmentReason: '构成诈骗罪；漏罪与前罪并罚。', category: '侵财类犯罪' },
+  { id: 4, caseName: '李某诈骗案', procedureType: '一审', caseNumber: '(2025)京0102刑初731号', keywords: '非法占有, 罚金, 故意犯', judgmentReason: '构成诈骗罪；漏罪与前罪并罚。', category: '侵财类犯罪' },
   { id: 5, caseName: '罗某等生产销售有毒有害食品案', procedureType: '一审', caseNumber: '(2025)京0102刑初95号', keywords: '共同犯罪, 从犯, 罚金, 没收, 违法所得', judgmentReason: '构成共同犯罪；主从犯区分，认罪认罚从轻。', category: '妨害社会管理类犯罪' },
   { id: 6, caseName: '任某侵犯公民个人信息案', procedureType: '一审', caseNumber: '(2025)京0102刑初686号', keywords: '违法所得, 罚金, 自首, 没收, 合法财产', judgmentReason: '情节严重；退赃、如实供述，从轻。', category: '妨害社会管理类犯罪' },
   { id: 7, caseName: '田某等虚开增值税专用发票案', procedureType: '一审', caseNumber: '(2025)京0102刑初144号', keywords: '共同犯罪, 罚金, 自首, 减轻处罚, 单位犯罪', judgmentReason: '单位及主管人员构成犯罪；补税、认罪，部分缓刑。', category: '妨害社会管理类犯罪' },

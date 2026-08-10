@@ -80,6 +80,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
+import 'echarts-gl'
 import BackHome from '../components/back-home.vue'
 import RiskMapPanel from '../components/risk-map-panel.vue'
 import { fetchCommunityRiskPoints, fetchDashboardOverview, fetchRiskTrend, fetchMultiTrend } from '../api/platform'
@@ -87,7 +88,6 @@ import { chatWithLLM } from '../services/llm'
 import { USER_PROMPT_TEMPLATES } from '../services/prompts'
 import type { CommunityRiskPoint, DashboardOverview, RiskTrendPoint, MultiTrendData } from '../types/platform'
 import {
-  CHART_PALETTES,
   areaGradient,
   chartAxis,
   chartTooltip,
@@ -119,17 +119,10 @@ const syncThemeMode = () => {
   themeMode.value = document.body.classList.contains('theme-light') ? 'light' : 'dark'
 }
 
-const tabPalettes: Record<string, readonly string[]> = {
-  totalCases: CHART_PALETTES.amberTeal,
-  highIncidence: CHART_PALETTES.rainbow,
-  riskAlert: CHART_PALETTES.political,
-  procuratorate: CHART_PALETTES.violetCyan,
-  legalPlan: CHART_PALETTES.governance
-}
+const dashboard3DColors = ['#0B56C8', '#0874D6', '#0B91C8', '#2446D0', '#4734CA', '#5A3CC6'] as const
 
 const getChartColors = () => {
-  const palette = tabPalettes[activeTab.value] ?? CHART_PALETTES.rainbow
-  return palette.map((color) => isLightTheme.value ? shadeHex(color, -24) : color)
+  return dashboard3DColors.map((color) => isLightTheme.value ? shadeHex(color, -18) : color)
 }
 
 const aiAssessing = ref(false)
@@ -300,13 +293,195 @@ const getChartOption = (): echarts.EChartsOption => {
   }
 }
 
+const getDashboard3DChartOption = (): echarts.EChartsOption => {
+  const light = isLightTheme.value
+  const chartColors = getChartColors()
+  const dates = multiTrend.value.map((item) => item.date)
+  type MetricSeries = { name: string; values: number[] }
+
+  const build3DOption = (title: string, metrics: MetricSeries[]) => {
+    const metricNames = metrics.map((item) => item.name)
+    const data = metrics.flatMap((metric, metricIndex) =>
+      dates.map((date, dateIndex) => {
+        const color = chartColors[metricIndex % chartColors.length]!
+        return {
+          value: [dateIndex, metricIndex, metric.values[dateIndex] ?? 0],
+          itemStyle: {
+            color: rgbaHex(color, light ? 0.84 : 0.88),
+            borderColor: rgbaHex(shadeHex(color, 44), 0.72),
+            borderWidth: 1
+          }
+        }
+      })
+    )
+
+    return {
+      backgroundColor: light ? 'rgba(236, 248, 255, 0.86)' : 'rgba(3, 18, 42, 0.96)',
+      animationDuration: 1000,
+      animationEasing: 'cubicOut',
+      title: {
+        text: title,
+        left: 18,
+        top: 12,
+        textStyle: {
+          color: light ? '#123963' : '#d8f5ff',
+          fontSize: 15,
+          fontWeight: 700
+        }
+      },
+      tooltip: {
+        backgroundColor: light ? 'rgba(255,255,255,.96)' : 'rgba(4,18,42,.95)',
+        borderColor: rgbaHex(chartColors[0]!, 0.45),
+        borderWidth: 1,
+        textStyle: { color: light ? '#173b5d' : '#d9f7ff', fontSize: 13 },
+        formatter: (params: any) => {
+          const value = params.value || []
+          const date = dates[value[0]] ?? ''
+          const metric = metricNames[value[1]] ?? ''
+          return `${date}<br/>${metric}: ${value[2] ?? 0}`
+        }
+      },
+      xAxis3D: {
+        type: 'category',
+        name: 'X 时间',
+        data: dates,
+        axisLine: { lineStyle: { color: rgbaHex(chartColors[1]!, light ? 0.38 : 0.66), width: 2 } },
+        axisLabel: { color: light ? '#335b7e' : '#aeeaff', fontSize: 11, interval: 0 },
+        splitLine: { show: true, lineStyle: { color: light ? 'rgba(68, 128, 178, .16)' : 'rgba(112, 205, 255, .18)' } }
+      },
+      yAxis3D: {
+        type: 'category',
+        name: 'Y 指标',
+        data: metricNames,
+        axisLine: { lineStyle: { color: rgbaHex(chartColors[3]!, light ? 0.36 : 0.62), width: 2 } },
+        axisLabel: { color: light ? '#335b7e' : '#c5efff', fontSize: 12 },
+        splitLine: { show: true, lineStyle: { color: light ? 'rgba(68, 128, 178, .14)' : 'rgba(112, 205, 255, .16)' } }
+      },
+      zAxis3D: {
+        type: 'value',
+        name: 'Z 数量',
+        axisLine: { lineStyle: { color: rgbaHex('#9DEBFF', light ? 0.45 : 0.78), width: 2 } },
+        axisLabel: { color: light ? '#335b7e' : '#bcefff', fontSize: 12 },
+        splitLine: { show: true, lineStyle: { color: light ? 'rgba(68, 128, 178, .18)' : 'rgba(112, 205, 255, .22)' } }
+      },
+      grid3D: {
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+        boxWidth: 190,
+        boxDepth: Math.max(64, Math.min(138, metricNames.length * 24)),
+        boxHeight: 112,
+        environment: light ? '#edf8ff' : '#03122a',
+        viewControl: {
+          projection: 'perspective',
+          alpha: 26,
+          beta: -38,
+          distance: 165,
+          center: [0, -8, 0],
+          zoomSensitivity: 0.2,
+          rotateSensitivity: 0.6
+        },
+        light: {
+          main: {
+            intensity: 1.75,
+            shadow: true,
+            shadowQuality: 'high',
+            alpha: 34,
+            beta: 24
+          },
+          ambient: { intensity: light ? 0.68 : 0.52 }
+        },
+        postEffect: {
+          enable: true,
+          bloom: { enable: true, bloomIntensity: light ? 0.18 : 0.48 },
+          SSAO: { enable: true, quality: 'medium', radius: 2, intensity: 0.42 }
+        },
+        splitLine: {
+          show: true,
+          lineStyle: { color: light ? 'rgba(68, 128, 178, .14)' : 'rgba(84, 180, 255, .18)', width: 1 }
+        },
+        splitArea: {
+          show: true,
+          areaStyle: {
+            color: light
+              ? ['rgba(38, 126, 206, .035)', 'rgba(95, 119, 255, .03)']
+              : ['rgba(27, 104, 188, .075)', 'rgba(89, 104, 255, .055)']
+          }
+        }
+      },
+      series: [{
+        name: title,
+        type: 'bar3D',
+        data,
+        barSize: metricNames.length > 1 ? 9 : 15,
+        bevelSize: 0,
+        bevelSmoothness: 0,
+        shading: 'realistic',
+        realisticMaterial: { roughness: 0.18, metalness: 0.08 },
+        itemStyle: {
+          opacity: light ? 0.84 : 0.88,
+          shadowBlur: 20,
+          shadowColor: rgbaHex(chartColors[1]!, 0.58)
+        },
+        emphasis: {
+          label: {
+            show: true,
+            formatter: (params: any) => params.value?.[2] ?? '',
+            textStyle: { color: '#ffffff', fontSize: 13, fontWeight: 800 }
+          },
+          itemStyle: {
+            opacity: light ? 0.96 : 0.98,
+            borderColor: 'rgba(104, 230, 255, 0.92)',
+            borderWidth: 1.5
+          }
+        }
+      }]
+    } as echarts.EChartsOption
+  }
+
+  switch (activeTab.value) {
+    case 'totalCases':
+      return build3DOption('案件总数趋势', [
+        { name: '案件总数', values: multiTrend.value.map((item) => item.totalCases) }
+      ])
+    case 'highIncidence':
+      return build3DOption('高发案件类型', [
+        { name: '诈骗罪', values: multiTrend.value.map((item) => Math.round(item.highIncidenceCount * 0.34)) },
+        { name: '盗窃罪', values: multiTrend.value.map((item) => Math.round(item.highIncidenceCount * 0.26)) },
+        { name: '扰乱秩序', values: multiTrend.value.map((item) => Math.round(item.highIncidenceCount * 0.18)) },
+        { name: '相邻纠纷', values: multiTrend.value.map((item) => Math.round(item.highIncidenceCount * 0.12)) },
+        { name: '侵权纠纷', values: multiTrend.value.map((item) => Math.round(item.highIncidenceCount * 0.1)) }
+      ])
+    case 'riskAlert':
+      return build3DOption('风险预警推送', [
+        { name: '推送次数', values: multiTrend.value.map((item) => item.riskAlertPush) }
+      ])
+    case 'procuratorate':
+      return build3DOption('检察建议发送', [
+        { name: '刑事检察', values: multiTrend.value.map((item) => Math.round(item.procuratorateSuggestion * 0.36)) },
+        { name: '民事检察', values: multiTrend.value.map((item) => Math.round(item.procuratorateSuggestion * 0.26)) },
+        { name: '行政检察', values: multiTrend.value.map((item) => Math.round(item.procuratorateSuggestion * 0.22)) },
+        { name: '公益诉讼', values: multiTrend.value.map((item) => Math.round(item.procuratorateSuggestion * 0.16)) }
+      ])
+    case 'legalPlan':
+      return build3DOption('普法方案投递', [
+        { name: '线上推送', values: multiTrend.value.map((item) => Math.round(item.legalPlanDelivery * 0.46)) },
+        { name: '线下活动', values: multiTrend.value.map((item) => Math.round(item.legalPlanDelivery * 0.32)) },
+        { name: '社区宣讲', values: multiTrend.value.map((item) => Math.round(item.legalPlanDelivery * 0.22)) }
+      ])
+    default:
+      return {}
+  }
+}
+
 const renderChart = () => {
   if (!chartRef.value) return
   if (!myChart) {
     myChart = echarts.init(chartRef.value)
   }
   myChart.clear()
-  myChart.setOption(getChartOption())
+  myChart.setOption(getDashboard3DChartOption())
 }
 
 watch(activeTab, () => {
@@ -487,26 +662,34 @@ onUnmounted(() => {
 
 /* 趋势图 tab 按钮深色主题 */
 .dashboard :deep(.arco-radio-group-button) {
-  background: rgba(13, 30, 56, 0.8);
-  border-color: rgba(108, 201, 255, 0.28);
+  padding: 3px;
+  background: linear-gradient(180deg, rgba(4, 24, 52, 0.92), rgba(3, 15, 35, 0.94));
+  border: 1px solid rgba(61, 160, 245, 0.36);
+  box-shadow:
+    inset 0 0 18px rgba(26, 105, 196, 0.18),
+    0 0 18px rgba(19, 114, 214, 0.10);
 }
 
 .dashboard :deep(.arco-radio-button) {
-  color: #8ec7e8;
+  color: #8fcff0;
   background: transparent;
-  border-color: rgba(108, 201, 255, 0.25);
+  border-color: transparent;
+  border-radius: 5px;
 }
 
 .dashboard :deep(.arco-radio-button:hover) {
-  color: #b6e7ff;
-  background: rgba(81, 182, 255, 0.12);
+  color: #d7f6ff;
+  background: rgba(25, 104, 196, 0.20);
 }
 
 .dashboard :deep(.arco-radio-button.arco-radio-button-checked),
 .dashboard :deep(.arco-radio-button.arco-radio-button-checked:hover) {
   color: #ffffff;
-  background: linear-gradient(180deg, rgba(83, 195, 255, 0.38), rgba(46, 129, 255, 0.3));
-  border-color: rgba(83, 195, 255, 0.5);
+  background: linear-gradient(180deg, rgba(28, 124, 224, 0.86), rgba(10, 68, 154, 0.82));
+  border-color: rgba(95, 218, 255, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(166, 238, 255, 0.22),
+    0 0 14px rgba(46, 176, 255, 0.35);
 }
 
 .ai-assessment {

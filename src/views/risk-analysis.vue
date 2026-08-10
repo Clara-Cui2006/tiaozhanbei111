@@ -98,6 +98,7 @@
 import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router' // 【新增】
 import * as echarts from 'echarts'
+import 'echarts-gl'
 import BackHome from '../components/back-home.vue'
 import { chatWithLLM } from '../services/llm'
 import { USER_PROMPT_TEMPLATES } from '../services/prompts'
@@ -155,15 +156,15 @@ const isLightTheme = () => localStorage.getItem('platform:theme-mode') === 'ligh
 
 // 视觉规范：同页面不同图表使用不同梯度色系，避免“一屏全蓝”
 const CHART_PALETTES = {
-  rainbow: ['#ff3b5c', '#ff7a1a', '#ffc928', '#8edc3f', '#1fd6a7', '#26c8ff', '#4d76ff', '#8a5cff', '#d64dff', '#ff4fa8'],
-  subject: ['#744cff', '#9d59ff', '#d450ff', '#36d8ff', '#1ab4ff', '#2fe3c0'],
-  age: ['#ff4f5e', '#ff8a22', '#ffd83a', '#7ed957', '#20d6b2'],
-  time: ['#1bd7ff', '#2b9bff', '#5f72ff', '#9a5dff', '#27e2bc'],
-  caseBlue: ['#0e66ff', '#168bff', '#20b9ff', '#48d5ff', '#79e6ff']
+  rainbow: ['#1e78ff', '#2aa8ff', '#47c7ff', '#4f7dff', '#6d6bff', '#805cff', '#9a6dff', '#6cd3ff', '#3ca7f4', '#566dff'],
+  subject: ['#3b82f6', '#6d6bff', '#8a72ff', '#35b6ff', '#59d0e8', '#566dff'],
+  age: ['#d56b24', '#e27d2f', '#ec9142', '#f0a85c', '#f4bc78'],
+  time: ['#2aa8ff', '#4f7dff', '#6d6bff', '#8a72ff', '#59d0e8'],
+  caseBlue: ['#1e78ff', '#2aa8ff', '#47c7ff', '#5b8cff', '#8a72ff']
 }
 
 const getChartColors = () => isLightTheme()
-  ? ['#d9485f', '#e57a26', '#d8a915', '#6fa936', '#159c7d', '#1b87bd', '#425db8', '#7550b8', '#a445b0', '#c93c7f']
+  ? ['#246ecf', '#228ccf', '#319ed8', '#4c73d6', '#655bd4', '#7a63d7', '#458bd9', '#367fcb', '#586edf', '#376dbb']
   : CHART_PALETTES.rainbow
 
 const chartTextPrimary = () => isLightTheme() ? '#183b5a' : '#ecf8ff'
@@ -171,7 +172,8 @@ const chartTextSecondary = () => isLightTheme() ? '#416989' : '#b9ddf3'
 const chartAxisColor = () => isLightTheme() ? 'rgba(70, 118, 158, 0.42)' : 'rgba(160,210,255,0.34)'
 const chartSplitColor = () => isLightTheme() ? 'rgba(76, 125, 166, 0.13)' : 'rgba(96,166,230,0.12)'
 const chartTooltipBg = () => isLightTheme() ? 'rgba(245, 250, 255, 0.97)' : 'rgba(6, 18, 36, 0.94)'
-const chartTooltipBorder = () => isLightTheme() ? 'rgba(166, 128, 51, 0.42)' : 'rgba(238, 210, 138, 0.58)'
+const chartTooltipBorder = () => isLightTheme() ? 'rgba(85, 125, 206, 0.42)' : 'rgba(120, 155, 255, 0.58)'
+const chart3DBackground = () => isLightTheme() ? 'rgba(232, 244, 255, 0.96)' : '#061b3d'
 
 const clamp = (n: number, min = 0, max = 255) => Math.min(max, Math.max(min, Math.round(n)))
 const normalizeHex = (hex: string) => hex.replace('#', '').trim()
@@ -198,12 +200,12 @@ const verticalGradient = (color: string, topBoost = 42, bottomDrop = -46) => new
 
 const sliceStyle = (color: string, index: number, selected = false) => ({
   color: verticalGradient(color),
-  borderColor: index % 2 === 0 ? '#f3d28a' : '#bfe8ff',
-  borderWidth: selected ? 3 : 1.6,
-  borderRadius: 8,
-  shadowBlur: selected ? 26 : 16,
-  shadowOffsetY: selected ? 14 : 10,
-  shadowColor: rgbaHex(color, selected ? 0.78 : 0.48),
+  borderColor: selected ? '#eff8ff' : (index % 2 === 0 ? '#b9d9ff' : '#d7ccff'),
+  borderWidth: selected ? 2.6 : 1.35,
+  borderRadius: 4,
+  shadowBlur: selected ? 42 : 22,
+  shadowOffsetY: selected ? 18 : 11,
+  shadowColor: rgbaHex(color, selected ? 0.86 : 0.58),
   opacity: 1
 })
 
@@ -227,6 +229,8 @@ const buildPieDepthLayers = (
     silent: true,
     animation: false,
     z: 1 + layerIndex,
+    selectedMode: extra.selectedMode ?? 'single',
+    selectedOffset: extra.selectedOffset ?? 0,
     label: { show: false },
     labelLine: { show: false },
     tooltip: { show: false },
@@ -237,10 +241,14 @@ const buildPieDepthLayers = (
       return {
         name: item.name,
         value: item.value,
+        selected: Boolean(item.selected),
         itemStyle: {
-          color: verticalGradient(shadeHex(base, -48), 10, -28),
-          borderColor: 'rgba(0, 0, 0, 0.22)',
+          color: verticalGradient(shadeHex(base, -42), item.selected ? 24 : 8, item.selected ? -20 : -34),
+          borderColor: item.selected ? rgbaHex(shadeHex(base, 60), 0.48) : 'rgba(0, 0, 0, 0.22)',
           borderWidth: 1,
+          shadowBlur: item.selected ? 22 : 10,
+          shadowOffsetY: item.selected ? 12 : 7,
+          shadowColor: rgbaHex(base, item.selected ? 0.42 : 0.22),
           opacity: item.itemStyle?.opacity ?? 1
         }
       }
@@ -253,7 +261,66 @@ const BUBBLE_LAYOUTS = [
   [17, 58], [31, 66], [48, 58], [63, 63], [79, 58], [91, 68],
   [8, 78], [24, 82], [42, 80], [59, 82], [75, 82], [87, 84]
 ]
-const BUBBLE_COLORS = ['#1f9dff', '#7d58ff', '#d04cff', '#19d6c1', '#ff9a2a', '#48ce6a', '#29bfff', '#ff5c66']
+const BUBBLE_COLORS = ['#0e4fb8', '#176fd2', '#2196e6', '#45b9ff', '#566dff', '#6d5be8', '#7b72ff', '#359fe8']
+
+const wrapChartLabel = (value: string, size = 5) => {
+  const chars = Array.from(value || '')
+  const lines: string[] = []
+  for (let index = 0; index < chars.length; index += size) {
+    lines.push(chars.slice(index, index + size).join(''))
+  }
+  return lines.join('\n')
+}
+
+const cubeTopSymbol = 'path://M0,10 L16,0 L32,10 L16,20 Z'
+const cubeShadowSymbol = 'path://M0,8 L24,0 L48,8 L24,16 Z'
+const barTopCapSeries = (name: string, data: number[], colors: string[], size: [number | string, number | string] = ['42%', 16]) => ({
+  name,
+  type: 'pictorialBar' as const,
+  symbol: cubeTopSymbol,
+  symbolSize: size,
+  symbolOffset: [0, -8],
+  symbolPosition: 'end' as const,
+  z: 12,
+  tooltip: { show: false },
+  data: data.map((value, index) => {
+    const color = colors[index % colors.length]!
+    return {
+      value,
+      itemStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 1, 1, [
+          { offset: 0, color: shadeHex(color, 72) },
+          { offset: 0.55, color: shadeHex(color, 26) },
+          { offset: 1, color: shadeHex(color, -12) }
+        ]),
+        borderColor: rgbaHex(shadeHex(color, 70), 0.88),
+        borderWidth: 1,
+        shadowBlur: 18,
+        shadowOffsetY: 6,
+        shadowColor: rgbaHex(color, 0.42)
+      }
+    }
+  })
+})
+
+const barGroundShadowSeries = (name: string, data: number[], size: [number | string, number | string] = ['54%', 14]) => ({
+  name,
+  type: 'pictorialBar' as const,
+  symbol: cubeShadowSymbol,
+  symbolSize: size,
+  symbolOffset: [0, 8],
+  symbolPosition: 'start' as const,
+  z: 0,
+  tooltip: { show: false },
+  data: data.map(value => ({
+    value,
+    itemStyle: {
+      color: isLightTheme() ? 'rgba(32, 92, 150, .16)' : 'rgba(18, 104, 210, .22)',
+      shadowBlur: 18,
+      shadowColor: 'rgba(68, 160, 255, .28)'
+    }
+  }))
+})
 
 const featureBubbleData = computed(() => {
   const source = [...featureWords.value].sort((a, b) => b.value - a.value).slice(0, BUBBLE_LAYOUTS.length)
@@ -314,6 +381,13 @@ const searchCases = () => {
 
 // ===== PIE CHART (nested ring with linkage) =====
 const selectedPieCategory = ref<string>('')
+const selectedPieChild = ref<string>('')
+
+const resetPieOverview = () => {
+  selectedPieCategory.value = ''
+  selectedPieChild.value = ''
+  pieChart?.setOption(buildPieOption(), true)
+}
 
 const buildPieOption = () => {
   const selected = selectedPieCategory.value
@@ -343,30 +417,34 @@ const buildPieOption = () => {
       if (selected && cat.name !== selected) return
       cat.children.forEach((child, childIdx) => {
         const color = palette[(catIdx * 3 + childIdx + 2) % palette.length]!
+        const isChildSelected = selectedPieChild.value === child.name
         outerData.push({
           name: child.name,
           value: child.value,
+          selected: isChildSelected,
           __baseColor: color,
-          itemStyle: sliceStyle(color, catIdx + childIdx + 1)
+          itemStyle: sliceStyle(color, catIdx + childIdx + 1, isChildSelected)
         })
       })
     })
   }
 
   const isMobileNoSelection = isMobile && !selected
-  const center: [string, string] = isMobile ? ['50%', '47%'] : ['56%', '47%']
+  const center: [string, string] = isMobile ? ['50%', '49%'] : ['56%', '50%']
   const innerRadius: [string, string] = isMobile
-    ? (isMobileNoSelection ? ['18%', '53%'] : ['17%', '34%'])
-    : ['18%', '38%']
-  const outerRadius: [string, string] = isMobile ? ['41%', '58%'] : ['45%', '68%']
+    ? (isMobileNoSelection ? ['17%', '51%'] : ['13%', '33%'])
+    : ['13%', '34%']
+  const outerRadius: [string, string] = isMobile ? ['43%', '59%'] : ['49%', '68%']
 
   const innerDepth = buildPieDepthLayers('一级分类', innerData, innerRadius, center, 8, {
     startAngle: 96,
-    clockwise: true
+    clockwise: true,
+    selectedOffset: 0
   })
   const outerDepth = isMobileNoSelection ? [] : buildPieDepthLayers('二级分类', outerData, outerRadius, center, 8, {
     startAngle: 96,
-    clockwise: true
+    clockwise: true,
+    selectedOffset: 0
   })
 
   return {
@@ -402,30 +480,40 @@ const buildPieOption = () => {
         center,
         startAngle: 96,
         selectedMode: 'single',
-        selectedOffset: isMobile ? 8 : 12,
+        selectedOffset: 0,
         padAngle: 2,
-        minShowLabelAngle: 4,
-        avoidLabelOverlap: true,
-        z: 30,
+        minShowLabelAngle: 0,
+        avoidLabelOverlap: false,
+        z: 42,
         label: {
           show: true,
           position: 'inside',
           color: '#f8fbff',
-          fontSize: isMobile ? 10 : 13,
-          formatter: '{b}',
+          fontSize: isMobile ? 11 : 15,
+          lineHeight: isMobile ? 14 : 19,
+          formatter: (params: any) => wrapChartLabel(params.name, isMobile ? 4 : 4),
           textBorderWidth: 2,
           textBorderColor: 'rgba(0, 15, 36, .72)',
-          fontWeight: 'bold'
+          fontWeight: 'bold',
+          overflow: 'break',
+          width: isMobile ? 76 : 116
         },
         labelLine: { show: false },
-        itemStyle: { borderRadius: 8 },
+        labelLayout: { hideOverlap: false },
+        itemStyle: { borderRadius: 4 },
         emphasis: {
           scale: true,
-          scaleSize: 8,
+          scaleSize: 5,
+          label: {
+            show: true,
+            fontSize: isMobile ? 12 : 16,
+            lineHeight: isMobile ? 15 : 20,
+            formatter: (params: any) => wrapChartLabel(params.name, isMobile ? 4 : 4)
+          },
           itemStyle: {
-            shadowBlur: 32,
-            shadowOffsetY: 14,
-            shadowColor: 'rgba(255,214,128,.62)'
+            shadowBlur: 48,
+            shadowOffsetY: 18,
+            shadowColor: 'rgba(91, 151, 255, .78)'
           }
         },
         data: innerData
@@ -436,36 +524,40 @@ const buildPieOption = () => {
         radius: outerRadius,
         center,
         startAngle: 96,
-        selectedOffset: 10,
+        selectedMode: 'single',
+        selectedOffset: 0,
         padAngle: 2.5,
-        minShowLabelAngle: 2,
-        avoidLabelOverlap: true,
+        minShowLabelAngle: 0,
+        avoidLabelOverlap: false,
         z: 31,
         label: {
           show: isMobile ? !!selected : true,
           color: chartTextPrimary(),
-          fontSize: isMobile ? 10 : 13,
-          lineHeight: 18,
-          formatter: '{b}\n{d}%',
+          fontSize: isMobile ? 11 : 14,
+          lineHeight: isMobile ? 15 : 19,
+          formatter: (params: any) => `${wrapChartLabel(params.name, isMobile ? 5 : 5)}\n${params.percent}%`,
           textBorderWidth: 2,
-          textBorderColor: isLightTheme() ? 'rgba(255,255,255,.9)' : 'rgba(0,12,30,.9)'
+          textBorderColor: isLightTheme() ? 'rgba(255,255,255,.9)' : 'rgba(0,12,30,.9)',
+          overflow: 'break',
+          width: isMobile ? 88 : 138
         },
         labelLine: {
           show: isMobile ? !!selected : true,
-          length: 12,
-          length2: 10,
+          length: isMobile ? 10 : 16,
+          length2: isMobile ? 8 : 13,
           smooth: 0.2,
-          lineStyle: { color: isLightTheme() ? 'rgba(116,94,46,.75)' : 'rgba(218,231,244,.72)', width: 1.2 }
+          lineStyle: { color: isLightTheme() ? 'rgba(86,121,207,.72)' : 'rgba(181,207,255,.72)', width: 1.2 }
         },
-        itemStyle: { borderRadius: 8 },
+        labelLayout: { hideOverlap: false },
+        itemStyle: { borderRadius: 4 },
         emphasis: {
           scale: true,
-          scaleSize: 10,
-          label: { show: true, fontSize: isMobile ? 11 : 14, fontWeight: 'bold' },
+          scaleSize: 7,
+          label: { show: true, fontSize: isMobile ? 12 : 15, fontWeight: 'bold' },
           itemStyle: {
-            shadowBlur: 30,
-            shadowOffsetY: 14,
-            shadowColor: 'rgba(116,198,255,.58)'
+            shadowBlur: 46,
+            shadowOffsetY: 18,
+            shadowColor: 'rgba(116,198,255,.76)'
           }
         },
         data: outerData
@@ -478,6 +570,9 @@ const renderPieChart = () => {
   if (!pieChartRef.value) return
   if (!pieChart) {
     pieChart = echarts.init(pieChartRef.value)
+    pieChart.getZr().on('click', (event: any) => {
+      if (!event.target && selectedPieCategory.value) resetPieOverview()
+    })
     pieChart.on('click', (params: any) => {
       const clickedName = params.name as string
       // Check if an inner ring (一级分类) was clicked
@@ -489,6 +584,7 @@ const renderPieChart = () => {
         } else {
           selectedPieCategory.value = foundInner.name
         }
+        selectedPieChild.value = ''
         selectedCategory.value = foundInner.name
         // Re-render to update outer ring linkage
         pieChart!.setOption(buildPieOption(), true)
@@ -499,6 +595,7 @@ const renderPieChart = () => {
         )
         if (parent) {
           selectedPieCategory.value = parent.name
+          selectedPieChild.value = clickedName
           selectedCategory.value = parent.name
           pieChart!.setOption(buildPieOption(), true)
         }
@@ -525,66 +622,116 @@ const renderSubjectCharts = () => {
 
   if (!subjectChart) subjectChart = echarts.init(subjectChartRef.value)
   const ageValues = Object.values(ageBuckets)
+  const ageLabels = Object.keys(ageBuckets)
+  const age3DData = ageValues.map((value, i) => {
+    const color = CHART_PALETTES.age[i % CHART_PALETTES.age.length]!
+    return {
+      value: [ageLabels[i], '主体数量', value],
+      itemStyle: {
+        color: rgbaHex(shadeHex(color, -18), 0.86),
+        borderColor: rgbaHex(shadeHex(color, 46), 0.82),
+        borderWidth: 1.2
+      }
+    }
+  })
   subjectChart.setOption({
-    backgroundColor: 'transparent',
+    backgroundColor: chart3DBackground(),
     title: {
       text: '年龄分布',
       left: 'center',
       top: 8,
-      textStyle: { color: chartTextPrimary(), fontSize: 16, fontWeight: 700, textShadowBlur: 10, textShadowColor: 'rgba(255,194,86,.35)' }
+      textStyle: { color: chartTextPrimary(), fontSize: 16, fontWeight: 700, textShadowBlur: 12, textShadowColor: 'rgba(255,194,86,.42)' }
     },
     tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
       backgroundColor: chartTooltipBg(),
       borderColor: '#e9c779',
-      textStyle: { color: chartTextPrimary() }
+      textStyle: { color: chartTextPrimary() },
+      formatter: (params: any) => `${params.value?.[0] || ''}<br/>人数：${params.value?.[2] || 0}`
     },
-    xAxis: {
+    xAxis3D: {
       type: 'category',
-      data: Object.keys(ageBuckets),
-      axisLabel: { color: chartTextSecondary(), fontSize: 14 },
-      axisLine: { lineStyle: { color: chartAxisColor() } },
-      axisTick: { show: false }
+      name: 'X 年龄段',
+      data: ageLabels,
+      axisLabel: { color: chartTextSecondary(), fontSize: 13, margin: 8 },
+      axisLine: { lineStyle: { color: '#6faeff', width: 2 } },
+      axisTick: { lineStyle: { color: '#6faeff' } },
+      nameTextStyle: { color: chartTextPrimary(), fontSize: 13 }
     },
-    yAxis: {
+    yAxis3D: {
+      type: 'category',
+      name: 'Y 画像',
+      data: ['主体数量'],
+      axisLabel: { color: chartTextSecondary(), fontSize: 12 },
+      axisLine: { lineStyle: { color: '#6faeff', width: 2 } },
+      axisTick: { lineStyle: { color: '#6faeff' } },
+      nameTextStyle: { color: chartTextPrimary(), fontSize: 13 }
+    },
+    zAxis3D: {
       type: 'value',
-      axisLabel: { color: chartTextSecondary(), fontSize: 13 },
-      axisLine: { show: false },
-      splitLine: { lineStyle: { color: chartSplitColor(), type: 'dashed' } }
+      name: 'Z 人数',
+      axisLabel: { color: chartTextSecondary(), fontSize: 12 },
+      axisLine: { lineStyle: { color: '#6faeff', width: 2 } },
+      axisTick: { lineStyle: { color: '#6faeff' } },
+      splitLine: { lineStyle: { color: chartSplitColor() } },
+      nameTextStyle: { color: chartTextPrimary(), fontSize: 13 }
+    },
+    grid3D: {
+      left: 0,
+      right: 0,
+      top: 8,
+      bottom: 0,
+      boxWidth: 172,
+      boxDepth: 62,
+      boxHeight: 112,
+      environment: chart3DBackground(),
+      axisPointer: { show: true, lineStyle: { color: 'rgba(255, 231, 168, .88)' } },
+      light: {
+        main: { intensity: 1.8, shadow: true, shadowQuality: 'high', alpha: 36, beta: 24 },
+        ambient: { intensity: 0.62 },
+        ambientCubemap: { exposure: 0.6, diffuseIntensity: 0.4, specularIntensity: 0.8 }
+      },
+      viewControl: {
+        projection: 'perspective',
+        alpha: 24,
+        beta: -34,
+        distance: 152,
+        center: [0, -8, 0],
+        damping: 0.65
+      },
+      splitLine: { show: true, lineStyle: { color: isLightTheme() ? 'rgba(68, 120, 180, .2)' : 'rgba(118, 187, 255, .24)', width: 1 } },
+      splitArea: { show: true, areaStyle: { color: ['rgba(26, 71, 126, .05)', 'rgba(63, 130, 216, .035)'] } }
     },
     series: [{
       name: '人数',
-      type: 'bar',
-      data: ageValues.map((value, i) => {
-        const color = CHART_PALETTES.age[i % CHART_PALETTES.age.length]!
-        return {
-          value,
-          itemStyle: {
-            color: verticalGradient(color, 52, -50),
-            borderColor: i % 2 ? '#d6f0ff' : '#f3d28a',
-            borderWidth: 1.2,
-            borderRadius: [9, 9, 3, 3],
-            shadowBlur: 18,
-            shadowOffsetY: 12,
-            shadowColor: rgbaHex(color, 0.5)
-          }
-        }
-      }),
-      barWidth: '42%',
-      showBackground: true,
-      backgroundStyle: {
-        color: isLightTheme() ? 'rgba(74,108,138,.06)' : 'rgba(16,56,94,.16)',
-        borderColor: isLightTheme() ? 'rgba(88,116,141,.12)' : 'rgba(149,206,255,.08)',
-        borderWidth: 1,
-        borderRadius: [10, 10, 3, 3]
+      type: 'bar3D',
+      data: age3DData,
+      barSize: 22,
+      bevelSize: 0,
+      bevelSmoothness: 0,
+      shading: 'realistic',
+      realisticMaterial: {
+        roughness: 0.18,
+        metalness: 0.08
+      },
+      label: {
+        show: true,
+        formatter: (params: any) => params.value?.[2],
+        textStyle: { color: '#fff7d7', fontSize: 13, fontWeight: 800, borderWidth: 2, borderColor: 'rgba(0, 12, 30, .7)' }
+      },
+      itemStyle: {
+        opacity: 0.88,
+        shadowBlur: 22,
+        shadowColor: 'rgba(255, 172, 54, .68)'
       },
       emphasis: {
-        itemStyle: { shadowBlur: 30, shadowOffsetY: 16 }
+        label: { show: true },
+        itemStyle: {
+          opacity: 0.98,
+          color: 'rgba(223, 116, 26, .96)'
+        }
       }
-    }],
-    grid: { top: 58, bottom: 34, left: 46, right: 18 }
-  }, true)
+    }]
+  } as any, true)
 
   // --- Gender + Resident donut chart: 蓝紫/青色独立配色，双环 3D 浮起 ---
   const genderCount = { '男': 0, '女': 0 }
@@ -645,7 +792,7 @@ const renderSubjectCharts = () => {
         center: donutCenter,
         startAngle: 90,
         z: 30,
-        selectedOffset: 10,
+        selectedOffset: 0,
         padAngle: 3,
         label: { show: true, position: 'inside', color: '#ffffff', fontSize: 16, fontWeight: 700, textBorderWidth: 2, textBorderColor: 'rgba(0,0,25,.65)' },
         labelLine: { show: false },
@@ -659,7 +806,7 @@ const renderSubjectCharts = () => {
         center: donutCenter,
         startAngle: 90,
         z: 31,
-        selectedOffset: 12,
+        selectedOffset: 0,
         padAngle: 3,
         label: { color: chartTextPrimary(), fontSize: 15, formatter: '{b}\n{d}%', textBorderWidth: 2, textBorderColor: isLightTheme() ? '#fff' : '#06152c' },
         labelLine: { length: 12, length2: 10, lineStyle: { color: '#b8ddff', width: 1.2 } },
@@ -753,13 +900,13 @@ const renderTimeCharts = () => {
           symbolSize: 52,
           data: [{ coord: [sortedPeriods[maxIndex], maxCount], value: maxCount }],
           itemStyle: {
-            color: verticalGradient('#ffc533', 34, -48),
-            borderColor: '#fff0ba',
+            color: verticalGradient('#5b8cff', 34, -48),
+            borderColor: '#d8e8ff',
             borderWidth: 1.4,
             shadowBlur: 24,
-            shadowColor: 'rgba(255,190,56,.72)'
+            shadowColor: 'rgba(91,140,255,.72)'
           },
-          label: { color: '#111827', fontWeight: 800 }
+          label: { color: '#f8fbff', fontWeight: 800, textBorderWidth: 2, textBorderColor: 'rgba(8,18,50,.62)' }
         } : undefined,
         z: 5
       }
@@ -780,69 +927,121 @@ const renderTimeCharts = () => {
   })
   const quarters = Array.from(quarterMap.keys()).sort()
   const catArr = Array.from(allCategories)
-  const stackPalette = ['#ff5c5c', '#ff962f', '#ffd13b', '#4bd47d', '#2fd6c4', '#2ca7ff', '#7b66ff', '#cf58ff']
-
-  const stackedSeries = catArr.map((cat, i) => {
-    const color = stackPalette[i % stackPalette.length]!
-    return {
-      name: cat,
-      type: 'bar' as const,
-      stack: 'total',
-      barWidth: '42%',
-      data: quarters.map(q => quarterMap.get(q)?.get(cat) || 0),
+  const stackPalette = ['#1e78ff', '#2aa8ff', '#47c7ff', '#4f7dff', '#6d6bff', '#805cff', '#59d0e8', '#566dff']
+  const quarter3DData = catArr.flatMap((cat, catIndex) => {
+    const color = stackPalette[catIndex % stackPalette.length]!
+    return quarters.map(q => ({
+      value: [q, cat, quarterMap.get(q)?.get(cat) || 0],
       itemStyle: {
-        color: verticalGradient(color, 44, -46),
-        borderColor: i % 2 ? '#d7edff' : '#f0d186',
-        borderWidth: 0.8,
-        borderRadius: i === catArr.length - 1 ? [7, 7, 0, 0] : 0,
-        shadowBlur: 10,
-        shadowOffsetY: 6,
-        shadowColor: rgbaHex(color, 0.34)
-      },
-      emphasis: { itemStyle: { shadowBlur: 24, shadowOffsetY: 10, shadowColor: rgbaHex(color, 0.68) } }
-    }
+        color: rgbaHex(shadeHex(color, -24), 0.86),
+        borderColor: rgbaHex(shadeHex(color, 40), 0.78),
+        borderWidth: 1
+      }
+    }))
   })
 
   if (!timeBarChart) timeBarChart = echarts.init(timeBarChartRef.value)
   timeBarChart.setOption({
-    backgroundColor: 'transparent',
+    backgroundColor: chart3DBackground(),
     animationDuration: 950,
     title: {
       text: '季度分类案件堆叠',
       left: 'center',
       top: 8,
-      textStyle: { color: chartTextPrimary(), fontSize: 16, fontWeight: 700, textShadowBlur: 10, textShadowColor: 'rgba(255,194,86,.36)' }
+      textStyle: { color: chartTextPrimary(), fontSize: 16, fontWeight: 700, textShadowBlur: 10, textShadowColor: 'rgba(96,142,255,.36)' }
     },
     tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
       backgroundColor: chartTooltipBg(),
-      borderColor: '#e9c779',
-      textStyle: { color: chartTextPrimary() }
+      borderColor: '#93b9ff',
+      textStyle: { color: chartTextPrimary() },
+      formatter: (params: any) => `${params.value?.[0] || ''}<br/>${params.value?.[1] || ''}<br/>案件数量：${params.value?.[2] || 0}`
     },
-    legend: {
-      bottom: 0,
-      type: 'scroll',
-      itemWidth: 12,
-      itemHeight: 12,
-      textStyle: { color: chartTextSecondary(), fontSize: 12 },
-      data: catArr
-    },
-    xAxis: {
+    xAxis3D: {
       type: 'category',
+      name: 'X 季度',
       data: quarters,
-      axisLabel: { color: chartTextSecondary(), fontSize: 13 },
-      axisLine: { lineStyle: { color: chartAxisColor() } },
-      axisTick: { show: false }
+      axisLabel: { color: chartTextSecondary(), fontSize: 12, margin: 8 },
+      axisLine: { lineStyle: { color: '#79b8ff', width: 2 } },
+      axisTick: { lineStyle: { color: '#79b8ff' } },
+      nameTextStyle: { color: chartTextPrimary(), fontSize: 13 }
     },
-    yAxis: {
+    yAxis3D: {
+      type: 'category',
+      name: 'Y 类型',
+      data: catArr,
+      axisLabel: { color: chartTextSecondary(), fontSize: 10, interval: 0 },
+      axisLine: { lineStyle: { color: '#79b8ff', width: 2 } },
+      axisTick: { lineStyle: { color: '#79b8ff' } },
+      nameTextStyle: { color: chartTextPrimary(), fontSize: 13 }
+    },
+    zAxis3D: {
       type: 'value',
+      name: 'Z 数量',
       axisLabel: { color: chartTextSecondary(), fontSize: 12 },
-      splitLine: { lineStyle: { color: chartSplitColor(), type: 'dashed' } }
+      axisLine: { lineStyle: { color: '#79b8ff', width: 2 } },
+      axisTick: { lineStyle: { color: '#79b8ff' } },
+      splitLine: { lineStyle: { color: chartSplitColor() } },
+      nameTextStyle: { color: chartTextPrimary(), fontSize: 13 }
     },
-    series: stackedSeries,
-    grid: { top: 60, bottom: 66, left: 52, right: 24 }
-  }, true)
+    grid3D: {
+      left: 0,
+      right: 0,
+      top: 6,
+      bottom: 0,
+      boxWidth: 196,
+      boxDepth: 132,
+      boxHeight: 116,
+      environment: chart3DBackground(),
+      axisPointer: { show: true, lineStyle: { color: 'rgba(161, 211, 255, .84)' } },
+      light: {
+        main: { intensity: 1.65, shadow: true, shadowQuality: 'high', alpha: 34, beta: 28 },
+        ambient: { intensity: 0.72 },
+        ambientCubemap: { exposure: 0.65, diffuseIntensity: 0.48, specularIntensity: 0.9 }
+      },
+      viewControl: {
+        projection: 'perspective',
+        alpha: 28,
+        beta: -38,
+        distance: 166,
+        center: [0, -12, 0],
+        damping: 0.65
+      },
+      splitLine: { show: true, lineStyle: { color: isLightTheme() ? 'rgba(69, 127, 186, .2)' : 'rgba(126, 197, 255, .24)', width: 1 } },
+      splitArea: { show: true, areaStyle: { color: ['rgba(23, 81, 148, .05)', 'rgba(86, 108, 255, .04)'] } }
+    },
+    series: [{
+      name: '案件数量',
+      type: 'bar3D',
+      data: quarter3DData,
+      barSize: 13,
+      bevelSize: 0,
+      bevelSmoothness: 0,
+      shading: 'realistic',
+      realisticMaterial: {
+        roughness: 0.2,
+        metalness: 0.06
+      },
+      label: {
+        show: false,
+        textStyle: { color: '#f8fbff', fontSize: 11, borderWidth: 2, borderColor: 'rgba(0, 10, 30, .68)' }
+      },
+      itemStyle: {
+        opacity: 0.88,
+        shadowBlur: 20,
+        shadowColor: 'rgba(54, 135, 255, .62)'
+      },
+      emphasis: {
+        label: {
+          show: true,
+          formatter: (params: any) => params.value?.[2],
+          textStyle: { color: '#fff', fontSize: 12, fontWeight: 800 }
+        },
+        itemStyle: {
+          opacity: 0.98
+        }
+      }
+    }]
+  } as any, true)
 }
 
 // ===== TAB 3: Feature Bubble Cloud =====
@@ -996,7 +1195,7 @@ onUnmounted(() => {
   z-index: -1;
   background:
     radial-gradient(circle at 12% 8%, rgba(25, 130, 255, .13), transparent 32%),
-    radial-gradient(circle at 84% 12%, rgba(255, 162, 45, .08), transparent 27%),
+    radial-gradient(circle at 84% 12%, rgba(104, 95, 255, .10), transparent 27%),
     linear-gradient(180deg, rgba(1, 9, 23, .14), rgba(1, 11, 27, .38));
 }
 
@@ -1035,7 +1234,7 @@ onUnmounted(() => {
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(120deg, rgba(255, 220, 145, .92), rgba(255, 255, 255, .08) 32%, rgba(126, 211, 255, .72) 70%, rgba(255, 196, 86, .75));
+  background: linear-gradient(120deg, rgba(85, 146, 255, .86), rgba(255, 255, 255, .08) 32%, rgba(126, 211, 255, .72) 70%, rgba(119, 104, 255, .75));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
@@ -1047,16 +1246,16 @@ onUnmounted(() => {
   right: 4%;
   top: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 218, 128, .8), rgba(208, 242, 255, .92), transparent);
+  background: linear-gradient(90deg, transparent, rgba(105, 154, 255, .78), rgba(208, 242, 255, .92), transparent);
   filter: drop-shadow(0 0 8px rgba(101, 193, 255, .7));
 }
 
 .holo-card--gold::before {
-  background: linear-gradient(110deg, #e8b84e, rgba(255,255,255,.08) 28%, #8cdcff 72%, #ffd98c);
+  background: linear-gradient(110deg, #4f8cff, rgba(255,255,255,.08) 28%, #8cdcff 72%, #7768ff);
 }
 
 .holo-card--silver::before {
-  background: linear-gradient(110deg, #b8d8ed, rgba(255,255,255,.06) 32%, #7fd8ff 70%, #f0cf7d);
+  background: linear-gradient(110deg, #b8d8ed, rgba(255,255,255,.06) 32%, #7fd8ff 70%, #8a72ff);
 }
 
 .chart-stage {
@@ -1096,21 +1295,22 @@ onUnmounted(() => {
   height: 18%;
   transform: translateX(-50%);
   border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(255, 189, 69, .22), rgba(61, 154, 255, .12) 45%, transparent 72%);
+  background: radial-gradient(ellipse, rgba(91, 140, 255, .24), rgba(91, 106, 255, .13) 45%, transparent 72%);
   filter: blur(12px);
   animation: stagePulse 3.8s ease-in-out infinite;
   pointer-events: none;
 }
 
-.chart-stage--amber { box-shadow: inset 0 0 34px rgba(255, 165, 46, .06), 0 16px 30px rgba(0,0,0,.18); }
+.chart-stage--amber { box-shadow: inset 0 0 34px rgba(213, 107, 36, .10), 0 16px 30px rgba(0,0,0,.18); }
 .chart-stage--violet { box-shadow: inset 0 0 34px rgba(136, 83, 255, .08), 0 16px 30px rgba(0,0,0,.18); }
 .chart-stage--cyan { box-shadow: inset 0 0 34px rgba(42, 200, 255, .08), 0 16px 30px rgba(0,0,0,.18); }
-.chart-stage--gold { box-shadow: inset 0 0 34px rgba(255, 190, 66, .07), 0 16px 30px rgba(0,0,0,.18); }
+.chart-stage--gold { box-shadow: inset 0 0 34px rgba(103, 112, 255, .08), 0 16px 30px rgba(0,0,0,.18); }
 
 .chart-canvas { position: relative; z-index: 2; width: 100%; }
-.chart-canvas--main { height: 500px; }
-.chart-canvas--sub { height: 380px; }
-.chart-canvas--time { height: 390px; }
+.chart-canvas--main { height: 560px; }
+.chart-canvas--sub { height: 430px; }
+.chart-canvas--time { height: 430px; }
+.chart-stage--time .chart-canvas--time { height: 450px; }
 
 @keyframes stagePulse {
   0%, 100% { opacity: .5; transform: translateX(-50%) scale(.95); }
@@ -1144,7 +1344,7 @@ onUnmounted(() => {
   background:
     radial-gradient(circle at 50% 18%, rgba(77, 180, 255, .18), transparent 28%),
     radial-gradient(circle at 23% 44%, rgba(101, 82, 255, .10), transparent 22%),
-    radial-gradient(circle at 78% 50%, rgba(255, 169, 67, .08), transparent 20%);
+    radial-gradient(circle at 78% 50%, rgba(74, 146, 255, .10), transparent 20%);
   mix-blend-mode: screen;
 }
 
@@ -1202,17 +1402,17 @@ onUnmounted(() => {
   transform: translate(-50%, -50%);
   cursor: default;
   user-select: none;
-  border: 1.5px solid rgba(223, 242, 255, .86);
+  border: 1.5px solid rgba(223, 242, 255, .58);
   background:
-    radial-gradient(circle at 30% 23%, #ffffff 0 2%, var(--bubble-light) 8%, var(--bubble-color) 38%, var(--bubble-dark) 70%, rgba(2, 10, 26, .72) 100%);
+    radial-gradient(circle at 30% 23%, rgba(255,255,255,.54) 0 2%, color-mix(in srgb, var(--bubble-light) 52%, transparent) 8%, color-mix(in srgb, var(--bubble-color) 50%, transparent) 42%, color-mix(in srgb, var(--bubble-dark) 56%, transparent) 74%, rgba(2, 10, 26, .32) 100%);
   box-shadow:
-    inset -14px -20px 26px rgba(0, 0, 16, .34),
-    inset 9px 10px 18px rgba(255, 255, 255, .17),
-    0 14px 22px rgba(0, 0, 0, .32),
-    0 0 18px var(--bubble-shadow),
-    0 0 34px var(--bubble-shadow);
+    inset -14px -20px 26px rgba(0, 0, 16, .24),
+    inset 9px 10px 18px rgba(255, 255, 255, .12),
+    0 14px 22px rgba(0, 0, 0, .22),
+    0 0 12px color-mix(in srgb, var(--bubble-shadow) 46%, transparent),
+    0 0 24px color-mix(in srgb, var(--bubble-shadow) 40%, transparent);
   animation: bubbleFloat var(--duration) ease-in-out var(--delay) infinite;
-  transition: filter .25s ease, z-index .25s ease;
+  transition: filter .25s ease, z-index .25s ease, border-color .25s ease;
   will-change: transform;
 }
 
@@ -1238,7 +1438,7 @@ onUnmounted(() => {
   background: radial-gradient(ellipse, var(--bubble-shadow), transparent 68%);
   filter: blur(8px);
   transform: rotateX(64deg);
-  opacity: .45;
+  opacity: .2;
 }
 
 .feature-bubble__shine {
@@ -1249,9 +1449,9 @@ onUnmounted(() => {
   height: 18%;
   border-radius: 50%;
   transform: rotate(-28deg);
-  background: linear-gradient(180deg, rgba(255,255,255,.86), rgba(255,255,255,0));
+  background: linear-gradient(180deg, rgba(255,255,255,.58), rgba(255,255,255,0));
   filter: blur(.6px);
-  opacity: .8;
+  opacity: .62;
 }
 
 .feature-bubble__text {
@@ -1269,7 +1469,8 @@ onUnmounted(() => {
 
 .feature-bubble:hover {
   z-index: 9;
-  filter: brightness(1.18) saturate(1.12);
+  border-color: rgba(239, 249, 255, .82);
+  filter: brightness(1.12) saturate(1.02);
   animation-play-state: paused;
 }
 
@@ -1291,9 +1492,10 @@ onUnmounted(() => {
 }
 
 @media (max-width: 900px) {
-  .chart-canvas--main { height: 430px; }
-  .chart-canvas--sub { height: 350px; }
-  .chart-canvas--time { height: 360px; }
+  .chart-canvas--main { height: 480px; }
+  .chart-canvas--sub { height: 390px; }
+  .chart-canvas--time,
+  .chart-stage--time .chart-canvas--time { height: 400px; }
   .feature-scene { height: 520px; }
   .feature-bubble { transform: translate(-50%, -50%) scale(.82); }
 }

@@ -3,6 +3,8 @@
 
   <div v-else class="app-container" :class="`theme-${theme}`">
     <a-layout class="layout-shell">
+      <div v-if="isHomeRoute" id="home-account-layer" class="home-account-layer"></div>
+
       <a-layout-header class="header">
         <button class="brand" type="button" aria-label="返回首页" @click="goTo('/')">
           红墙智检
@@ -62,6 +64,10 @@
           </div>
         </nav>
 
+        <div id="header-account-layer" class="header-account-layer"></div>
+      </a-layout-header>
+
+      <Teleport defer :to="accountTeleportTarget">
         <div
           class="account-slot"
           :class="{ 'account-slot--hero': isHomeRoute }"
@@ -103,7 +109,7 @@
             </div>
           </transition>
         </div>
-      </a-layout-header>
+      </Teleport>
 
       <a-layout-content class="content" :class="{ 'home-content': isHomeRoute }">
         <router-view />
@@ -179,6 +185,9 @@ const newPassword = ref('')
 const footerInfo = ref<SiteFooterInfo>({ recordNo: '备案信息加载中', links: [] })
 
 const isHomeRoute = computed(() => route.path === '/')
+const accountTeleportTarget = computed(() =>
+  isHomeRoute.value ? '#home-account-layer' : '#header-account-layer'
+)
 const primaryMenuItems = computed(() =>
   PRIMARY_NAVIGATION_ITEMS.filter((item) => hasPermissions(item.permissions, item.permissionMode))
 )
@@ -385,6 +394,7 @@ onBeforeUnmount(() => {
 }
 
 .layout-shell {
+  position: relative;
   min-height: 100vh;
   background: transparent;
   display: flex;
@@ -1281,10 +1291,25 @@ onBeforeUnmount(() => {
   justify-self: end;
 }
 
+.header-account-layer {
+  justify-self: end;
+}
+
+.home-account-layer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 90;
+  height: 0;
+  pointer-events: none;
+}
+
 .account-slot--hero {
-  position: fixed;
+  position: absolute;
   top: 122px;
   right: 38px;
+  pointer-events: auto;
 }
 
 .account-trigger {

@@ -227,8 +227,18 @@
             </div>
           </div>
 
-          <div class="xrm-map-stage">
+          <div class="xrm-map-stage" :style="{ height: `${mapDisplayHeight}px` }">
+            <XichengThreeMap
+              v-if="mapBoundaryMode === 'street' && mapViewMode === '3d' && overview"
+              ref="threeMapRef"
+              :streets="overview.streets"
+              :selected-street-name="activeStreetName"
+              @select="selectStreetFromThree"
+              @clear="clearSelection"
+              @error="handleThreeMapError"
+            />
             <div
+              v-else
               ref="mapRef"
               class="xrm-map-box"
               :style="{ height: `${mapDisplayHeight}px` }"
@@ -570,6 +580,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import * as echarts from 'echarts'
 import 'echarts-gl'
 import { patchMap3DStreetLift } from './map3d-street-lift'
+import XichengThreeMap from './xicheng-three-map/XichengThreeMap.vue'
 import {
   QUANTITY_COLORS,
   buildCaseCountRanges,
@@ -718,8 +729,15 @@ const STREET_LABEL_CONFIG: Record<string, StreetLabelConfig> = {
 }
 
 type MapBoundaryMode = 'street' | 'district'
+type XichengThreeMapExpose = {
+  zoomIn(): void
+  zoomOut(): void
+  reset(): void
+  focusStreet(streetName: string): void
+}
 
 const mapRef = ref<HTMLDivElement | null>(null)
+const threeMapRef = ref<XichengThreeMapExpose | null>(null)
 const mapPanelRef = ref<HTMLElement | null>(null)
 const subjectChartRef = ref<HTMLDivElement | null>(null)
 const behaviorChartRef = ref<HTMLDivElement | null>(null)
@@ -2091,6 +2109,12 @@ const selectStreet = (streetName: string) => {
   summaryExplanation.value = ''
 }
 
+const selectStreetFromThree = (streetName: string) => selectStreet(streetName)
+const handleThreeMapError = (message: string) => {
+  mapError.value = true
+  mapErrorMessage.value = message || '三维地图初始化失败'
+}
+
 const clearSelection = (resetView = false) => {
   activeStreetName.value = ''
   detail.value = null
@@ -2102,14 +2126,8 @@ const clearSelection = (resetView = false) => {
     map3DViewState.alpha = 46
     map3DViewState.beta = 0
     map3DViewState.center = [0, 0, 0]
-    if (chart && mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') {
-      chart.setOption({
-        series: [{
-          id: 'xrm-street-map-series',
-          viewControl: getCurrentMap3DViewControl()
-        }]
-      }, { notMerge: false, lazyUpdate: true })
-      scheduleCircuitTextureRestore()
+    if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') {
+      threeMapRef.value?.reset()
     } else if (chart && mapBoundaryMode.value === 'street' && mapViewMode.value === '2d') {
       chart.setOption({ geo: { id: 'xrm-street-map-2d-geo', zoom: 1, center: undefined } })
     }
@@ -2172,11 +2190,11 @@ const handleMapWheel = (event: WheelEvent) => {
 }
 
 const zoomIn = () => {
-  if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') applyMap3DDistance(map3DViewState.distance * 0.82)
+  if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') threeMapRef.value?.zoomIn()
   else applyMapZoom(mapZoom.value * 1.22)
 }
 const zoomOut = () => {
-  if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') applyMap3DDistance(map3DViewState.distance * 1.22)
+  if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') threeMapRef.value?.zoomOut()
   else applyMapZoom(mapZoom.value / 1.22)
 }
 const resetMap = () => {
@@ -2188,14 +2206,8 @@ const resetMap = () => {
   map3DViewState.alpha = 46
   map3DViewState.beta = 0
   map3DViewState.center = [0, 0, 0]
-  if (chart && mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') {
-    chart.setOption({
-      series: [{
-        id: 'xrm-street-map-series',
-        viewControl: getCurrentMap3DViewControl()
-      }]
-    }, { notMerge: false, lazyUpdate: true })
-    scheduleCircuitTextureRestore()
+  if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') {
+    threeMapRef.value?.reset()
   } else if (chart && mapBoundaryMode.value === 'street' && mapViewMode.value === '2d') {
     chart.setOption({ geo: { id: 'xrm-street-map-2d-geo', zoom: 1, center: undefined } })
   } else if (chart) {
@@ -2203,11 +2215,19 @@ const resetMap = () => {
   }
 }
 
-const setMapViewMode = (mode: '3d' | '2d') => {
+const setMapViewMode = async (mode: '3d' | '2d') => {
   if (mode === '2d' && mapBoundaryMode.value !== 'street') return
   if (mapViewMode.value === mode) return
+  if (mode === '3d' && chart) {
+    stopMapEdgeAnimation()
+    chart.dispose()
+    chart = null
+    lastRenderedMapMode = null
+  }
   mapViewMode.value = mode
-  renderMap()
+  await nextTick()
+  if (mode === '2d') await renderMap()
+  else if (activeStreetName.value) threeMapRef.value?.focusStreet(activeStreetName.value)
 }
 
 const formatRate = (rate: number | null) => {
@@ -2265,9 +2285,7 @@ watch(filters, async () => {
 watch(activeStreetName, async () => {
   await nextTick()
   if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') {
-    // 选中/取消选中时同步真实相机状态，再连同 data 一起写回。
-    // 这样 map3D 重绘不会读取旧 distance，从而避免缩小后点击街道自动放大。
-    updateStreetMapSelectionVisuals()
+    if (activeStreetName.value) threeMapRef.value?.focusStreet(activeStreetName.value)
   } else {
     await renderMap()
   }

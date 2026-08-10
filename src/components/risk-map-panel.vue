@@ -570,6 +570,11 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import * as echarts from 'echarts'
 import 'echarts-gl'
 import { patchMap3DStreetLift } from './map3d-street-lift'
+import {
+  QUANTITY_COLORS,
+  buildCaseCountRanges,
+  getCaseCountRange
+} from './xicheng-three-map/case-count-metrics'
 import type {
   StreetMapDetail,
   StreetMapFilters,
@@ -638,8 +643,6 @@ const EXPECTED_STREETS = [
   '陶然亭街道', '广安门内街道', '牛街街道', '白纸坊街道', '广安门外街道'
 ]
 const EXPECTED_STREET_SET = new Set(EXPECTED_STREETS)
-// 首页 3D 数量色：保持“冷蓝→青→金→橙→红”的数量分档，并提高暗色底图上的发光纯度。
-const QUANTITY_COLORS = ['#1689C4', '#16A8B7', '#D4B64D', '#EC8438', '#E94B5B']
 const HEAT_COLOR_STOPS: Array<[number, [number, number, number]]> = [
   [0, [64, 205, 143]],
   [0.48, [232, 196, 74]],
@@ -1243,46 +1246,6 @@ const getMaxCaseCount = () => {
   return Math.max(0, ...values)
 }
 
-type QuantityRange = {
-  min: number
-  max: number
-  color: string
-  label: string
-}
-
-const buildQuantityRanges = (maxValue: number): QuantityRange[] => {
-  const normalizedMax = Math.max(0, Math.floor(Number(maxValue) || 0))
-  if (normalizedMax === 0) {
-    return [{ min: 0, max: 0, color: QUANTITY_COLORS[0] ?? '#dbeafe', label: '0 件' }]
-  }
-
-  const starts = [
-    0,
-    Math.ceil(normalizedMax * 0.2),
-    Math.ceil(normalizedMax * 0.4),
-    Math.ceil(normalizedMax * 0.6),
-    Math.ceil(normalizedMax * 0.8)
-  ]
-
-  return starts
-    .map((min, index) => {
-      const nextStart = starts[index + 1] ?? normalizedMax
-      const max = index === starts.length - 1 ? normalizedMax : Math.min(normalizedMax, nextStart - 1)
-      return {
-        min,
-        max,
-        color: QUANTITY_COLORS[index] ?? QUANTITY_COLORS[0] ?? '#dbeafe',
-        label: min === max ? `${min} 件` : `${min}–${max} 件`
-      }
-    })
-    .filter((item) => item.min <= item.max)
-}
-
-const getQuantityColor = (value: number, maxValue: number) => {
-  const normalizedValue = Math.max(0, Math.floor(Number(value) || 0))
-  return buildQuantityRanges(maxValue).find((item) => normalizedValue >= item.min && normalizedValue <= item.max)?.color ?? QUANTITY_COLORS[0] ?? '#dbeafe'
-}
-
 // 2D 热力图使用 绿→黄→红 的渐变填色，颜色保持清透。
 const getHeatColor = (value: number, maxValue: number, alpha = 0.88) => {
   const normalizedMax = Math.max(1, Number(maxValue) || 1)
@@ -1313,11 +1276,11 @@ const getHeatColor = (value: number, maxValue: number, alpha = 0.88) => {
 const getLegendColor = (value: number, maxValue: number) =>
   mapViewMode.value === '2d'
     ? getHeatColor(value, maxValue)
-    : getQuantityColor(value, maxValue)
+    : getCaseCountRange(value, maxValue).color
 
 const quantityLegendItems = computed(() => {
   const maxCaseCount = getMaxCaseCount()
-  return buildQuantityRanges(maxCaseCount).map((item) => ({
+  return buildCaseCountRanges(maxCaseCount).map((item) => ({
     ...item,
     color: getLegendColor(item.max, maxCaseCount)
   }))
@@ -1492,7 +1455,7 @@ const buildStreetMapData = () => {
   const maxCaseCount = getMaxCaseCount()
 
   return overview.value.streets.map((item) => {
-    const quantityColor = getQuantityColor(item.caseCount, maxCaseCount)
+    const quantityColor = getCaseCountRange(item.caseCount, maxCaseCount).color
     const selected = item.streetName === activeStreetName.value
     return {
       name: item.streetName,
@@ -1886,7 +1849,7 @@ const renderMap = async () => {
 
   const hasSelection = Boolean(activeStreetName.value)
   const maxCaseCount = getMaxCaseCount()
-  const quantityRanges = buildQuantityRanges(maxCaseCount)
+  const quantityRanges = buildCaseCountRanges(maxCaseCount)
   const visualMapPieces = quantityRanges.map((item) => ({
     gte: item.min,
     lte: item.max,
@@ -2019,7 +1982,7 @@ const renderMap = async () => {
   const pointData = overview.value.streets.map((item) => {
     const coordinate = STREET_COORDINATES[item.streetName]
     const selected = item.streetName === activeStreetName.value
-    const quantityColor = getQuantityColor(item.caseCount, maxCaseCount)
+    const quantityColor = getCaseCountRange(item.caseCount, maxCaseCount).color
     const labelConfig = STREET_LABEL_CONFIG[item.streetName] || { position: 'top' as LabelPosition, offset: [0, -4] as [number, number] }
     return {
       name: item.streetName,

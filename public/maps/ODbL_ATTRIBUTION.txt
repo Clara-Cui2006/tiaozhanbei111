@@ -1,0 +1,4 @@
+Data © OpenStreetMap contributors, available under the Open Database License (ODbL) 1.0.
+Source: https://www.openstreetmap.org/copyright
+CRS: WGS 84 (EPSG:4326)
+Cleaning: Baizhifang local Xicheng component retained; Xichang'anjie school inner ring filled.

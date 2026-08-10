@@ -248,8 +248,8 @@ describe('createMapScene', () => {
     handle.dispose()
   })
 
-  it('switches the camera field of view at the responsive width boundary', () => {
-    const container = createContainer(600, 400)
+  it('switches the camera field of view exactly at the 720px boundary', () => {
+    const container = createContainer(719, 360)
     const { store } = createStore()
     const handle = createMapScene(container, {
       collection: emptyCollection,
@@ -262,8 +262,8 @@ describe('createMapScene', () => {
     expect(camera.fov).toBe(52)
 
     Object.defineProperties(container, {
-      clientWidth: { configurable: true, value: 900 },
-      clientHeight: { configurable: true, value: 450 },
+      clientWidth: { configurable: true, value: 720 },
+      clientHeight: { configurable: true, value: 360 },
     })
     handle.resize()
 

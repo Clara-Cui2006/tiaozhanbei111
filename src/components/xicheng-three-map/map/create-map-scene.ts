@@ -80,10 +80,16 @@ export function createMapScene(container: HTMLElement, options: MapSceneOptions)
     projection,
     topHeight: 12.7,
   })
+  const platformTexture = new THREE.TextureLoader().load('/textures/xicheng-tech-platform-v1.png')
+  platformTexture.colorSpace = THREE.SRGBColorSpace
+  platformTexture.minFilter = THREE.LinearMipmapLinearFilter
+  platformTexture.magFilter = THREE.LinearFilter
+  platformTexture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy())
   const technologyPlatform = createTechnologyPlatform({
     width: Math.max(1, container.clientWidth),
     height: Math.max(1, container.clientHeight),
     pixelRatio: window.devicePixelRatio,
+    patternTexture: platformTexture,
   })
   scene.add(technologyPlatform.group, streetLayer.group, labelLayer.group)
 

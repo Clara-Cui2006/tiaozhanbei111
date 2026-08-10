@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StreetFeatureCollection } from './types'
@@ -27,7 +28,7 @@ vi.mock('./map/create-map-scene', () => ({
 }))
 
 const collection = JSON.parse(
-  readFileSync(new URL('../../../public/maps/xicheng_15_streets_clean.geojson', import.meta.url), 'utf8')
+  readFileSync(resolve(process.cwd(), 'public/maps/xicheng_15_streets_clean.geojson'), 'utf8')
 ) as StreetFeatureCollection
 
 const initialStreets = [

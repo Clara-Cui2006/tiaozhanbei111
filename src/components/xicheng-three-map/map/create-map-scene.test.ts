@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   streetLayers: [] as Array<Record<string, unknown>>,
   labelLayers: [] as Array<Record<string, unknown>>,
   technologyPlatforms: [] as Array<Record<string, unknown>>,
+  technologyPlatformOptions: [] as Array<Record<string, unknown>>,
+  loadedTextures: [] as Array<{ url: string; texture: import('three').Texture }>,
   interactions: [] as Array<Record<string, unknown>>,
   resizeObservers: [] as Array<Record<string, unknown>>,
   disposeObject3D: vi.fn(),
@@ -34,9 +36,17 @@ vi.mock('three', async (importOriginal) => {
     readonly setPixelRatio = vi.fn()
     readonly setSize = vi.fn()
     readonly dispose = vi.fn()
+    readonly capabilities = { getMaxAnisotropy: vi.fn(() => 16) }
     constructor() { mocks.renderers.push(this as unknown as Record<string, unknown>) }
   }
-  return { ...actual, WebGLRenderer }
+  class TextureLoader {
+    load(url: string) {
+      const texture = new actual.Texture()
+      mocks.loadedTextures.push({ url, texture })
+      return texture
+    }
+  }
+  return { ...actual, WebGLRenderer, TextureLoader }
 })
 
 vi.mock('three/addons/controls/OrbitControls.js', () => ({
@@ -152,8 +162,9 @@ vi.mock('./create-label-layer', () => ({
 }))
 
 vi.mock('./create-technology-platform', () => ({
-  createTechnologyPlatform: () => {
+  createTechnologyPlatform: (options: Record<string, unknown>) => {
     const handle = { group: new THREE.Group(), update: vi.fn(), resize: vi.fn(), dispose: vi.fn() }
+    mocks.technologyPlatformOptions.push(options)
     mocks.technologyPlatforms.push(handle)
     return handle
   },
@@ -221,6 +232,29 @@ beforeEach(() => {
 })
 
 describe('createMapScene', () => {
+  it('loads and configures the generated technology platform texture', () => {
+    const container = createContainer(900, 600)
+    const { store } = createStore()
+    const handle = createMapScene(container, {
+      collection: emptyCollection,
+      metrics: {} as Record<string, StreetCaseMetric>,
+      store,
+      onSelect: vi.fn(),
+      onClear: vi.fn(),
+    })
+
+    expect(mocks.loadedTextures).toHaveLength(1)
+    const loaded = mocks.loadedTextures[0]!
+    expect(loaded.url).toBe('/textures/xicheng-tech-platform-v1.png')
+    expect(loaded.texture.colorSpace).toBe(THREE.SRGBColorSpace)
+    expect(loaded.texture.minFilter).toBe(THREE.LinearMipmapLinearFilter)
+    expect(loaded.texture.magFilter).toBe(THREE.LinearFilter)
+    expect(loaded.texture.anisotropy).toBe(8)
+    expect(mocks.technologyPlatformOptions[0]!.patternTexture).toBe(loaded.texture)
+
+    handle.dispose()
+  })
+
   it('focuses from the selected street bounds with the narrow-screen distance factor', () => {
     const container = createContainer(600, 400)
     const { store } = createStore()

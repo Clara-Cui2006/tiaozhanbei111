@@ -2,7 +2,12 @@ import * as THREE from 'three'
 import { Reflector } from 'three/addons/objects/Reflector.js'
 
 export interface ReflectionSize { width: number; height: number }
-export interface TechnologyPlatformViewport { width: number; height: number; pixelRatio: number }
+export interface TechnologyPlatformViewport {
+  width: number
+  height: number
+  pixelRatio: number
+  patternTexture: THREE.Texture
+}
 export interface TechnologyPlatformHandle {
   group: THREE.Group
   reflector: Reflector
@@ -69,60 +74,6 @@ const REFLECTION_SHADER = {
     }
   `,
 }
-
-const TECHNOLOGY_HUD_VERTEX_SHADER = /* glsl */ `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`
-
-const TECHNOLOGY_HUD_FRAGMENT_SHADER = /* glsl */ `
-  uniform float uTime;
-  uniform float uDensity;
-  varying vec2 vUv;
-  const float TAU = 6.28318530718;
-  float band(float value, float center, float width) {
-    return 1.0 - smoothstep(width, width + fwidth(value), abs(value - center));
-  }
-  float hash21(vec2 p) {
-    p = fract(p * vec2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return fract(p.x * p.y);
-  }
-  void main() {
-    vec2 p = (vUv - 0.5) * 2.0;
-    float radius = length(p);
-    float angle = atan(p.y, p.x);
-    float mask = 1.0 - smoothstep(0.70, 1.0, radius);
-    vec2 gridUv = vUv * (30.0 * uDensity);
-    vec2 gridDistance = abs(fract(gridUv) - 0.5) / fwidth(gridUv);
-    float grid = 1.0 - min(min(gridDistance.x, gridDistance.y), 1.0);
-    grid *= 0.075 * (1.0 - smoothstep(0.18, 0.95, radius));
-    float rings = 0.0;
-    rings += band(radius, 0.36, 0.0025) * 0.34;
-    rings += band(radius, 0.52, 0.0030) * 0.50;
-    rings += band(radius, 0.68, 0.0040) * 0.72;
-    rings += band(radius, 0.84, 0.0030) * 0.42;
-    float dashPhase = fract((angle / TAU + 0.5) * 72.0 + uTime * 0.025);
-    float dashedRing = band(radius, 0.76, 0.012) * step(0.34, dashPhase) * 0.72;
-    float tickPhase = fract((angle / TAU + 0.5) * 108.0);
-    float ticks = band(radius, 0.91, 0.028) * step(0.78, tickPhase) * 0.58;
-    vec2 direction = vec2(cos(uTime * 0.18), sin(uTime * 0.18));
-    float sweep = pow(max(dot(normalize(p + 0.0001), direction), 0.0), 56.0);
-    sweep *= (1.0 - smoothstep(0.08, 0.92, radius)) * 0.80;
-    vec2 nodeCell = floor(vUv * 22.0);
-    vec2 nodeUv = fract(vUv * 22.0) - 0.5;
-    float nodes = (1.0 - smoothstep(0.05, 0.14, length(nodeUv)));
-    nodes *= step(0.91, hash21(nodeCell)) * 0.62;
-    float signal = (grid + rings + dashedRing + ticks + sweep + nodes) * mask;
-    vec3 cyan = vec3(0.02, 0.55, 1.0);
-    vec3 ice = vec3(0.28, 0.92, 1.0);
-    vec3 color = mix(cyan, ice, clamp(sweep + nodes, 0.0, 1.0));
-    gl_FragColor = vec4(color * signal, clamp(signal * 0.72, 0.0, 0.64));
-  }
-`
 
 export function computeReflectionSize(
   viewportWidth: number,
@@ -199,63 +150,57 @@ export function createTechnologyPlatform(viewport: TechnologyPlatformViewport): 
   reflectorMaterial.blending = THREE.NormalBlending
   reflectorMaterial.uniforms.uTexelSize?.value.set(1 / reflectionSize.width, 1 / reflectionSize.height)
 
-  const hudGeometry = new THREE.CircleGeometry(133, 128)
-  const hudMaterial = new THREE.ShaderMaterial({
+  const patternGeometry = new THREE.PlaneGeometry(270, 270)
+  const patternMaterial = new THREE.MeshBasicMaterial({
+    map: viewport.patternTexture,
     transparent: true,
+    opacity: 0.88,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
     toneMapped: false,
-    uniforms: {
-      uTime: { value: 0 },
-      uDensity: { value: viewport.width < 720 ? 0.72 : 1 },
-    },
-    vertexShader: TECHNOLOGY_HUD_VERTEX_SHADER,
-    fragmentShader: TECHNOLOGY_HUD_FRAGMENT_SHADER,
   })
-  const hud = new THREE.Mesh(hudGeometry, hudMaterial)
-  hud.name = 'technology-hud'
-  hud.rotation.x = -Math.PI / 2
-  hud.position.y = -1.48
-  hud.renderOrder = 2
+  const pattern = new THREE.Mesh(patternGeometry, patternMaterial)
+  pattern.name = 'technology-pattern'
+  pattern.rotation.x = -Math.PI / 2
+  pattern.position.y = -2.04
+  pattern.renderOrder = 1
+
+  reflector.position.y = -1.72
+  reflector.renderOrder = 2
 
   const particles = createParticleField(viewport.width < 720 ? 96 : 168)
   particles.renderOrder = 3
   const originalBeforeRender = reflector.onBeforeRender
   reflector.onBeforeRender = function (...args) {
-    const hudVisible = hud.visible
+    const patternVisible = pattern.visible
     const particlesVisible = particles.visible
-    hud.visible = false
+    pattern.visible = false
     particles.visible = false
     try {
       originalBeforeRender.apply(this, args)
     } finally {
-      hud.visible = hudVisible
+      pattern.visible = patternVisible
       particles.visible = particlesVisible
     }
   }
-  group.add(base, reflector, hud, particles)
+  group.add(base, pattern, reflector, particles)
 
   return {
     group,
     reflector,
-    update: (deltaSeconds) => {
-      const timeUniform = hudMaterial.uniforms.uTime
-      if (timeUniform) timeUniform.value += Math.max(0, deltaSeconds)
-    },
+    update: () => {},
     resize: (width, height, pixelRatio) => {
       const nextSize = computeReflectionSize(width, height, pixelRatio)
       reflector.getRenderTarget().setSize(nextSize.width, nextSize.height)
       reflectorMaterial.uniforms.uTexelSize?.value.set(1 / nextSize.width, 1 / nextSize.height)
-      const densityUniform = hudMaterial.uniforms.uDensity
-      if (densityUniform) densityUniform.value = width < 720 ? 0.72 : 1
     },
     dispose: () => {
       reflector.dispose()
       reflector.geometry.dispose()
       baseGeometry.dispose()
       baseMaterial.dispose()
-      hudGeometry.dispose()
-      hudMaterial.dispose()
+      patternGeometry.dispose()
+      patternMaterial.dispose()
+      viewport.patternTexture.dispose()
       particles.geometry.dispose()
       ;(particles.material as THREE.Material).dispose()
       group.clear()

@@ -60,3 +60,4 @@ venv/
 feishu-bot/.env
 .claude/settings.local.json
 miniapp/project.private.config.json
+.worktrees/

@@ -105,11 +105,43 @@
     <a-row :gutter="16" class="dashboard-row">
       <a-col :span="24">
         <a-card title="数据驾驶舱" class="chart-card" :bordered="false">
-          <div class="cockpit-grid">
-            <div class="cockpit-chart"><h4>地点因素</h4><div ref="locationChartRef" class="chart-box"></div></div>
-            <div class="cockpit-chart"><h4>行为内容</h4><div ref="behaviorChartRef" class="chart-box"></div></div>
-            <div class="cockpit-chart"><h4>涉及主体</h4><div ref="subjectChartRef" class="chart-box"></div></div>
-            <div class="cockpit-chart"><h4>时间因素</h4><div ref="timeChartRef" class="chart-box"></div></div>
+          <div v-if="activeCockpitPanel" class="cockpit-return-bar">
+            <a-button size="small" type="outline" @click="closeCockpitPanel">返回数据驾驶舱</a-button>
+            <span>{{ activeCockpitPanelTitle }}详情</span>
+          </div>
+          <div class="cockpit-grid" :class="{ 'is-expanded': activeCockpitPanel }">
+            <div
+              class="cockpit-chart"
+              :class="{ 'is-active': activeCockpitPanel === 'location', 'is-hidden': activeCockpitPanel && activeCockpitPanel !== 'location' }"
+              @click="openCockpitPanel('location')"
+            >
+              <h4>地点因素</h4>
+              <div ref="locationChartRef" class="chart-box"></div>
+            </div>
+            <div
+              class="cockpit-chart"
+              :class="{ 'is-active': activeCockpitPanel === 'behavior', 'is-hidden': activeCockpitPanel && activeCockpitPanel !== 'behavior' }"
+              @click="openCockpitPanel('behavior')"
+            >
+              <h4>行为内容</h4>
+              <div ref="behaviorChartRef" class="chart-box"></div>
+            </div>
+            <div
+              class="cockpit-chart"
+              :class="{ 'is-active': activeCockpitPanel === 'subject', 'is-hidden': activeCockpitPanel && activeCockpitPanel !== 'subject' }"
+              @click="openCockpitPanel('subject')"
+            >
+              <h4>涉及主体</h4>
+              <div ref="subjectChartRef" class="chart-box"></div>
+            </div>
+            <div
+              class="cockpit-chart"
+              :class="{ 'is-active': activeCockpitPanel === 'time', 'is-hidden': activeCockpitPanel && activeCockpitPanel !== 'time' }"
+              @click="openCockpitPanel('time')"
+            >
+              <h4>时间因素</h4>
+              <div ref="timeChartRef" class="chart-box"></div>
+            </div>
           </div>
         </a-card>
       </a-col>
@@ -118,7 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import BackHome from '../components/back-home.vue'
 import RiskMapPanel from '../components/risk-map-panel.vue'
@@ -143,6 +175,15 @@ const locationChartRef = ref<HTMLElement | null>(null)
 const behaviorChartRef = ref<HTMLElement | null>(null)
 const subjectChartRef = ref<HTMLElement | null>(null)
 const timeChartRef = ref<HTMLElement | null>(null)
+type CockpitPanelKey = 'location' | 'behavior' | 'subject' | 'time'
+const activeCockpitPanel = ref<CockpitPanelKey | null>(null)
+const cockpitPanelTitles: Record<CockpitPanelKey, string> = {
+  location: '地点因素',
+  behavior: '行为内容',
+  subject: '涉及主体',
+  time: '时间因素'
+}
+const activeCockpitPanelTitle = computed(() => activeCockpitPanel.value ? cockpitPanelTitles[activeCockpitPanel.value] : '')
 
 let locationChart: echarts.ECharts | null = null
 let behaviorChart: echarts.ECharts | null = null
@@ -349,6 +390,25 @@ const handleResize = () => {
   behaviorChart?.resize()
   subjectChart?.resize()
   timeChart?.resize()
+}
+
+const resizeCockpitCharts = async () => {
+  await nextTick()
+  window.requestAnimationFrame(() => {
+    handleResize()
+    window.setTimeout(handleResize, 260)
+  })
+}
+
+const openCockpitPanel = async (panel: CockpitPanelKey) => {
+  if (activeCockpitPanel.value === panel) return
+  activeCockpitPanel.value = panel
+  await resizeCockpitCharts()
+}
+
+const closeCockpitPanel = async () => {
+  activeCockpitPanel.value = null
+  await resizeCockpitCharts()
 }
 
 onMounted(() => {
@@ -598,6 +658,29 @@ onUnmounted(() => {
   gap: 14px;
 }
 
+.cockpit-grid.is-expanded {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cockpit-return-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  border: 1px solid rgba(110, 196, 255, 0.22);
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(12, 46, 82, 0.72), rgba(6, 24, 50, 0.42));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.cockpit-return-bar span {
+  color: #dff6ff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
 .cockpit-chart {
   position: relative;
   min-height: 314px;
@@ -611,7 +694,23 @@ onUnmounted(() => {
     rgba(5, 21, 43, 0.38);
   background-size: 30px 30px;
   box-shadow: 0 16px 30px rgba(0, 0, 0, 0.22), inset 0 0 34px rgba(63, 161, 222, 0.06);
-  transition: transform 0.28s ease, box-shadow 0.28s ease;
+  cursor: pointer;
+  transition: min-height 0.28s ease, transform 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease;
+}
+
+.cockpit-chart.is-hidden {
+  display: none;
+}
+
+.cockpit-chart.is-active {
+  min-height: 642px;
+  cursor: default;
+  border-color: rgba(158, 221, 255, 0.42);
+  background:
+    linear-gradient(rgba(74, 158, 214, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74, 158, 214, 0.055) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(8, 32, 66, 0.76), rgba(5, 18, 42, 0.54));
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.30), inset 0 0 56px rgba(63, 161, 222, 0.10);
 }
 
 .cockpit-chart::after {
@@ -639,6 +738,10 @@ onUnmounted(() => {
 
 .cockpit-chart .chart-box {
   height: 260px;
+}
+
+.cockpit-chart.is-active .chart-box {
+  height: 586px;
 }
 
 .chart-container-large {
@@ -761,6 +864,21 @@ onUnmounted(() => {
   background: #f7fbff !important;
 }
 
+:global(body.theme-light .political-security-page .cockpit-return-bar) {
+  border-color: rgba(70, 136, 192, 0.24) !important;
+  background: linear-gradient(90deg, #f4faff, #e7f3fd) !important;
+}
+
+:global(body.theme-light .political-security-page .cockpit-return-bar span) {
+  color: #0a2f4d !important;
+}
+
+:global(body.theme-light .political-security-page .cockpit-chart.is-active) {
+  border-color: rgba(55, 126, 190, 0.42) !important;
+  background: linear-gradient(180deg, #fbfdff, #edf7ff) !important;
+  box-shadow: 0 18px 34px rgba(42, 98, 158, 0.13), inset 0 0 42px rgba(70, 136, 192, 0.10) !important;
+}
+
 :global(body.theme-light .political-security-page .cockpit-chart h4) {
   color: #0a2f4d !important;
 }
@@ -824,5 +942,8 @@ onUnmounted(() => {
   .kpi-value { font-size: 22px !important; text-align: center !important; }
   .kpi-value-text { font-size: 13px !important; }
   .kpi-accent { height: 2px !important; margin-bottom: 10px !important; }
+  .cockpit-chart.is-active { min-height: 500px; }
+  .cockpit-chart.is-active .chart-box { height: 438px; }
+  .cockpit-return-bar { align-items: flex-start; flex-direction: column; }
 }
 </style>

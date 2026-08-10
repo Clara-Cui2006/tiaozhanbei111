@@ -1,5 +1,6 @@
 import { reactive } from 'vue'
 import { http } from '../api/http'
+import type { PermissionMode } from '../config/navigation'
 
 export type UserRole = 'ordinary' | 'department_supervisor' | 'leadership' | 'data_admin' | 'system_admin'
 
@@ -25,6 +26,15 @@ export function getAccessToken() {
 
 export function hasPermission(permission?: string) {
   return !permission || Boolean(authState.user?.permissions.includes(permission))
+}
+
+export function hasPermissions(permissions?: readonly string[], mode: PermissionMode = 'any') {
+  if (!permissions?.length) return true
+  if (!authState.user) return false
+
+  return mode === 'all'
+    ? permissions.every((permission) => hasPermission(permission))
+    : permissions.some((permission) => hasPermission(permission))
 }
 
 export async function restoreSession() {

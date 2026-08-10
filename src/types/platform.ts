@@ -8,10 +8,10 @@ export type MapClassification =
 export type MapDimensionScores = Partial<Record<MapClassification, number>>
 
 // ===== 新增：政治安全专项类型 =====
-export type PoliticalSecurityCategory = 
-  | '危害国家安全类' 
-  | '极端宗教与意识形态渗透类' 
-  | '重大活动安保风险类' 
+export type PoliticalSecurityCategory =
+  | '危害国家安全类'
+  | '极端宗教与意识形态渗透类'
+  | '重大活动安保风险类'
   | '网络政治安全类'
 
 export interface PoliticalSecurityAlert {
@@ -175,7 +175,6 @@ export interface FooterLink {
 
 export interface SiteFooterInfo {
   recordNo: string
-  publicSecurityNo?: string
   links: FooterLink[]
 }
 
@@ -251,7 +250,7 @@ export interface ProcuratorateSuggestion {
   issueDate: string
   status: '待处理' | '处理中' | '已反馈' | '已驳回'
   ignored?: boolean
-  isPolitical?: boolean 
+  isPolitical?: boolean
 }
 
 export interface ProcuratorateSuggestionInput {

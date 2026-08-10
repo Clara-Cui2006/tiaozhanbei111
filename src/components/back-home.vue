@@ -16,6 +16,7 @@ const goHome = () => {
 .back-btn {
   padding-left: 0;
   color: #bfe9ff;
+  font-size: 15px;
   font-weight: 600;
 }
 

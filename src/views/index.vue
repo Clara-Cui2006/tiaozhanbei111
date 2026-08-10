@@ -70,7 +70,7 @@
               <a-radio value="legalPlan">普法方案投递次数</a-radio>
             </a-radio-group>
           </template>
-          <div ref="chartRef" style="width: 100%; height: 600px"></div>
+          <div ref="chartRef" class="dashboard-chart-stage"></div>
         </a-card>
       </a-col>
     </a-row>
@@ -86,6 +86,15 @@ import { fetchCommunityRiskPoints, fetchDashboardOverview, fetchRiskTrend, fetch
 import { chatWithLLM } from '../services/llm'
 import { USER_PROMPT_TEMPLATES } from '../services/prompts'
 import type { CommunityRiskPoint, DashboardOverview, RiskTrendPoint, MultiTrendData } from '../types/platform'
+import {
+  CHART_PALETTES,
+  areaGradient,
+  chartAxis,
+  chartTooltip,
+  raisedBarStyle,
+  rgbaHex,
+  shadeHex
+} from '../utils/chart-visual'
 
 const chartRef = ref<HTMLDivElement | null>(null)
 let myChart: echarts.ECharts | null = null
@@ -110,11 +119,18 @@ const syncThemeMode = () => {
   themeMode.value = document.body.classList.contains('theme-light') ? 'light' : 'dark'
 }
 
-const getChartColors = () => isLightTheme.value
-  ? ['#1e5a9e', '#2b7ab8', '#3a8ac6', '#4a9cd4', '#1f6ea8']
-  : ['#5ad6ff', '#44c2ff', '#8ad6ff', '#bde9ff', '#6ee8ff']
-const chartTooltipBg = () => isLightTheme.value ? 'rgba(235, 246, 255, 0.96)' : 'rgba(8, 23, 44, 0.9)'
-const chartTooltipBorder = () => isLightTheme.value ? 'rgba(70, 136, 192, 0.42)' : 'rgba(90, 214, 255, 0.32)'
+const tabPalettes: Record<string, readonly string[]> = {
+  totalCases: CHART_PALETTES.amberTeal,
+  highIncidence: CHART_PALETTES.rainbow,
+  riskAlert: CHART_PALETTES.political,
+  procuratorate: CHART_PALETTES.violetCyan,
+  legalPlan: CHART_PALETTES.governance
+}
+
+const getChartColors = () => {
+  const palette = tabPalettes[activeTab.value] ?? CHART_PALETTES.rainbow
+  return palette.map((color) => isLightTheme.value ? shadeHex(color, -24) : color)
+}
 
 const aiAssessing = ref(false)
 const aiAssessment = ref('')
@@ -150,113 +166,101 @@ const formatAssessment = (content: string) => {
 
 const getChartOption = (): echarts.EChartsOption => {
   const light = isLightTheme.value
-  const axisTextColor = light ? '#1d4f79' : '#a7dfff'
-  const axisLineColor = light ? 'rgba(47, 112, 166, 0.48)' : 'rgba(90, 174, 255, 0.55)'
-  const splitLineColor = light ? 'rgba(56, 121, 176, 0.18)' : 'rgba(98, 179, 255, 0.15)'
+  const axis = chartAxis(light)
   const chartColors = getChartColors()
   const dates = multiTrend.value.map((item) => item.date)
   const baseGrid = { left: 40, right: 20, top: 40, bottom: 35 }
   const baseXAxis = {
     type: 'category' as const,
     data: dates,
-    axisLine: { lineStyle: { color: axisLineColor } },
-    axisLabel: { color: axisTextColor }
+    axisLine: { lineStyle: { color: axis.line } },
+    axisLabel: { color: axis.text, fontSize: 13 },
+    axisTick: { show: false }
   }
   const baseYAxis = {
     type: 'value' as const,
-    splitLine: { lineStyle: { color: splitLineColor } },
-    axisLabel: { color: axisTextColor }
+    splitLine: { lineStyle: { color: axis.split, type: 'dashed' as const } },
+    axisLabel: { color: axis.text, fontSize: 13 }
   }
+  const baseOption = {
+    backgroundColor: 'transparent',
+    animationDuration: 1100,
+    animationEasing: 'cubicOut' as const,
+    animationDelay: (index: number) => index * 45,
+    grid: baseGrid,
+    tooltip: { trigger: 'axis' as const, ...chartTooltip(light, chartColors[0]) },
+    xAxis: baseXAxis,
+    yAxis: baseYAxis
+  }
+  const legendStyle = { color: axis.text, fontSize: 13, textShadowBlur: light ? 0 : 8, textShadowColor: 'rgba(57, 180, 255, .45)' }
+  const barData = (values: number[], colors = chartColors) => values.map((value, index) => ({
+    value,
+    itemStyle: raisedBarStyle(colors[index % colors.length]!, index)
+  }))
+  const lineDecoration = (color: string) => ({
+    smooth: true,
+    symbol: 'circle',
+    symbolSize: 9,
+    lineStyle: { width: 3, color, shadowBlur: 14, shadowColor: rgbaHex(color, 0.62) },
+    itemStyle: { color, borderColor: '#f6dfaa', borderWidth: 1.5, shadowBlur: 14, shadowColor: rgbaHex(color, 0.7) },
+    areaStyle: { color: areaGradient(color, 0.4) },
+    emphasis: { scale: true, scaleSize: 5 }
+  })
 
   switch (activeTab.value) {
     case 'totalCases':
       return {
-        backgroundColor: 'transparent',
-        grid: baseGrid,
-        tooltip: {
-          trigger: 'axis',
-          backgroundColor: chartTooltipBg(),
-          borderColor: chartTooltipBorder(),
-          textStyle: { color: axisTextColor }
-        },
-        legend: { data: ['案件总数', '趋势'], textStyle: { color: axisTextColor } },
-        xAxis: baseXAxis,
-        yAxis: baseYAxis,
+        ...baseOption,
+        legend: { data: ['案件总数', '趋势'], textStyle: legendStyle },
         series: [
           {
             name: '案件总数',
-            data: multiTrend.value.map((item) => item.totalCases),
+            data: barData(multiTrend.value.map((item) => item.totalCases)),
             type: 'bar',
             barWidth: '40%',
-            itemStyle: { color: chartColors[0] }
+            emphasis: { itemStyle: { shadowBlur: 30, shadowOffsetY: 14 } }
           },
           {
             name: '趋势',
             data: multiTrend.value.map((item) => item.totalCases),
             type: 'line',
-            smooth: true,
-            symbol: 'circle',
-            symbolSize: 8,
-            lineStyle: { width: 3, color: chartColors[1] },
-            itemStyle: { color: chartColors[1] }
+            ...lineDecoration(chartColors[3]!)
           }
         ]
       }
 
     case 'highIncidence': {
-      const categories = ['侵财类犯罪', '人身伤害类犯罪', '危害公共安全类犯罪', '妨害社会管理类犯罪']
+      const categories = ['诈骗罪', '盗窃罪', '扰乱公共秩序', '相邻关系纠纷', '侵权责任纠纷']
       return {
-        backgroundColor: 'transparent',
-        grid: baseGrid,
-        tooltip: {
-          trigger: 'axis',
-          backgroundColor: chartTooltipBg(),
-          borderColor: chartTooltipBorder(),
-          textStyle: { color: axisTextColor }
-        },
-        legend: { data: categories, textStyle: { color: axisTextColor } },
-        xAxis: baseXAxis,
-        yAxis: baseYAxis,
+        ...baseOption,
+        legend: { data: categories, textStyle: legendStyle },
         series: categories.map((cat, i) => ({
           name: cat,
           type: 'bar' as const,
           stack: 'highIncidence',
           data: multiTrend.value.map((item) => Math.round(item.highIncidenceCount * ((i + 1) / 10))),
-          itemStyle: { color: chartColors[i % chartColors.length] }
+          itemStyle: raisedBarStyle(chartColors[i % chartColors.length]!, i),
+          emphasis: { itemStyle: { shadowBlur: 28, shadowOffsetY: 12 } }
         }))
       }
     }
 
     case 'riskAlert':
       return {
-        backgroundColor: 'transparent',
-        grid: baseGrid,
-        tooltip: {
-          trigger: 'axis',
-          backgroundColor: chartTooltipBg(),
-          borderColor: chartTooltipBorder(),
-          textStyle: { color: axisTextColor }
-        },
-        legend: { data: ['推送次数', '趋势'], textStyle: { color: axisTextColor } },
-        xAxis: baseXAxis,
-        yAxis: baseYAxis,
+        ...baseOption,
+        legend: { data: ['推送次数', '趋势'], textStyle: legendStyle },
         series: [
           {
             name: '推送次数',
-            data: multiTrend.value.map((item) => item.riskAlertPush),
+            data: barData(multiTrend.value.map((item) => item.riskAlertPush)),
             type: 'bar',
-            barWidth: '40%',
-            itemStyle: { color: chartColors[2] }
+            barWidth: '40%'
           },
           {
             name: '趋势',
             data: multiTrend.value.map((item) => item.riskAlertPush),
             type: 'line',
-            smooth: true,
-            symbol: 'circle',
-            symbolSize: 8,
-            lineStyle: { width: 3, color: chartColors[4] },
-            itemStyle: { color: chartColors[4] }
+            ...lineDecoration(chartColors[4]!)
           }
         ]
       }
@@ -264,23 +268,14 @@ const getChartOption = (): echarts.EChartsOption => {
     case 'procuratorate': {
       const procCategories = ['刑事检察', '民事检察', '行政检察', '公益诉讼检察']
       return {
-        backgroundColor: 'transparent',
-        grid: baseGrid,
-        tooltip: {
-          trigger: 'axis',
-          backgroundColor: chartTooltipBg(),
-          borderColor: chartTooltipBorder(),
-          textStyle: { color: axisTextColor }
-        },
-        legend: { data: procCategories, textStyle: { color: axisTextColor } },
-        xAxis: baseXAxis,
-        yAxis: baseYAxis,
+        ...baseOption,
+        legend: { data: procCategories, textStyle: legendStyle },
         series: procCategories.map((cat, i) => ({
           name: cat,
           type: 'bar' as const,
           stack: 'procuratorate',
           data: multiTrend.value.map((item) => Math.round(item.procuratorateSuggestion * ((i + 1) / 4))),
-          itemStyle: { color: chartColors[i % chartColors.length] }
+          itemStyle: raisedBarStyle(chartColors[i % chartColors.length]!, i)
         }))
       }
     }
@@ -288,23 +283,14 @@ const getChartOption = (): echarts.EChartsOption => {
     case 'legalPlan': {
       const planTypes = ['线上推送', '线下活动', '社区宣讲']
       return {
-        backgroundColor: 'transparent',
-        grid: baseGrid,
-        tooltip: {
-          trigger: 'axis',
-          backgroundColor: chartTooltipBg(),
-          borderColor: chartTooltipBorder(),
-          textStyle: { color: axisTextColor }
-        },
-        legend: { data: planTypes, textStyle: { color: axisTextColor } },
-        xAxis: baseXAxis,
-        yAxis: baseYAxis,
+        ...baseOption,
+        legend: { data: planTypes, textStyle: legendStyle },
         series: planTypes.map((t, i) => ({
           name: t,
           type: 'bar' as const,
           stack: 'legalPlan',
           data: multiTrend.value.map((item) => Math.round(item.legalPlanDelivery * ((i + 1) / 3))),
-          itemStyle: { color: chartColors[i % chartColors.length] }
+          itemStyle: raisedBarStyle(chartColors[i % chartColors.length]!, i)
         }))
       }
     }
@@ -374,9 +360,26 @@ onUnmounted(() => {
 
 .stat-card,
 .trend-card {
-  border: 1px solid rgba(93, 191, 255, 0.2);
+  border: 1px solid rgba(226, 203, 142, 0.34);
   background: linear-gradient(180deg, rgba(14, 39, 78, 0.78), rgba(9, 24, 47, 0.85));
-  box-shadow: 0 10px 24px rgba(46, 146, 255, 0.12);
+  box-shadow:
+    0 18px 38px rgba(0, 0, 0, 0.26),
+    0 0 22px rgba(71, 174, 238, 0.1),
+    inset 0 1px 0 rgba(255, 240, 196, 0.09);
+}
+
+.dashboard-chart-stage {
+  width: 100%;
+  height: 600px;
+  border-radius: 8px;
+  border: 1px solid rgba(172, 218, 244, 0.16);
+  background:
+    linear-gradient(rgba(77, 154, 205, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(77, 154, 205, 0.06) 1px, transparent 1px),
+    radial-gradient(ellipse at 50% 86%, rgba(46, 154, 221, 0.12), transparent 52%),
+    rgba(2, 16, 35, 0.24);
+  background-size: 34px 34px, 34px 34px, auto, auto;
+  box-shadow: inset 0 -26px 54px rgba(1, 8, 22, 0.24);
 }
 
 /* ===== KPI 卡片条 ===== */
@@ -437,8 +440,8 @@ onUnmounted(() => {
   color: #7cc1ec;
   padding: 0 16px;
   margin-bottom: 8px;
-  text-align: center; 
-  transform: translateY(-10px); 
+  text-align: center;
+  transform: translateY(-10px);
 }
 
 .kpi-value {
@@ -446,7 +449,7 @@ onUnmounted(() => {
   font-weight: 800;
   padding: 0 16px;
   line-height: 1;
-  text-align: center; 
+  text-align: center;
 }
 
 .kpi-value-text {
@@ -621,6 +624,10 @@ onUnmounted(() => {
 
 /* ===== 手机端适配 ===== */
 @media (max-width: 768px) {
+  .dashboard-chart-stage {
+    height: 300px;
+  }
+
   .kpi-strip {
     display: grid !important;
     grid-template-columns: 1fr 1fr;

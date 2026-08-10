@@ -135,6 +135,17 @@ import {
   ignoreProcuratorateSuggestion
 } from '../api/platform'
 import type { ProcuratorateSuggestion, ProcuratorateFeedItem, ProcuratorateMonthlyTrend } from '../types/platform'
+import {
+  CHART_PALETTES,
+  areaGradient,
+  buildPieDepthLayers,
+  chartAxis,
+  chartTooltip,
+  raisedPieStyle,
+  rgbaHex,
+  shadeHex,
+  type ChartDatum
+} from '../utils/chart-visual'
 
 const router = useRouter()
 const isLightTheme = () => localStorage.getItem('platform:theme-mode') === 'light'
@@ -168,13 +179,82 @@ const columns = [
 const getStatusClass = (status: string) => { const map: Record<string, string> = { '已反馈': 'status-feedback', '处理中': 'status-processing', '待处理': 'status-pending', '已驳回': 'status-rejected' }; return map[status] || 'status-pending' }
 
 const initPieChart = () => {
-  if (!pieChartRef.value) return; pieChart = echarts.init(pieChartRef.value)
-  pieChart.setOption({ series: [{ name: '建议类别', type: 'pie', radius: ['40%', '65%'], center: ['50%', '45%'], data: categoryDistribution.value }] })
+  if (!pieChartRef.value) return
+  if (!pieChart) pieChart = echarts.init(pieChartRef.value)
+  const light = isLightTheme()
+  const palette = CHART_PALETTES.violetCyan.map((color) => light ? shadeHex(color, -24) : color)
+  const center: [string, string] = ['50%', '42%']
+  const radius: [string, string] = ['38%', '64%']
+  const prepared: ChartDatum[] = categoryDistribution.value.map((item, index) => ({
+    ...item,
+    baseColor: palette[index % palette.length],
+    itemStyle: raisedPieStyle(palette[index % palette.length]!, index)
+  }))
+  pieChart.setOption({
+    animationDuration: 1000,
+    animationEasing: 'cubicOut',
+    animationDelay: (index: number) => index * 75,
+    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)', ...chartTooltip(light, '#e6c675') },
+    legend: { bottom: 0, textStyle: { color: light ? '#234f72' : '#cbe8f7', fontSize: 12 } },
+    series: [
+      ...buildPieDepthLayers('建议类别', prepared, radius, center, 6),
+      {
+        name: '建议类别',
+        type: 'pie',
+        radius,
+        center,
+        z: 20,
+        selectedMode: 'single',
+        selectedOffset: 10,
+        padAngle: 3,
+        label: { color: light ? '#173f60' : '#e5f6ff', fontSize: 12, textBorderWidth: 2, textBorderColor: light ? '#fff' : '#07162c' },
+        labelLine: { length: 8, length2: 6, smooth: 0.2 },
+        emphasis: { scale: true, scaleSize: 8, itemStyle: { shadowBlur: 28, shadowOffsetY: 13 } },
+        data: prepared
+      }
+    ]
+  }, true)
 }
 const initLineChart = () => {
-  if (!lineChartRef.value) return; lineChart = echarts.init(lineChartRef.value)
-  lineChart.setOption({ xAxis: { type: 'category', data: monthlyTrend.value.map(i => i.month) }, yAxis: { type: 'value' }, series: [{ type: 'line', data: monthlyTrend.value.map(i => i.count) }] })
+  if (!lineChartRef.value) return
+  if (!lineChart) lineChart = echarts.init(lineChartRef.value)
+  const light = isLightTheme()
+  const axis = chartAxis(light)
+  const color = light ? shadeHex(CHART_PALETTES.amberTeal[0], -24) : CHART_PALETTES.amberTeal[0]
+  lineChart.setOption({
+    animationDuration: 1100,
+    animationEasing: 'cubicOut',
+    animationDelay: (index: number) => index * 65,
+    grid: { left: 42, right: 18, top: 28, bottom: 34 },
+    tooltip: { trigger: 'axis', ...chartTooltip(light, color) },
+    xAxis: {
+      type: 'category',
+      data: monthlyTrend.value.map(i => i.month),
+      axisLine: { lineStyle: { color: axis.line } },
+      axisLabel: { color: axis.text, fontSize: 12 },
+      axisTick: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: axis.text, fontSize: 12 },
+      splitLine: { lineStyle: { color: axis.split, type: 'dashed' } }
+    },
+    series: [{
+      name: '建议数量',
+      type: 'line',
+      data: monthlyTrend.value.map(i => i.count),
+      smooth: true,
+      symbol: 'circle',
+      symbolSize: 9,
+      lineStyle: { width: 3, color, shadowBlur: 14, shadowColor: rgbaHex(color, 0.65) },
+      itemStyle: { color, borderColor: '#f3d38e', borderWidth: 1.5, shadowBlur: 12, shadowColor: rgbaHex(color, 0.68) },
+      areaStyle: { color: areaGradient(color, 0.44) },
+      emphasis: { scale: true, scaleSize: 5 }
+    }]
+  }, true)
 }
+
+const handleChartResize = () => { pieChart?.resize(); lineChart?.resize() }
 
 const handleSearch = () => { loading.value = true; setTimeout(() => { loading.value = false }, 500) }
 const handleReset = () => { filterForm.type = 'all'; filterForm.status = 'all' }
@@ -187,11 +267,18 @@ const handleIgnore = (r: any) => { Modal.confirm({ title: '忽略建议', conten
 onMounted(async () => {
   loading.value = true; try { [suggestions.value, feedItems.value, monthlyTrend.value, categoryDistribution.value] = await Promise.all([fetchProcuratorateSuggestions(), fetchProcuratorateFeed(), fetchProcuratorateMonthlyTrend(), fetchProcuratorateCategoryDistribution()]) } finally { loading.value = false }
   await nextTick(); initPieChart(); initLineChart()
-  window.addEventListener('resize', () => { pieChart?.resize(); lineChart?.resize() })
+  window.addEventListener('resize', handleChartResize)
+  themeObserver = new MutationObserver(() => { updateTheme(); initPieChart(); initLineChart() })
+  themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] })
   updateTheme(); window.addEventListener('storage', handleStorageChange)
 })
 onActivated(async () => { suggestions.value = await fetchProcuratorateSuggestions() })
-onUnmounted(() => { pieChart?.dispose(); lineChart?.dispose(); window.removeEventListener('storage', handleStorageChange) })
+onUnmounted(() => {
+  pieChart?.dispose(); lineChart?.dispose(); pieChart = null; lineChart = null
+  themeObserver?.disconnect(); themeObserver = null
+  window.removeEventListener('resize', handleChartResize)
+  window.removeEventListener('storage', handleStorageChange)
+})
 </script>
 
 <style scoped>
@@ -289,6 +376,13 @@ onUnmounted(() => { pieChart?.dispose(); lineChart?.dispose(); window.removeEven
 .chart-container {
   width: 100%;
   height: 260px;
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(71, 152, 205, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(71, 152, 205, 0.045) 1px, transparent 1px),
+    radial-gradient(ellipse at 50% 80%, rgba(89, 175, 226, 0.1), transparent 56%);
+  background-size: 30px 30px, 30px 30px, auto;
+  box-shadow: inset 0 -22px 42px rgba(0, 8, 24, 0.2);
 }
 
 .feed-list {

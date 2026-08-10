@@ -150,6 +150,16 @@ import { chatWithLLM } from '../services/llm'
 import { USER_PROMPT_TEMPLATES } from '../services/prompts'
 import { fetchEffectTrend, fetchEffectRatesForPeriod, fetchCommunityEffectStatsForPeriod } from '../api/platform'
 import type { CommunityEffectStat, EffectRate, EffectTrendPoint } from '../types/platform'
+import {
+  CHART_PALETTES,
+  areaGradient,
+  buildPieDepthLayers,
+  raisedBarStyle,
+  raisedPieStyle,
+  rgbaHex,
+  shadeHex,
+  type ChartDatum
+} from '../utils/chart-visual'
 
 const period = ref('month')
 
@@ -240,12 +250,23 @@ const chartBarPrimary = () => isLightTheme() ? '#2f73ad' : '#44c2ff'
 const chartBarSecondary = () => isLightTheme() ? '#5a98ca' : '#7bedc1'
 const chartTooltipBg = () => isLightTheme() ? 'rgba(235, 246, 255, 0.96)' : 'rgba(8, 23, 44, 0.9)'
 const chartTooltipBorder = () => isLightTheme() ? 'rgba(70, 136, 192, 0.42)' : 'rgba(90, 214, 255, 0.32)'
+const themedColor = (color: string) => isLightTheme() ? shadeHex(color, -24) : color
 
 const renderTrendChart = () => {
   if (!trendChartRef.value) return
   if (!trendChart) trendChart = echarts.init(trendChartRef.value)
+  const colors = [
+    themedColor(CHART_PALETTES.governance[4]),
+    themedColor(CHART_PALETTES.amberTeal[1]),
+    themedColor(CHART_PALETTES.political[0])
+  ]
+  const lineStyle = (color: string) => ({ width: 3, color, shadowBlur: 14, shadowColor: rgbaHex(color, 0.62) })
+  const pointStyle = (color: string) => ({ color, borderColor: '#f4d99c', borderWidth: 1.5, shadowBlur: 12, shadowColor: rgbaHex(color, 0.68) })
   trendChart.setOption({
     backgroundColor: 'transparent',
+    animationDuration: 1150,
+    animationEasing: 'cubicOut',
+    animationDelay: (index: number) => index * 55,
     tooltip: {
       trigger: 'axis',
       backgroundColor: chartTooltipBg(),
@@ -288,10 +309,12 @@ const renderTrendChart = () => {
         yAxisIndex: 0,
         data: trendData.value.map((d) => d.alertCount),
         smooth: true,
-        lineStyle: { width: 3, color: chartLinePrimary() },
-        itemStyle: { color: chartLinePrimary() },
+        lineStyle: lineStyle(colors[0]!),
+        itemStyle: pointStyle(colors[0]!),
+        areaStyle: { color: areaGradient(colors[0]!, 0.34) },
         symbol: 'circle',
-        symbolSize: 6
+        symbolSize: 8,
+        emphasis: { scale: true, scaleSize: 5 }
       },
       {
         name: '结案闭环率',
@@ -299,10 +322,12 @@ const renderTrendChart = () => {
         yAxisIndex: 1,
         data: trendData.value.map((d) => d.closeRate),
         smooth: true,
-        lineStyle: { width: 3, color: chartLineSecondary() },
-        itemStyle: { color: chartLineSecondary() },
+        lineStyle: lineStyle(colors[1]!),
+        itemStyle: pointStyle(colors[1]!),
+        areaStyle: { color: areaGradient(colors[1]!, 0.28) },
         symbol: 'circle',
-        symbolSize: 6
+        symbolSize: 8,
+        emphasis: { scale: true, scaleSize: 5 }
       },
       {
         name: '政治安全案件',
@@ -310,10 +335,12 @@ const renderTrendChart = () => {
         yAxisIndex: 0, // 和预警总数共用左侧Y轴
         data: trendData.value.map((d) => d.politicalCases || 0),
         smooth: true,
-        lineStyle: { width: 3, color: '#f53f3f', type: 'dashed' },
-        itemStyle: { color: '#f53f3f' },
+        lineStyle: { ...lineStyle(colors[2]!), type: 'dashed' },
+        itemStyle: pointStyle(colors[2]!),
+        areaStyle: { color: areaGradient(colors[2]!, 0.24) },
         symbol: 'triangle',
-        symbolSize: 7
+        symbolSize: 9,
+        emphasis: { scale: true, scaleSize: 5 }
       }
     ]
   })
@@ -324,8 +351,11 @@ const renderRadarChart = () => {
   if (!radarChart) radarChart = echarts.init(radarChartRef.value)
   const r = rates.value
   const v = (n?: number) => Math.round(n ?? 72)
+  const radarColor = themedColor(CHART_PALETTES.violetCyan[1])
   radarChart.setOption({
     backgroundColor: 'transparent',
+    animationDuration: 1100,
+    animationEasing: 'cubicOut',
     tooltip: {
       trigger: 'item',
       backgroundColor: chartTooltipBg(),
@@ -348,16 +378,20 @@ const renderRadarChart = () => {
       splitArea: {
         show: true,
         areaStyle: {
-          color: ['rgba(22, 93, 255, 0.06)', 'rgba(22, 93, 255, 0.12)']
+          color: isLightTheme()
+            ? ['rgba(92, 93, 170, 0.04)', 'rgba(92, 93, 170, 0.10)']
+            : ['rgba(89, 207, 224, 0.04)', 'rgba(123, 88, 232, 0.13)']
         }
       }
     },
     series: [
       {
         type: 'radar',
-        areaStyle: { color: 'rgba(90, 214, 255, 0.25)' },
-        lineStyle: { width: 2, color: chartLinePrimary() },
-        itemStyle: { color: chartLinePrimary() },
+        symbol: 'circle',
+        symbolSize: 7,
+        areaStyle: { color: areaGradient(radarColor, 0.56) },
+        lineStyle: { width: 2.5, color: radarColor, shadowBlur: 16, shadowColor: rgbaHex(radarColor, 0.7) },
+        itemStyle: { color: radarColor, borderColor: '#f2d391', borderWidth: 1.2, shadowBlur: 10, shadowColor: rgbaHex(radarColor, 0.7) },
         data: [
           {
             value: [
@@ -380,8 +414,13 @@ const renderBarChart = () => {
   if (!barChartRef.value) return
   if (!barChart) barChart = echarts.init(barChartRef.value)
   const names = data.value.map((d) => d.community.replace('街道', ''))
+  const alertColors = CHART_PALETTES.rainbow.map(themedColor)
+  const closedColors = CHART_PALETTES.caseBlue.map(themedColor)
   barChart.setOption({
     backgroundColor: 'transparent',
+    animationDuration: 1050,
+    animationEasing: 'cubicOut',
+    animationDelay: (index: number) => index * 35,
     tooltip: {
       trigger: 'axis',
       backgroundColor: chartTooltipBg(),
@@ -407,15 +446,13 @@ const renderBarChart = () => {
       {
         name: '预警量',
         type: 'bar',
-        data: data.value.map((d) => d.alerts),
-        itemStyle: { color: chartBarPrimary(), borderRadius: [4, 4, 0, 0] },
+        data: data.value.map((d, index) => ({ value: d.alerts, itemStyle: raisedBarStyle(alertColors[index % alertColors.length]!, index) })),
         barMaxWidth: 22
       },
       {
         name: '已闭环',
         type: 'bar',
-        data: data.value.map((d) => d.closed),
-        itemStyle: { color: chartBarSecondary(), borderRadius: [4, 4, 0, 0] },
+        data: data.value.map((d, index) => ({ value: d.closed, itemStyle: raisedBarStyle(closedColors[index % closedColors.length]!, index + 1) })),
         barMaxWidth: 22
       }
     ]
@@ -428,8 +465,24 @@ const renderDonutChart = () => {
   const closed = totalClosed.value
   const open = inProgress.value
   const act = totalActivities.value
+  const light = isLightTheme()
+  const colors = [
+    themedColor(CHART_PALETTES.governance[3]),
+    themedColor(CHART_PALETTES.governance[1]),
+    themedColor(CHART_PALETTES.violetCyan[0])
+  ]
+  const center: [string, string] = ['50%', '43%']
+  const radius: [string, string] = ['40%', '66%']
+  const prepared: ChartDatum[] = [
+    { value: closed, name: '已闭环' },
+    { value: open, name: '在办/待闭环' },
+    { value: act, name: '普法活动场次' }
+  ].map((item, index) => ({ ...item, baseColor: colors[index], itemStyle: raisedPieStyle(colors[index]!, index) }))
   donutChart.setOption({
     backgroundColor: 'transparent',
+    animationDuration: 1050,
+    animationEasing: 'cubicOut',
+    animationDelay: (index: number) => index * 90,
     tooltip: {
       trigger: 'item',
       backgroundColor: chartTooltipBg(),
@@ -441,18 +494,20 @@ const renderDonutChart = () => {
       textStyle: { color: isLightTheme() ? '#1d4f79' : '#bde7ff', fontSize: 11 }
     },
     series: [
+      ...buildPieDepthLayers('处置结构', prepared, radius, center, 7),
       {
         type: 'pie',
-        radius: ['42%', '68%'],
-        center: ['50%', '46%'],
+        radius,
+        center,
+        z: 20,
+        selectedMode: 'single',
+        selectedOffset: 12,
+        padAngle: 3,
         avoidLabelOverlap: true,
-        itemStyle: { borderRadius: 6, borderColor: 'rgba(8, 23, 44, 0.9)', borderWidth: 2 },
-        label: { color: isLightTheme() ? '#123f66' : '#dff6ff', fontSize: 11 },
-        data: [
-          { value: closed, name: '已闭环', itemStyle: { color: chartLinePrimary() } },
-          { value: open, name: '在办/待闭环', itemStyle: { color: isLightTheme() ? '#c97a2f' : '#ffb86b' } },
-          { value: act, name: '普法活动场次', itemStyle: { color: chartBarSecondary() } }
-        ]
+        label: { color: light ? '#123f66' : '#dff6ff', fontSize: 11, textBorderWidth: 2, textBorderColor: light ? '#fff' : '#06162d' },
+        labelLine: { smooth: 0.2, lineStyle: { color: light ? '#6a8296' : '#b9def1' } },
+        emphasis: { scale: true, scaleSize: 9, itemStyle: { shadowBlur: 30, shadowOffsetY: 14 } },
+        data: prepared
       }
     ]
   })
@@ -625,6 +680,13 @@ onUnmounted(() => {
 
 .chart-box {
   width: 100%;
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(70, 151, 203, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(70, 151, 203, 0.045) 1px, transparent 1px),
+    radial-gradient(ellipse at 50% 82%, rgba(68, 175, 218, 0.09), transparent 55%);
+  background-size: 32px 32px, 32px 32px, auto;
+  box-shadow: inset 0 -28px 48px rgba(1, 9, 24, 0.18);
 }
 
 .chart-tall {
@@ -695,8 +757,9 @@ onUnmounted(() => {
 }
 
 .page-contrast :deep(.arco-card) {
-  border: 1px solid rgba(93, 191, 255, 0.22);
+  border: 1px solid rgba(220, 231, 226, 0.28);
   background: linear-gradient(180deg, rgba(14, 39, 78, 0.78), rgba(9, 24, 47, 0.86));
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(244, 216, 158, 0.08);
 }
 
 .page-contrast :deep(.arco-progress-line-text) {

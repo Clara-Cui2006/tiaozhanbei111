@@ -18,7 +18,7 @@
 
     <a-card title="普法紧迫示意（12345 投诉关切热力）" :bordered="false" class="urgency-card">
       <p class="urgency-hint">
-        动态红点表示关切强度（示意）：越密集、涟漪越大可优先覆盖普法；点击红点查看推荐物料链接。
+        动态光点表示关切强度（示意）：颜色由绿到红、涟漪由小到大，可优先覆盖高关切街区；点击光点查看推荐物料链接。
       </p>
       <div v-if="!mapPoints.length" class="urgency-empty">暂无街区点位数据，稍后再试。</div>
       <div v-else ref="urgencyChartRef" class="urgency-chart" style="width: 100%; height: 240px"></div>
@@ -126,6 +126,13 @@ import {
   deleteLegalRecommendation
 } from '../api/platform'
 import type { LegalRecommendationV2, LegalPushStats, CommunityRiskPoint } from '../types/platform'
+import {
+  CHART_PALETTES,
+  chartAxis,
+  chartTooltip,
+  raisedPieStyle,
+  shadeHex
+} from '../utils/chart-visual'
 
 const router = useRouter()
 const recommendList = ref<any[]>([])
@@ -178,7 +185,7 @@ const getNormalizedXY = (lon: number, lat: number, points: CommunityRiskPoint[])
 // ========== 修正后的强度计算公式 ==========
 const complaintIntensity = (p: CommunityRiskPoint) => {
   // 按照实际数据的范围（annualCases大概在30~350）进行缩放
-  const scaledCases = (p.annualCases || 0) * 0.2; 
+  const scaledCases = (p.annualCases || 0) * 0.2;
   const scaledScore = (p.riskScore || 50) * 0.3;
   // 保证最终计算出来的数据在 10 ~ 100 之间，呈现出真实的大小差异
   return Math.round(Math.min(100, Math.max(10, scaledCases + scaledScore)));
@@ -194,41 +201,63 @@ const defaultMaterials = (community: string) => [
 const renderUrgencyChart = () => {
   if (!urgencyChartRef.value || !mapPoints.value.length) return
   if (!urgencyChart) urgencyChart = echarts.init(urgencyChartRef.value)
-  
+
   const lons = mapPoints.value.map(p => p.longitude)
   const lats = mapPoints.value.map(p => p.latitude)
   const lonMin = Math.min(...lons)
   const lonMax = Math.max(...lons)
   const latMin = Math.min(...lats)
   const latMax = Math.max(...lats)
-  
-  const data = mapPoints.value.map((p) => {
+
+  const light = isLightTheme()
+  const axis = chartAxis(light)
+  const intensityPalette = [
+    CHART_PALETTES.governance[3],
+    CHART_PALETTES.governance[2],
+    CHART_PALETTES.governance[1],
+    CHART_PALETTES.governance[0]
+  ]
+  const data = mapPoints.value.map((p, index) => {
     const [x, y] = getNormalizedXY(p.longitude, p.latitude, mapPoints.value)
     const intensity = complaintIntensity(p)
-    return { name: p.community, value: [x, y, intensity], symbolSize: 12 + intensity * 0.22 }
+    const paletteIndex = intensity >= 80 ? 3 : intensity >= 60 ? 2 : intensity >= 35 ? 1 : 0
+    const baseColor = intensityPalette[paletteIndex]!
+    const color = light ? shadeHex(baseColor, -24) : baseColor
+    return {
+      name: p.community,
+      value: [x, y, intensity],
+      symbolSize: 12 + intensity * 0.22,
+      itemStyle: raisedPieStyle(color, index)
+    }
   })
-  
+
   urgencyChart.setOption({
     backgroundColor: 'transparent',
+    animationDuration: 1050,
+    animationEasing: 'cubicOut',
+    animationDelay: (index: number) => index * 55,
     grid: { left: 100, right: 12, top: 60, bottom: 40 },
     xAxis: {
       type: 'value', min: 0, max: 100,
       name: `西 → 东 (经度 ${lonMin.toFixed(3)} ~ ${lonMax.toFixed(3)})`,
       nameLocation: 'middle', nameGap: 22,
-      nameTextStyle: { color: isLightTheme() ? '#1d4f79' : '#8ec7e8', fontSize: 11 },
-      splitLine: { lineStyle: { color: isLightTheme() ? 'rgba(74, 140, 198, 0.15)' : 'rgba(98, 179, 255, 0.12)' } },
+      nameTextStyle: { color: axis.text, fontSize: 11 },
+      axisLine: { lineStyle: { color: axis.line } },
+      splitLine: { lineStyle: { color: axis.split, type: 'dashed' } },
       axisLabel: { show: false }
     },
     yAxis: {
       type: 'value', min: 0, max: 100,
       name: `南 → 北 (纬度 ${latMin.toFixed(3)} ~ ${latMax.toFixed(3)})`,
-      nameTextStyle: { color: isLightTheme() ? '#1d4f79' : '#8ec7e8', fontSize: 11 },
+      nameTextStyle: { color: axis.text, fontSize: 11 },
       nameGap: 28,
-      splitLine: { lineStyle: { color: isLightTheme() ? 'rgba(74, 140, 198, 0.15)' : 'rgba(98, 179, 255, 0.12)' } },
+      axisLine: { lineStyle: { color: axis.line } },
+      splitLine: { lineStyle: { color: axis.split, type: 'dashed' } },
       axisLabel: { show: false }
     },
     tooltip: {
       trigger: 'item',
+      ...chartTooltip(light, '#e8c36a'),
       formatter: (params: { name?: string; value?: number[] }) => {
         const v = params.value as number[]
         return `${params.name}<br/>关切强度（示意）：${v[2] ?? 0}`
@@ -236,11 +265,13 @@ const renderUrgencyChart = () => {
     },
     series: [{
       type: 'effectScatter', coordinateSystem: 'cartesian2d', data,
-      rippleEffect: { brushType: 'stroke', scale: 3.2, period: 2.6 },
-      itemStyle: { color: '#f53f3f', shadowBlur: 12, shadowColor: 'rgba(245, 63, 63, 0.45)' }, zlevel: 1
+      rippleEffect: { brushType: 'stroke', scale: 3.6, period: 2.8, number: 3 },
+      label: { show: true, position: 'top', formatter: '{b}', color: axis.text, fontSize: 11, textBorderWidth: 2, textBorderColor: light ? '#fff' : '#06152b' },
+      emphasis: { scale: true, focus: 'series' },
+      zlevel: 1
     }]
   })
-  
+
   urgencyChart.off('click')
   urgencyChart.on('click', (params: { name?: string }) => {
     materialModalCommunity.value = String(params.name || '')
@@ -331,10 +362,21 @@ onUnmounted(() => {
 .stat-value { color: #5ad6ff; font-weight: bold; font-size: 16px; }
 .plan-title-row { display: flex; justify-content: space-between; align-items: center; }
 .plan-card { margin-bottom: 16px; }
-.urgency-card { margin-bottom: 16px; border: 1px solid rgba(93, 191, 255, 0.22); background: linear-gradient(180deg, rgba(14, 39, 78, 0.78), rgba(9, 24, 47, 0.86)); }
+.urgency-card { margin-bottom: 16px; border: 1px solid rgba(226, 208, 160, 0.34); background: linear-gradient(180deg, rgba(14, 39, 78, 0.78), rgba(9, 24, 47, 0.86)); box-shadow: 0 18px 38px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 240, 196, 0.08); }
 .urgency-card :deep(.arco-card-header-title) { color: #d8f3ff; }
 .urgency-hint { margin: 0 0 10px; font-size: 12px; color: #8ec7e8; line-height: 1.55; }
-.urgency-chart { width: 100%; height: 220px; }
+.urgency-chart {
+  width: 100%;
+  height: 220px;
+  overflow: hidden;
+  border-radius: 8px;
+  background-image:
+    linear-gradient(180deg, rgba(2, 15, 34, 0.46), rgba(2, 15, 34, 0.82)),
+    url('/images/financial-street-city-grid.png');
+  background-size: cover;
+  background-position: center 58%;
+  box-shadow: inset 0 -24px 48px rgba(0, 7, 22, 0.28);
+}
 .urgency-empty { color: #9fd4f2; font-size: 13px; padding: 24px 0; text-align: center; }
 .material-list { margin: 0; padding-left: 18px; color: #d8f2ff; line-height: 1.9; }
 
@@ -345,6 +387,7 @@ onUnmounted(() => {
   .counter-number { color: #165dff !important; text-shadow: 0 0 8px rgba(22, 93, 255, 0.2) !important; }
   .plan-card { background: #ffffff !important; border-color: #cce0ff !important; }
   .urgency-card { background: #f5f9ff !important; border-color: #b8d4f0 !important; }
+  .urgency-chart { background-image: linear-gradient(180deg, rgba(247, 251, 255, 0.72), rgba(227, 240, 252, 0.9)), url('/images/financial-street-city-grid.png') !important; }
   .urgency-card :deep(.arco-card-header-title) { color: #0a2f4d !important; }
   .auto-note { color: #3a6685 !important; }
   .resource-row { color: #1d4f79 !important; }

@@ -124,6 +124,16 @@ import BackHome from '../components/back-home.vue'
 import RiskMapPanel from '../components/risk-map-panel.vue'
 import { fetchPoliticalMonthlyTrend, fetchPoliticalStreetStats, fetchPoliticalOverview } from '../api/platform'
 import type { PoliticalMonthlyTrend, PoliticalStreetStat, PoliticalOverview } from '../types/platform'
+import {
+  CHART_PALETTES,
+  areaGradient,
+  buildPieDepthLayers,
+  chartTooltip,
+  raisedPieStyle,
+  rgbaHex,
+  shadeHex,
+  type ChartDatum
+} from '../utils/chart-visual'
 
 // 引入 LLM 相关服务
 import { chatWithLLM } from '../services/llm'
@@ -193,8 +203,6 @@ const chartTextPrimary = () => isLightTheme() ? '#1d4f79' : '#dbf2ff'
 const chartTextSecondary = () => isLightTheme() ? '#2f638f' : '#8ec7e8'
 const chartAxisColor = () => isLightTheme() ? 'rgba(52, 123, 180, 0.46)' : 'rgba(110,196,255,0.3)'
 const chartSplitColor = () => isLightTheme() ? 'rgba(52, 123, 180, 0.16)' : 'rgba(110,196,255,0.12)'
-const tooltipBg = () => isLightTheme() ? 'rgba(235, 246, 255, 0.96)' : 'rgba(8, 23, 44, 0.9)'
-const tooltipBorder = () => isLightTheme() ? 'rgba(70, 136, 192, 0.42)' : 'rgba(245, 63, 63, 0.3)'
 
 const formatRate = (value?: number | null) => typeof value === 'number' ? `${(value * 100).toFixed(1)}%` : '暂无'
 const formatSignedRate = (value?: number | null) => {
@@ -215,47 +223,82 @@ const buildSyntheticDistribution = (names: string[], total: number, seed: number
   return names.map((name, index) => ({ name, value: Math.max(0, Math.round(safeTotal * weights[index]! / sum)) }))
 }
 
-const renderPie = (container: HTMLElement | null, instance: echarts.ECharts | null, title: string, data: Array<{ name: string; value: number }>) => {
+const renderPie = (
+  container: HTMLElement | null,
+  instance: echarts.ECharts | null,
+  title: string,
+  data: Array<{ name: string; value: number }>,
+  palette: readonly string[]
+) => {
   if (!container) return instance
   instance?.dispose()
   const chart = echarts.init(container)
+  const light = isLightTheme()
+  const center: [string, string] = ['50%', '51%']
+  const radius: [string, string] = ['34%', '62%']
+  const prepared: ChartDatum[] = data.map((item, index) => {
+    const color = light ? shadeHex(palette[index % palette.length]!, -24) : palette[index % palette.length]!
+    return { ...item, baseColor: color, itemStyle: raisedPieStyle(color, index) }
+  })
   chart.setOption({
     backgroundColor: 'transparent',
+    animationDuration: 1050,
+    animationEasing: 'cubicOut',
+    animationDelay: (index: number) => index * 55,
     tooltip: {
       trigger: 'item',
-      backgroundColor: tooltipBg(),
-      borderColor: tooltipBorder(),
-      textStyle: { color: chartTextPrimary(), fontSize: 13 },
+      ...chartTooltip(light, palette[0]),
       formatter: (params: any) => `${params.name}<br/>政治安全案件数量：${params.value} 件<br/>占比：${params.percent}%`
     },
-    series: [{
-      name: title,
-      type: 'pie',
-      radius: ['38%', '68%'],
-      center: ['50%', '54%'],
-      label: { color: chartTextPrimary(), fontSize: 12, formatter: '{b}\n{d}%' },
-      labelLine: { lineStyle: { color: chartAxisColor() } },
-      data
-    }]
+    series: [
+      ...buildPieDepthLayers(title, prepared, radius, center, 6),
+      {
+        name: title,
+        type: 'pie',
+        radius,
+        center,
+        z: 20,
+        selectedMode: 'single',
+        selectedOffset: 11,
+        padAngle: 2.5,
+        minShowLabelAngle: 4,
+        avoidLabelOverlap: true,
+        label: {
+          color: chartTextPrimary(),
+          fontSize: 12,
+          lineHeight: 17,
+          formatter: '{b}\n{d}%',
+          textBorderWidth: 2,
+          textBorderColor: light ? 'rgba(255,255,255,.88)' : 'rgba(2,12,30,.84)'
+        },
+        labelLine: { length: 8, length2: 7, smooth: 0.2, lineStyle: { color: chartAxisColor(), width: 1.1 } },
+        labelLayout: { hideOverlap: true },
+        emphasis: { scale: true, scaleSize: 8, itemStyle: { shadowBlur: 30, shadowOffsetY: 14 } },
+        data: prepared
+      }
+    ]
   })
   return chart
 }
 
 const renderCharts = () => {
-  locationChart = renderPie(locationChartRef.value, locationChart, '地点因素', streetData.value.map((item) => ({ name: item.community, value: item.count })))
+  locationChart = renderPie(locationChartRef.value, locationChart, '地点因素', streetData.value.map((item) => ({ name: item.community, value: item.count })), CHART_PALETTES.caseBlue)
   const total = overview.value.totalSignalsThisYear || streetData.value.reduce((sum, item) => sum + item.count, 0)
-  behaviorChart = renderPie(behaviorChartRef.value, behaviorChart, '行为内容', buildSyntheticDistribution(behaviorNames, total, 7))
-  subjectChart = renderPie(subjectChartRef.value, subjectChart, '涉及主体', buildSyntheticDistribution(subjectNames, total, 13))
+  behaviorChart = renderPie(behaviorChartRef.value, behaviorChart, '行为内容', buildSyntheticDistribution(behaviorNames, total, 7), CHART_PALETTES.political)
+  subjectChart = renderPie(subjectChartRef.value, subjectChart, '涉及主体', buildSyntheticDistribution(subjectNames, total, 13), CHART_PALETTES.violetCyan)
   timeChart?.dispose()
   if (timeChartRef.value) {
     timeChart = echarts.init(timeChartRef.value)
+    const light = isLightTheme()
+    const lineColor = light ? '#c82f45' : '#f0445e'
     timeChart.setOption({
       backgroundColor: 'transparent',
+      animationDuration: 1200,
+      animationEasing: 'cubicOut',
+      animationDelay: (index: number) => index * 60,
       tooltip: {
         trigger: 'axis',
-        backgroundColor: tooltipBg(),
-        borderColor: tooltipBorder(),
-        textStyle: { color: chartTextPrimary(), fontSize: 13 },
+        ...chartTooltip(light, '#e8c36a'),
         formatter: (params: any) => {
           const item = params?.[0]
           return `${item?.axisValue || ''}<br/>政治安全案件数量：${item?.data ?? 0}`
@@ -279,10 +322,11 @@ const renderCharts = () => {
         type: 'line',
         smooth: true,
         symbol: 'circle',
-        symbolSize: 7,
-        lineStyle: { color: '#f53f3f', width: 3 },
-        itemStyle: { color: '#f53f3f' },
-        areaStyle: { color: 'rgba(245, 63, 63, 0.18)' }
+        symbolSize: 9,
+        lineStyle: { color: lineColor, width: 3, shadowBlur: 16, shadowColor: rgbaHex(lineColor, 0.72) },
+        itemStyle: { color: lineColor, borderColor: '#f2d18d', borderWidth: 1.5, shadowBlur: 14, shadowColor: rgbaHex(lineColor, 0.72) },
+        areaStyle: { color: areaGradient(lineColor, 0.46) },
+        emphasis: { scale: true, scaleSize: 6 }
       }]
     })
   }
@@ -292,7 +336,7 @@ const initDataAndRender = async () => {
   const [tData, sData, oData] = await Promise.all([
     fetchPoliticalMonthlyTrend(),
     fetchPoliticalStreetStats(),
-    fetchPoliticalOverview() 
+    fetchPoliticalOverview()
   ])
   trendData.value = tData
   streetData.value = sData
@@ -310,7 +354,7 @@ const handleResize = () => {
 onMounted(() => {
   initDataAndRender()
   window.addEventListener('resize', handleResize)
-  
+
   themeObserver = new MutationObserver(() => {
     renderCharts()
   })
@@ -376,8 +420,8 @@ onUnmounted(() => {
   color: #7cc1ec;
   padding: 0 16px;
   margin-bottom: 8px;
-  text-align: center; 
-  transform: translateY(-10px); 
+  text-align: center;
+  transform: translateY(-10px);
 }
 
 .kpi-value {
@@ -385,7 +429,7 @@ onUnmounted(() => {
   font-weight: 800;
   padding: 0 16px;
   line-height: 1;
-  text-align: center; 
+  text-align: center;
 }
 
 .kpi-value-text {
@@ -555,11 +599,35 @@ onUnmounted(() => {
 }
 
 .cockpit-chart {
+  position: relative;
   min-height: 314px;
   padding: 14px;
-  border: 1px solid rgba(110, 196, 255, 0.2);
+  overflow: hidden;
+  border: 1px solid rgba(217, 235, 246, 0.3);
   border-radius: 8px;
-  background: rgba(5, 21, 43, 0.32);
+  background:
+    linear-gradient(rgba(74, 158, 214, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74, 158, 214, 0.05) 1px, transparent 1px),
+    rgba(5, 21, 43, 0.38);
+  background-size: 30px 30px;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.22), inset 0 0 34px rgba(63, 161, 222, 0.06);
+  transition: transform 0.28s ease, box-shadow 0.28s ease;
+}
+
+.cockpit-chart::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 12%;
+  right: 12%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(242, 210, 143, 0.9), rgba(190, 232, 250, 0.9), transparent);
+  box-shadow: 0 0 12px rgba(91, 188, 244, 0.55);
+}
+
+.cockpit-chart:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 22px 38px rgba(0, 0, 0, 0.28), inset 0 0 42px rgba(63, 161, 222, 0.09);
 }
 
 .cockpit-chart h4 {
@@ -573,16 +641,16 @@ onUnmounted(() => {
   height: 260px;
 }
 
-.chart-container-large { 
-  height: 450px; 
+.chart-container-large {
+  height: 450px;
   width: 100%;
   display: flex;
 }
 
-.chart-box { 
-  flex: 1; 
-  width: 100%; 
-  height: 100%; 
+.chart-box {
+  flex: 1;
+  width: 100%;
+  height: 100%;
 }
 
 .ai-assessment {
@@ -593,7 +661,7 @@ onUnmounted(() => {
 }
 
 :deep(.ai-section-title) {
-  color: #f53f3f; 
+  color: #f53f3f;
   display: block;
   margin-top: 14px;
   margin-bottom: 4px;
@@ -616,7 +684,7 @@ onUnmounted(() => {
 }
 
 :global(body.theme-light .political-security-page .ai-section-title) {
-  color: #d9363e !important; 
+  color: #d9363e !important;
 }
 
 :deep(.arco-page-header-title) { color: #dbf2ff !important; font-weight: 600; }
@@ -626,12 +694,12 @@ onUnmounted(() => {
 :deep(.arco-radio-group-button) { background-color: rgba(0, 0, 0, 0.2); }
 :deep(.arco-radio-button) { background-color: transparent; }
 :deep(.arco-radio-button-content) { color: #8ec7e8; }
-:deep(.arco-radio-button.arco-radio-checked) { 
+:deep(.arco-radio-button.arco-radio-checked) {
   background-color: #1f5b93 !important;
   border-color: #1f5b93 !important;
 }
-:deep(.arco-radio-button.arco-radio-checked .arco-radio-button-content) { 
-  color: #ffffff !important; 
+:deep(.arco-radio-button.arco-radio-checked .arco-radio-button-content) {
+  color: #ffffff !important;
 }
 
 /* 浅色模式适配 */
@@ -698,19 +766,19 @@ onUnmounted(() => {
 }
 
 :global(body.theme-light .political-security-page .arco-radio-group-button),
-:global(body.theme-light .political-security-page .arco-radio-button) { 
-  background-color: rgba(255, 255, 255, 0.5) !important; 
+:global(body.theme-light .political-security-page .arco-radio-button) {
+  background-color: rgba(255, 255, 255, 0.5) !important;
 }
-:global(body.theme-light .political-security-page .arco-radio-button-content) { 
-  color: #1d4f79 !important; 
+:global(body.theme-light .political-security-page .arco-radio-button-content) {
+  color: #1d4f79 !important;
 }
 
-:global(body.theme-light .political-security-page .arco-radio-button.arco-radio-checked) { 
+:global(body.theme-light .political-security-page .arco-radio-button.arco-radio-checked) {
   background-color: #e8f3ff !important;
   border-color: #165dff !important;
 }
-:global(body.theme-light .political-security-page .arco-radio-button.arco-radio-checked .arco-radio-button-content) { 
-  color: #165dff !important; 
+:global(body.theme-light .political-security-page .arco-radio-button.arco-radio-checked .arco-radio-button-content) {
+  color: #165dff !important;
 }
 
 :global(body.theme-light .political-security-page .kpi-item) {

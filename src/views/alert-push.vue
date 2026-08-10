@@ -9,28 +9,28 @@
 
     <a-row :gutter="16" class="stat-row">
       <a-col :span="6">
-        <a-card :bordered="false" class="stat-card">
+        <a-card :bordered="false" class="stat-card stat-card--red">
           <div class="stat-label">风险预警推送次数</div>
           <div class="stat-value">{{ overview.riskAlertPushCount }}</div>
           <div class="stat-sub">态势盘总览</div>
         </a-card>
       </a-col>
       <a-col :span="6">
-        <a-card :bordered="false" class="stat-card">
+        <a-card :bordered="false" class="stat-card stat-card--gold">
           <div class="stat-label">本页任务条数</div>
           <div class="stat-value">{{ tasks.length }}</div>
           <div class="stat-sub">列表示例</div>
         </a-card>
       </a-col>
       <a-col :span="6">
-        <a-card :bordered="false" class="stat-card">
+        <a-card :bordered="false" class="stat-card stat-card--green">
           <div class="stat-label">已发送</div>
           <div class="stat-value stat-ok">{{ sentCount }}</div>
           <div class="stat-sub">当前列表</div>
         </a-card>
       </a-col>
       <a-col :span="6">
-        <a-card :bordered="false" class="stat-card">
+        <a-card :bordered="false" class="stat-card stat-card--orange">
           <div class="stat-label">待发送</div>
           <div class="stat-value stat-warn">{{ pendingCount }}</div>
           <div class="stat-sub">当前列表</div>
@@ -44,17 +44,19 @@
       style="margin-top: 16px"
     />
 
-    <a-card title="推送任务" :bordered="false" style="margin-top: 16px">
+    <a-card title="推送任务" :bordered="false" class="task-card">
       <a-tabs default-active-key="1">
-        <a-tab-pane key="1" title="常规预警">
-          <a-table :columns="columns" :data="regularTasks" :pagination="false">
+        <a-tab-pane key="1">
+          <template #title><span class="task-tab-label task-tab-label--regular"><i></i>常规预警</span></template>
+          <a-table :columns="columns" :data="regularTasks" :pagination="false" class="task-table task-table--regular">
             <template #status="{ record }">
               <a-tag :color="record.status === '已发送' ? 'green' : 'orange'">{{ record.status }}</a-tag>
             </template>
           </a-table>
         </a-tab-pane>
-        <a-tab-pane key="2" title="政治安全">
-          <a-table :columns="columns" :data="politicalTasks" :pagination="false">
+        <a-tab-pane key="2">
+          <template #title><span class="task-tab-label task-tab-label--political"><i></i>政治安全</span></template>
+          <a-table :columns="columns" :data="politicalTasks" :pagination="false" class="task-table task-table--political">
             <template #status="{ record }">
               <a-tag :color="record.status === '已发送' ? 'green' : 'orange'">{{ record.status }}</a-tag>
             </template>
@@ -179,38 +181,132 @@ onUnmounted(() => {
 }
 
 .stat-card {
-  border: 1px solid rgba(93, 191, 255, 0.22) !important;
-  background: linear-gradient(180deg, rgba(14, 39, 78, 0.78), rgba(9, 24, 47, 0.86)) !important;
+  --stat-accent: #64d8ff;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--stat-accent) 42%, transparent) !important;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--stat-accent) 14%, transparent), transparent 52%),
+    linear-gradient(180deg, rgba(14, 39, 65, 0.82), rgba(7, 23, 40, 0.9)) !important;
+  box-shadow:
+    inset 0 0 24px color-mix(in srgb, var(--stat-accent) 7%, transparent),
+    0 14px 26px rgba(0, 0, 0, 0.18) !important;
 }
+
+.stat-card::before {
+  position: absolute;
+  inset: 0 16px auto;
+  height: 2px;
+  content: '';
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--stat-accent), #eef2ee, var(--stat-accent), transparent);
+  box-shadow: 0 0 13px color-mix(in srgb, var(--stat-accent) 62%, transparent);
+}
+
+.stat-card::after {
+  position: absolute;
+  inset: auto -18px -34px auto;
+  width: 96px;
+  height: 96px;
+  content: '';
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--stat-accent) 28%, transparent);
+  border-radius: 50%;
+  box-shadow: inset 0 0 24px color-mix(in srgb, var(--stat-accent) 8%, transparent);
+  opacity: 0.58;
+}
+
+.stat-card--red { --stat-accent: #ff726b; }
+.stat-card--gold { --stat-accent: #f2c86f; }
+.stat-card--green { --stat-accent: #59dfa7; }
+.stat-card--orange { --stat-accent: #ff9b52; }
 
 .stat-label {
   font-size: 18px;
-  color: #45a8d9;
+  color: color-mix(in srgb, var(--stat-accent) 72%, #d9edf4);
   margin-bottom: 14px;
   text-align: center;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .stat-value {
   font-size: 38px;
   font-weight: 700;
-  color: #43c5f0;
+  color: var(--stat-accent);
   text-align: center;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 17px color-mix(in srgb, var(--stat-accent) 52%, transparent);
 }
 
 .stat-value.stat-ok {
-  color: #58e9b2;
+  color: var(--stat-accent);
 }
 
 .stat-value.stat-warn {
-  color: #efa04c;
+  color: var(--stat-accent);
 }
 
 .stat-sub {
   margin-top: 8px;
   font-size: 14px;
-  color: #308acb;
+  color: color-mix(in srgb, var(--stat-accent) 58%, #89aab9);
   text-align: center;
+}
+
+.task-card {
+  position: relative;
+  margin-top: 16px;
+  overflow: hidden;
+}
+
+.task-card::before {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  height: 2px;
+  content: '';
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, #64d8ff, #edf2ef, #f2c86f, transparent);
+  box-shadow: 0 0 14px rgba(100, 216, 255, 0.48);
+}
+
+.task-card :deep(.arco-card-body) { padding-top: 8px; }
+
+.task-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-tab-label i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #64d8ff;
+  box-shadow: 0 0 9px rgba(100, 216, 255, 0.74);
+}
+
+.task-tab-label--political i {
+  background: #ff756c;
+  box-shadow: 0 0 9px rgba(255, 117, 108, 0.74);
+}
+
+.task-table {
+  border-top: 1px solid rgba(100, 206, 248, 0.2);
+  box-shadow: inset 0 8px 20px rgba(43, 171, 221, 0.035);
+}
+
+.task-table--political {
+  border-top-color: rgba(255, 117, 108, 0.28);
+  box-shadow: inset 0 8px 20px rgba(255, 117, 108, 0.04);
+}
+
+.task-table--regular :deep(.arco-table-th:first-child) {
+  box-shadow: inset 3px 0 0 rgba(100, 216, 255, 0.68);
+}
+
+.task-table--political :deep(.arco-table-th:first-child) {
+  box-shadow: inset 3px 0 0 rgba(255, 117, 108, 0.72);
 }
 
 /* 标签页样式 */
@@ -298,25 +394,47 @@ onUnmounted(() => {
   border-color: rgba(74, 140, 198, 0.28) !important;
 }
 
+:global(body.theme-light) .page-contrast .stat-card,
+.page-contrast.theme-light .stat-card {
+  border-color: color-mix(in srgb, var(--stat-accent) 46%, transparent) !important;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--stat-accent) 17%, transparent), transparent 52%),
+    rgba(235, 246, 251, 0.94) !important;
+  box-shadow: inset 0 0 20px color-mix(in srgb, var(--stat-accent) 7%, transparent), 0 10px 20px rgba(48, 86, 104, 0.12) !important;
+}
+
 :global(body.theme-light) .page-contrast .stat-label,
 .page-contrast.theme-light .stat-label {
-  color: #0e4f84 !important;
+  color: color-mix(in srgb, var(--stat-accent) 70%, #21465b) !important;
 }
 :global(body.theme-light) .page-contrast .stat-value,
 .page-contrast.theme-light .stat-value {
-  color: #1a4f7b !important;
+  color: color-mix(in srgb, var(--stat-accent) 76%, #173f55) !important;
+  text-shadow: none;
 }
 :global(body.theme-light) .page-contrast .stat-value.stat-ok,
 .page-contrast.theme-light .stat-value.stat-ok {
-  color: #1f6e53 !important;
+  color: color-mix(in srgb, var(--stat-accent) 76%, #173f55) !important;
 }
 :global(body.theme-light) .page-contrast .stat-value.stat-warn,
 .page-contrast.theme-light .stat-value.stat-warn {
-  color: #9c6126 !important;
+  color: color-mix(in srgb, var(--stat-accent) 76%, #173f55) !important;
 }
 :global(body.theme-light) .page-contrast .stat-sub,
 .page-contrast.theme-light .stat-sub {
-  color: #1a5f8a !important;
+  color: color-mix(in srgb, var(--stat-accent) 58%, #47687a) !important;
+}
+
+:global(body.theme-light) .page-contrast .task-table,
+.page-contrast.theme-light .task-table {
+  border-top-color: rgba(32, 117, 158, 0.25);
+  box-shadow: inset 0 8px 18px rgba(39, 124, 163, 0.04);
+}
+
+:global(body.theme-light) .page-contrast .task-table--political,
+.page-contrast.theme-light .task-table--political {
+  border-top-color: rgba(189, 68, 61, 0.27);
+  box-shadow: inset 0 8px 18px rgba(189, 68, 61, 0.04);
 }
 
 /* 标签页浅色 */

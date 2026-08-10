@@ -1126,7 +1126,7 @@ onUnmounted(() => {
   border: 1px solid rgba(174, 222, 255, .28);
   background-image:
     linear-gradient(180deg, rgba(0, 13, 34, .14) 0%, rgba(0, 16, 40, .22) 42%, rgba(0, 10, 30, .68) 100%),
-    url('/images/bg-tech-scale.jpg');
+    url('/images/financial-street-city-grid.png');
   background-size: cover;
   background-position: center bottom;
   box-shadow:

@@ -580,6 +580,15 @@ import {
   fetchXichengStreetMapDetail,
   fetchXichengStreetMapOverview
 } from '../api/platform'
+import {
+  CHART_PALETTES,
+  areaGradient,
+  buildPieDepthLayers,
+  raisedPieStyle,
+  rgbaHex,
+  shadeHex,
+  type ChartDatum
+} from '../utils/chart-visual'
 
 // 让 map3D 支持“整块平移”而非“拉高”，并为上下表面/侧面补全棱边高光。
 const map3DLiftPatched = patchMap3DStreetLift()
@@ -629,7 +638,8 @@ const EXPECTED_STREETS = [
   '陶然亭街道', '广安门内街道', '牛街街道', '白纸坊街道', '广安门外街道'
 ]
 const EXPECTED_STREET_SET = new Set(EXPECTED_STREETS)
-const QUANTITY_COLORS = ['#167DBA', '#159BA8', '#B59242', '#D07036', '#D83C4B']
+// 首页 3D 数量色：保持“冷蓝→青→金→橙→红”的数量分档，并提高暗色底图上的发光纯度。
+const QUANTITY_COLORS = ['#1689C4', '#16A8B7', '#D4B64D', '#EC8438', '#E94B5B']
 const HEAT_COLOR_STOPS: Array<[number, [number, number, number]]> = [
   [0, [64, 205, 143]],
   [0.48, [232, 196, 74]],
@@ -641,17 +651,20 @@ const STREET_BASE_HEIGHT = 7.2
 const STREET_SELECTED_LIFT = 10
 // 名称锚点贴在块顶（底面高度）；●││● 引线从名称框连到块顶，补丁会自动叠加 offset。
 const STREET_LABEL_ANCHOR = STREET_BASE_HEIGHT
+// 小屏保留地图信息密度，但缩短名称框并启用避让，避免 15 个街道名称互相遮挡。
+let compactMapLabels = false
 // 3D/2D 共用的街道名称框样式：黑底、不透明、白字。
 const getStreetLabelBox = (selected: boolean) => ({
   color: selected ? '#FFFFFF' : '#E9F5F9',
-  backgroundColor: selected ? 'rgba(11, 34, 54, 1)' : 'rgba(7, 22, 38, 0.98)',
-  borderColor: selected ? 'rgba(255, 255, 255, 0.95)' : 'rgba(190, 232, 246, 0.55)',
-  borderWidth: selected ? 1.5 : 1,
-  borderRadius: 7,
-  padding: [5, 10],
-  fontSize: selected ? 15 : 14,
-  fontWeight: 700,
-  lineHeight: 22
+  backgroundColor: selected ? 'rgba(8, 31, 53, 1)' : 'rgba(4, 18, 34, 0.98)',
+  borderColor: selected ? 'rgba(255, 255, 255, 0.98)' : 'rgba(139, 231, 255, 0.68)',
+  borderWidth: selected ? 2 : 1,
+  borderRadius: 6,
+  padding: compactMapLabels ? [4, 7] : [6, 11],
+  fontSize: compactMapLabels ? (selected ? 14 : 13) : (selected ? 17 : 16),
+  fontWeight: 800,
+  fontFamily: 'Microsoft YaHei UI, PingFang SC, Noto Sans CJK SC, sans-serif',
+  lineHeight: compactMapLabels ? 20 : 24
 })
 const MAP_MIN_ZOOM = 0.28
 const MAP_MAX_ZOOM = 5
@@ -766,7 +779,7 @@ let mapEdgeAnimationStartedAt = 0
 let mapEdgeLastPaintAt = 0
 let lastStreetClickAt = 0
 let mapCameraInteractionUntil = 0
-let glassDetailTexture: HTMLCanvasElement | null = null
+let circuitDetailTexture: HTMLCanvasElement | null = null
 const map3DViewState = {
   distance: MAP_DEFAULT_DISTANCE,
   alpha: 46,
@@ -1116,14 +1129,25 @@ const renderPieChart = (
   container: HTMLDivElement | null,
   current: echarts.ECharts | null,
   title: string,
-  data: Array<{ name: string; count: number; rate?: number }>
+  data: Array<{ name: string; count: number; rate?: number }>,
+  palette: readonly string[]
 ) => {
   if (!container) return current
   current?.dispose()
   const instance = echarts.init(container)
   const chartTheme = getChartTheme()
+  const light = isLightTheme.value
+  const center: [string, string] = ['50%', '47%']
+  const radius: [string, string] = ['36%', '64%']
+  const prepared: ChartDatum[] = data.map((item, index) => {
+    const color = light ? shadeHex(palette[index % palette.length]!, -24) : palette[index % palette.length]!
+    return { name: item.name, value: item.count, baseColor: color, itemStyle: raisedPieStyle(color, index) }
+  })
   instance.setOption({
     backgroundColor: 'transparent',
+    animationDuration: 1000,
+    animationEasing: 'cubicOut',
+    animationDelay: (index: number) => index * 65,
     tooltip: {
       trigger: 'item',
       backgroundColor: chartTheme.tooltipBg,
@@ -1131,20 +1155,30 @@ const renderPieChart = (
       textStyle: { color: chartTheme.tooltipText },
       formatter: (params: any) => `${params.name}<br/>政治安全案件数量：${params.value} 件<br/>占比：${params.percent}%`
     },
-    series: [{
-      name: title,
-      type: 'pie',
-      radius: ['38%', '68%'],
-      center: ['50%', '54%'],
-      avoidLabelOverlap: true,
-      label: {
-        color: chartTheme.labelText,
-        fontSize: 11,
-        formatter: '{b}\n{d}%'
-      },
-      labelLine: { lineStyle: { color: chartTheme.labelText } },
-      data: data.map((item) => ({ name: item.name, value: item.count }))
-    }]
+    series: [
+      ...buildPieDepthLayers(title, prepared, radius, center, 6),
+      {
+        name: title,
+        type: 'pie',
+        radius,
+        center,
+        z: 20,
+        selectedMode: 'single',
+        selectedOffset: 10,
+        padAngle: 3,
+        avoidLabelOverlap: true,
+        label: {
+          color: chartTheme.labelText,
+          fontSize: 11,
+          formatter: '{b}\n{d}%',
+          textBorderWidth: 2,
+          textBorderColor: light ? '#fff' : '#06152b'
+        },
+        labelLine: { length: 8, length2: 6, smooth: 0.2, lineStyle: { color: chartTheme.labelText } },
+        emphasis: { scale: true, scaleSize: 8, itemStyle: { shadowBlur: 28, shadowOffsetY: 13 } },
+        data: prepared
+      }
+    ]
   })
   return instance
 }
@@ -1153,15 +1187,19 @@ const renderDetailCharts = async () => {
   if (activeDetailTab.value !== 'charts' || !detail.value) return
   await nextTick()
   const chartTheme = getChartTheme()
-  subjectChart = renderPieChart(subjectChartRef.value, subjectChart, '涉及主体分析', detail.value.subjectBreakdown || [])
-  behaviorChart = renderPieChart(behaviorChartRef.value, behaviorChart, '行为内容类型分析', detail.value.behaviorBreakdown || [])
+  subjectChart = renderPieChart(subjectChartRef.value, subjectChart, '涉及主体分析', detail.value.subjectBreakdown || [], CHART_PALETTES.caseBlue)
+  behaviorChart = renderPieChart(behaviorChartRef.value, behaviorChart, '行为内容类型分析', detail.value.behaviorBreakdown || [], CHART_PALETTES.violetCyan)
   timeTrendChart?.dispose()
   timeTrendChart = null
   if (timeTrendChartRef.value) {
     timeTrendChart = echarts.init(timeTrendChartRef.value)
     const trend = detail.value.timeTrend || []
+    const lineColor = isLightTheme.value ? '#c7354b' : '#f04f65'
     timeTrendChart.setOption({
       backgroundColor: 'transparent',
+      animationDuration: 1100,
+      animationEasing: 'cubicOut',
+      animationDelay: (index: number) => index * 60,
       tooltip: {
         trigger: 'axis',
         backgroundColor: chartTheme.tooltipBg,
@@ -1189,11 +1227,12 @@ const renderDetailCharts = async () => {
         type: 'line',
         smooth: true,
         symbol: 'circle',
-        symbolSize: 7,
+        symbolSize: 9,
         data: trend.map((item) => item.count),
-        lineStyle: { color: '#ff7a7a', width: 3 },
-        itemStyle: { color: '#ff7a7a' },
-        areaStyle: { color: 'rgba(255, 122, 122, 0.16)' }
+        lineStyle: { color: lineColor, width: 3, shadowBlur: 14, shadowColor: rgbaHex(lineColor, 0.66) },
+        itemStyle: { color: lineColor, borderColor: '#f2d28d', borderWidth: 1.4, shadowBlur: 12, shadowColor: rgbaHex(lineColor, 0.7) },
+        areaStyle: { color: areaGradient(lineColor, 0.42) },
+        emphasis: { scale: true, scaleSize: 5 }
       }]
     })
   }
@@ -1287,7 +1326,7 @@ const quantityLegendItems = computed(() => {
 const legendGradientStyle = computed(() => ({
   background: mapViewMode.value === '2d'
     ? 'linear-gradient(90deg, #40CD8F 0%, #E8C44A 48%, #E84C52 100%)'
-    : 'linear-gradient(90deg, #167DBA 0%, #159BA8 25%, #B59242 50%, #D07036 75%, #D83C4B 100%)'
+    : `linear-gradient(90deg, ${QUANTITY_COLORS[0]} 0%, ${QUANTITY_COLORS[1]} 25%, ${QUANTITY_COLORS[2]} 50%, ${QUANTITY_COLORS[3]} 75%, ${QUANTITY_COLORS[4]} 100%)`
 }))
 
 const getTooltipOption = () => {
@@ -1298,7 +1337,11 @@ const getTooltipOption = () => {
     borderColor: theme.tooltipBorder,
     borderWidth: 1,
     padding: [10, 12],
-    textStyle: { color: theme.tooltipText, fontSize: 14 }
+    textStyle: {
+      color: theme.tooltipText,
+      fontSize: 15,
+      fontFamily: 'Microsoft YaHei UI, PingFang SC, Noto Sans CJK SC, sans-serif'
+    }
   }
 }
 
@@ -1309,21 +1352,22 @@ const getFluorescentLabelFormatter = (name: string, _selected = false) => {
 
 const getFluorescentLabelRich = (selected = false) => {
   const darkMode = !isLightTheme.value
-  const labelWidth = 88
+  const labelWidth = compactMapLabels ? 70 : 96
   return {
-    // 名称黑底（与 2D 相同样式）；opacity:1 保证精灵整体不透明。
+    // 名称采用高对比玻璃黑底；桌面保持 16px 起，窄屏按画布宽度降级并启用避让。
     name: {
       color: darkMode ? (selected ? '#F1F7F9' : '#E3F1F5') : (selected ? '#FFFFFF' : '#EAF6FA'),
-      fontSize: 15,
-      fontWeight: 700,
-      lineHeight: 24,
+      fontSize: compactMapLabels ? (selected ? 14 : 13) : (selected ? 17 : 16),
+      fontWeight: 800,
+      fontFamily: 'Microsoft YaHei UI, PingFang SC, Noto Sans CJK SC, sans-serif',
+      lineHeight: compactMapLabels ? 20 : 26,
       width: labelWidth,
       align: 'center',
-      backgroundColor: selected ? 'rgba(11, 34, 54, 1)' : 'rgba(7, 22, 38, 0.98)',
-      borderColor: selected ? 'rgba(255, 255, 255, 0.95)' : 'rgba(190, 232, 246, 0.55)',
-      borderWidth: selected ? 1.5 : 1,
-      borderRadius: 7,
-      padding: [5, 10]
+      backgroundColor: selected ? 'rgba(8, 31, 53, 1)' : 'rgba(4, 18, 34, 0.98)',
+      borderColor: selected ? 'rgba(255, 255, 255, 0.98)' : 'rgba(139, 231, 255, 0.68)',
+      borderWidth: selected ? 2 : 1,
+      borderRadius: 6,
+      padding: compactMapLabels ? [4, 7] : [6, 11]
     },
     // 引线：与名称框同宽并居中，形成一根正对名称中心的竖直线。
     topDot: {
@@ -1359,54 +1403,87 @@ const getFluorescentLabelRich = (selected = false) => {
   }
 }
 
-const getGlassDetailTexture = () => {
-  if (glassDetailTexture || typeof document === 'undefined') return glassDetailTexture
+const getCircuitDetailTexture = () => {
+  if (circuitDetailTexture || typeof document === 'undefined') return circuitDetailTexture
   const canvas = document.createElement('canvas')
-  canvas.width = 192
-  canvas.height = 192
+  canvas.width = 256
+  canvas.height = 256
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
 
-  // detailTexture 会与案件颜色相乘。纹理提高到“能看见但不抢色”的强度：
-  // 淡斜纹 + 反向细纹 + 极弱颗粒，强化玻璃内部的细微纹路。
-  ctx.fillStyle = 'rgb(212, 221, 225)'
+  // detailTexture 会与案件分档色相乘，因此使用明暗灰阶绘制电路纹理，
+  // 让每块街道保留原案件颜色，同时在顶面呈现正交走线、焊点和芯片节点。
+  ctx.fillStyle = 'rgb(236, 242, 245)'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-  ctx.lineWidth = 1.2
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.34)'
-  for (let offset = -192; offset < 384; offset += 22) {
+  // 微型基板网格。
+  ctx.lineWidth = 1
+  ctx.strokeStyle = 'rgba(18, 49, 66, 0.20)'
+  for (let offset = 0; offset <= 256; offset += 16) {
     ctx.beginPath()
     ctx.moveTo(offset, 0)
-    ctx.lineTo(offset + 192, 192)
+    ctx.lineTo(offset, 256)
+    ctx.moveTo(0, offset)
+    ctx.lineTo(256, offset)
     ctx.stroke()
   }
 
-  ctx.lineWidth = 1
-  ctx.strokeStyle = 'rgba(44, 72, 88, 0.17)'
-  for (let offset = -192; offset < 384; offset += 44) {
+  // 主线路全部使用直角折线；固定路径保证纹理可平铺且不会产生随机闪烁。
+  const traces = [
+    [[-8, 38], [44, 38], [44, 78], [94, 78], [94, 112], [146, 112]],
+    [[256, 26], [212, 26], [212, 62], [168, 62], [168, 98], [128, 98]],
+    [[0, 154], [34, 154], [34, 126], [72, 126], [72, 184], [116, 184], [116, 222]],
+    [[256, 170], [226, 170], [226, 136], [190, 136], [190, 202], [150, 202], [150, 256]],
+    [[58, 0], [58, 22], [108, 22], [108, 52], [142, 52]],
+    [[176, 256], [176, 232], [214, 232], [214, 214], [256, 214]]
+  ] as const
+
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  const drawTrace = (points: ReadonlyArray<readonly [number, number]>) => {
     ctx.beginPath()
-    ctx.moveTo(offset, 192)
-    ctx.lineTo(offset + 192, 0)
+    points.forEach(([x, y], pointIndex) => {
+      if (pointIndex === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    })
     ctx.stroke()
   }
+  traces.forEach((points, index) => {
+    // 深色蚀刻槽 + 中央金属亮线，默认相机距离下也能看见线路。
+    ctx.lineWidth = index % 2 === 0 ? 4.6 : 3.8
+    ctx.strokeStyle = index % 2 === 0
+      ? 'rgba(18, 49, 66, 0.72)'
+      : 'rgba(30, 66, 82, 0.60)'
+    drawTrace(points)
+    ctx.lineWidth = index % 2 === 0 ? 1.45 : 1.1
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.78)'
+    drawTrace(points)
+  })
 
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)'
-  for (let y = 12; y < 192; y += 32) {
+  // 芯片与焊盘节点。
+  const chips = [[118, 88, 22, 18], [54, 174, 20, 16], [188, 122, 18, 20]] as const
+  chips.forEach(([x, y, width, height]) => {
+    ctx.fillStyle = 'rgba(15, 45, 62, 0.68)'
+    ctx.fillRect(x, y, width, height)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.76)'
+    ctx.lineWidth = 1.4
+    ctx.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1)
+  })
+
+  const vias = [[44, 38], [44, 78], [94, 78], [146, 112], [212, 62], [168, 62], [34, 154], [72, 126], [72, 184], [116, 222], [226, 170], [190, 136], [190, 202], [108, 22], [214, 232]] as const
+  vias.forEach(([x, y], index) => {
     ctx.beginPath()
-    ctx.moveTo(0, y)
-    ctx.lineTo(192, y + 5)
-    ctx.stroke()
-  }
+    ctx.arc(x, y, index % 3 === 0 ? 3.2 : 2.3, 0, Math.PI * 2)
+    ctx.fillStyle = 'rgba(20, 52, 68, 0.86)'
+    ctx.fill()
+    ctx.beginPath()
+    ctx.arc(x, y, 0.9, 0, Math.PI * 2)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)'
+    ctx.fill()
+  })
 
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.12)'
-  for (let y = 9; y < 192; y += 26) {
-    for (let x = (Math.floor(y / 26) % 2) ? 15 : 5; x < 192; x += 28) {
-      ctx.fillRect(x, y, 1, 1)
-    }
-  }
-
-  glassDetailTexture = canvas
-  return glassDetailTexture
+  circuitDetailTexture = canvas
+  return circuitDetailTexture
 }
 
 const buildStreetMapData = () => {
@@ -1482,6 +1559,38 @@ const buildStreetMapData = () => {
   })
 }
 
+// 以同一份街道数据生成几何边缘。普通街道使用青白呼吸亮边，选中街道则提升为白色高亮，
+// 同时保留原数量色和区块透明度，避免呼吸动画覆盖每个街道的语义颜色。
+const buildStreetMapRegions = (streetData: any[], pulse = 0.55) => {
+  const normalizedPulse = Math.max(0, Math.min(1, pulse))
+  const normalAlpha = 0.70 + normalizedPulse * 0.26
+  const normalWidth = 1.8 + normalizedPulse * 0.9
+  const selectedWidth = 4.5 + normalizedPulse * 0.55
+
+  return streetData.map((item: any) => ({
+    name: item.name,
+    regionHeight: item.regionHeight,
+    itemStyle: item.selected
+      ? {
+          color: item.itemStyle.color,
+          areaColor: item.itemStyle.areaColor,
+          opacity: 0.70,
+          borderColor: `rgba(255, 255, 255, ${(0.94 + normalizedPulse * 0.06).toFixed(3)})`,
+          borderWidth: Number(selectedWidth.toFixed(2))
+        }
+      : {
+          color: item.itemStyle.color,
+          areaColor: item.itemStyle.areaColor,
+          opacity: item.itemStyle.opacity,
+          borderColor: `rgba(184, 241, 255, ${normalAlpha.toFixed(3)})`,
+          borderWidth: Number(normalWidth.toFixed(2))
+        },
+    emphasis: item.selected
+      ? { itemStyle: { borderColor: '#FFFFFF', borderWidth: 5.1, opacity: 0.74 } }
+      : { itemStyle: { borderColor: 'rgba(238, 253, 255, 0.98)', borderWidth: 3.5 } }
+  }))
+}
+
 const clampMapZoom = (value: number) => Math.max(MAP_MIN_ZOOM, Math.min(MAP_MAX_ZOOM, value))
 
 const syncMap3DViewStateFromChart = () => {
@@ -1525,17 +1634,41 @@ const getCurrentMap3DViewControl = () => ({
   zoomSensitivity: 0
 })
 
+// echarts-gl 的局部 setOption 会重新挂载材质，并可能关闭已存在的 detailMap 着色器宏。
+// 本项目已经为街道上浮使用同版本内部补丁，这里在必要重绘后恢复电路纹理状态。
+const getStreetMap3DBuilder = () => {
+  const views = (chart as any)?._chartsViews as any[] | undefined
+  const mapView = views?.find((item: any) => item?.__model?.id === 'xrm-street-map-series')
+  return mapView?._geo3DBuilder
+}
+
+const restoreCircuitTexture = () => {
+  if (!chart || mapViewMode.value !== '3d') return
+  const material = getStreetMap3DBuilder()?._polygonMesh?.material
+  if (!material?.get?.('detailMap') || material.isTextureEnabled?.('detailMap')) return
+  material.enableTexture?.('detailMap')
+  chart.getZr().refresh()
+}
+
+const scheduleCircuitTextureRestore = () => {
+  if (typeof window === 'undefined') return
+  requestAnimationFrame(() => requestAnimationFrame(restoreCircuitTexture))
+}
+
 const updateStreetMapSelectionVisuals = () => {
   if (!chart || mapBoundaryMode.value !== 'street' || mapViewMode.value !== '3d' || !overview.value) return
   // map3DViewState 由相机事件和本组件的缩放逻辑维护；这里不再从 model 反读，
   // 避免 model 尚未提交最新缩放时把 distance 覆盖成旧值。
+  const streetData = buildStreetMapData()
   chart.setOption({
     series: [{
       id: 'xrm-street-map-series',
       viewControl: getCurrentMap3DViewControl(),
-      data: buildStreetMapData()
+      data: streetData,
+      regions: buildStreetMapRegions(streetData)
     }]
   }, { notMerge: false, lazyUpdate: true })
+  scheduleCircuitTextureRestore()
 }
 
 const stopMapEdgeAnimation = () => {
@@ -1548,6 +1681,7 @@ const stopMapEdgeAnimation = () => {
 const startMapEdgeAnimation = () => {
   stopMapEdgeAnimation()
   if (typeof window === 'undefined') return
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
   mapEdgeAnimationStartedAt = performance.now()
 
   const tick = (now: number) => {
@@ -1556,22 +1690,20 @@ const startMapEdgeAnimation = () => {
       return
     }
 
-    // 约 4–5fps 更新边缘参数，并在用户缩放/旋转时暂停，避免动态描边抢占相机交互。
+    // 直接调节现有亮边材质，避免 setOption 重建几何时关闭电路 detailMap。
+    // 约 4–5fps 更新，并在用户缩放/旋转时暂停，降低集显负担。
     if (now >= mapCameraInteractionUntil && now - mapEdgeLastPaintAt > 220) {
       mapEdgeLastPaintAt = now
       const phase = (now - mapEdgeAnimationStartedAt) / 1650
       const pulse = 0.5 + Math.sin(phase * Math.PI * 2) * 0.5
-      const alpha = 0.78 + pulse * 0.18
-      const width = 1.8 + pulse * 0.8
-      chart.setOption({
-        series: [{
-          id: 'xrm-street-map-series',
-          itemStyle: {
-            borderColor: `rgba(184, 239, 255, ${alpha.toFixed(3)})`,
-            borderWidth: Number(width.toFixed(2))
-          }
-        }]
-      }, { notMerge: false, lazyUpdate: true })
+      const linesMaterial = getStreetMap3DBuilder()?._linesMesh?.material
+      linesMaterial?.set?.('color', [
+        0.64 + pulse * 0.28,
+        0.86 + pulse * 0.12,
+        0.95 + pulse * 0.05,
+        0.78 + pulse * 0.22
+      ])
+      chart.getZr().refresh()
     }
 
     mapEdgeAnimationFrame = requestAnimationFrame(tick)
@@ -1693,7 +1825,7 @@ const renderMap2D = () => {
         symbol: 'circle',
         z: 10,
         itemStyle: { color: 'rgba(0, 0, 0, 0)' },
-        labelLayout: { hideOverlap: false }
+        labelLayout: { hideOverlap: compactMapLabels }
       }
     ]
   }, { notMerge: true })
@@ -1702,6 +1834,9 @@ const renderMap2D = () => {
 const renderMap = async () => {
   await nextTick()
   if (!mapRef.value || !mapRegistered || !overview.value) return
+  const nextCompactMapLabels = mapRef.value.clientWidth <= 560
+  if (nextCompactMapLabels && !compactMapLabels) legendVisible.value = false
+  compactMapLabels = nextCompactMapLabels
 
   if (!chart) {
     chart = echarts.init(mapRef.value)
@@ -1799,10 +1934,10 @@ const renderMap = async () => {
           groundPlane: { show: false },
           boxHeight: 26,
           realisticMaterial: {
-            detailTexture: getGlassDetailTexture(),
-            textureTiling: 2.2,
-            roughness: 0.075,
-            metalness: 0.20
+            detailTexture: getCircuitDetailTexture(),
+            textureTiling: 2.25,
+            roughness: 0.11,
+            metalness: 0.24
           },
           postEffect: {
             enable: true,
@@ -1834,36 +1969,14 @@ const renderMap = async () => {
           top: 8,
           bottom: 0,
           data: streetData,
-          // regions 再写一层几何级边界样式。对选中区域同时提高顶面轮廓和挤出侧壁轮廓的亮度；
-          // 与 data.itemStyle 叠加后，echarts-gl 在不同显卡/抗锯齿路径下都能得到更完整的立体边缘。
-          regions: streetData.map((item: any) => ({
-            name: item.name,
-            regionHeight: item.regionHeight,
-            itemStyle: item.selected
-              ? {
-                  color: item.itemStyle.color,
-                  areaColor: item.itemStyle.areaColor,
-                  opacity: 0.69,
-                  borderColor: '#FFFFFF',
-                  borderWidth: 4.6
-                }
-              : {
-                  color: item.itemStyle.color,
-                  areaColor: item.itemStyle.areaColor,
-                  opacity: item.itemStyle.opacity,
-                  borderColor: 'rgba(215, 248, 255, 0.95)',
-                  borderWidth: 2.0
-                },
-            emphasis: item.selected
-              ? { itemStyle: { borderColor: '#FFFFFF', borderWidth: 4.9, opacity: 0.72 } }
-              : undefined
-          })),
+          // 几何级亮边与 data.itemStyle 叠加，兼容不同显卡的 WebGL 抗锯齿路径。
+          regions: buildStreetMapRegions(streetData),
           itemStyle: {
             color: QUANTITY_COLORS[0],
             areaColor: QUANTITY_COLORS[0],
-            borderColor: 'rgba(210, 245, 255, 0.95)',
-            borderWidth: 2.0,
-            opacity: 0.46
+            borderColor: 'rgba(184, 241, 255, 0.90)',
+            borderWidth: 2.3,
+            opacity: 0.48
           },
           emphasis: {
             label: { rich: getFluorescentLabelRich(false) },
@@ -1876,9 +1989,10 @@ const renderMap = async () => {
           label: {
             show: true,
             color: chartTheme.labelText,
-            fontSize: 12,
+            fontSize: 16,
             fontWeight: 700,
-            lineHeight: 12,
+            lineHeight: 16,
+            fontFamily: 'Microsoft YaHei UI, PingFang SC, Noto Sans CJK SC, sans-serif',
             backgroundColor: 'transparent',
             borderWidth: 0,
             padding: 0,
@@ -1888,11 +2002,12 @@ const renderMap = async () => {
           animationDurationUpdate: 360,
           animationEasingUpdate: 'cubicOut',
           labelLayout: {
-            hideOverlap: false
+            hideOverlap: compactMapLabels
           }
         }
       ]
     }, { notMerge: false, lazyUpdate: true })
+    scheduleCircuitTextureRestore()
     map3DViewInitialized = true
     startMapEdgeAnimation()
     lastRenderedMapMode = '3d'
@@ -1984,9 +2099,10 @@ const renderMap = async () => {
           show: true,
           distance: 5,
           color: chartTheme.labelText,
-          fontSize: 12,
+          fontSize: 16,
           fontWeight: 700,
-          lineHeight: 12,
+          lineHeight: 16,
+          fontFamily: 'Microsoft YaHei UI, PingFang SC, Noto Sans CJK SC, sans-serif',
           backgroundColor: 'transparent',
           borderWidth: 0,
           padding: 0,
@@ -2030,6 +2146,7 @@ const clearSelection = (resetView = false) => {
           viewControl: getCurrentMap3DViewControl()
         }]
       }, { notMerge: false, lazyUpdate: true })
+      scheduleCircuitTextureRestore()
     } else if (chart && mapBoundaryMode.value === 'street' && mapViewMode.value === '2d') {
       chart.setOption({ geo: { id: 'xrm-street-map-2d-geo', zoom: 1, center: undefined } })
     }
@@ -2053,6 +2170,7 @@ const applyMap3DDistance = (nextDistance: number) => {
       viewControl: getCurrentMap3DViewControl()
     }]
   }, { notMerge: false, lazyUpdate: false })
+  scheduleCircuitTextureRestore()
 }
 
 const applyMapZoom = (nextZoom: number) => {
@@ -2114,6 +2232,7 @@ const resetMap = () => {
         viewControl: getCurrentMap3DViewControl()
       }]
     }, { notMerge: false, lazyUpdate: true })
+    scheduleCircuitTextureRestore()
   } else if (chart && mapBoundaryMode.value === 'street' && mapViewMode.value === '2d') {
     chart.setOption({ geo: { id: 'xrm-street-map-2d-geo', zoom: 1, center: undefined } })
   } else if (chart) {
@@ -2161,11 +2280,17 @@ const syncDetailPanelHeight = () => {
 }
 
 const handleResize = () => {
+  const nextCompactMapLabels = Boolean(mapRef.value && mapRef.value.clientWidth <= 560)
+  const compactModeChanged = nextCompactMapLabels !== compactMapLabels
+  if (compactModeChanged && nextCompactMapLabels) legendVisible.value = false
+  compactMapLabels = nextCompactMapLabels
   chart?.resize()
+  scheduleCircuitTextureRestore()
   subjectChart?.resize()
   behaviorChart?.resize()
   timeTrendChart?.resize()
   syncDetailPanelHeight()
+  if (compactModeChanged) void renderMap()
 }
 
 watch(filters, async () => {
@@ -2242,24 +2367,27 @@ onUnmounted(() => {
 
 <style scoped>
 .xrm-card {
-  --page-bg: #091a31;
-  --surface-1: rgba(13, 35, 66, 0.78);
-  --surface-2: rgba(15, 43, 78, 0.72);
-  --surface-3: rgba(20, 55, 92, 0.52);
-  --surface-solid: #0d2848;
-  --line: rgba(101, 193, 239, 0.24);
-  --line-strong: rgba(101, 207, 239, 0.48);
+  --page-bg: #050e20;
+  --surface-1: rgba(8, 30, 58, 0.84);
+  --surface-2: rgba(9, 38, 70, 0.78);
+  --surface-3: rgba(16, 55, 89, 0.56);
+  --surface-solid: #0a2747;
+  --line: rgba(99, 207, 247, 0.30);
+  --line-strong: rgba(116, 226, 255, 0.66);
   --text-1: #edfaff;
-  --text-2: #b7dced;
-  --text-3: #82b6ce;
-  --title: #5ad6ff;
-  --input-bg: rgba(7, 28, 53, 0.78);
-  --shadow: 0 14px 40px rgba(0, 7, 20, 0.22);
+  --text-2: #b8e1ef;
+  --text-3: #8bbbd0;
+  --title: #66e2ff;
+  --input-bg: rgba(4, 23, 46, 0.90);
+  --shadow: 0 18px 44px rgba(0, 5, 18, 0.28);
   overflow: hidden;
   border: 1px solid var(--line) !important;
   border-radius: 14px;
-  background: linear-gradient(180deg, rgba(10, 29, 53, 0.98), rgba(7, 22, 42, 0.98)) !important;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(57, 185, 243, 0.12), transparent 31%),
+    linear-gradient(180deg, rgba(7, 26, 51, 0.99), rgba(3, 16, 34, 0.99)) !important;
   color: var(--text-1);
+  font-family: "Microsoft YaHei UI", "PingFang SC", "Noto Sans CJK SC", "Noto Sans SC", sans-serif;
   box-shadow: var(--shadow);
 }
 
@@ -2344,9 +2472,26 @@ onUnmounted(() => {
 }
 
 .xrm-section-shell {
+  position: relative;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--surface-1);
+  box-shadow:
+    inset 0 1px 0 rgba(224, 250, 255, 0.07),
+    0 12px 28px rgba(0, 8, 24, 0.14),
+    0 0 20px rgba(67, 200, 247, 0.035);
+}
+
+.xrm-section-shell::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 22px;
+  right: 22px;
+  z-index: 1;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(151, 239, 255, 0.84), transparent);
 }
 
 .xrm-filter-section {
@@ -2407,6 +2552,16 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 18px;
   margin-bottom: 14px;
+}
+
+.xrm-section-heading > div:first-child,
+.xrm-panel-heading > div:first-child {
+  position: relative;
+  padding: 7px 18px 7px 13px;
+  border-left: 3px solid var(--title);
+  border-radius: 3px 10px 10px 3px;
+  background: linear-gradient(90deg, rgba(74, 203, 247, 0.14), rgba(41, 116, 174, 0.045) 66%, transparent);
+  box-shadow: inset 0 1px 0 rgba(217, 248, 255, 0.04);
 }
 
 .xrm-section-heading.compact {
@@ -2784,17 +2939,19 @@ onUnmounted(() => {
 .xrm-map-stage {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(95, 193, 255, 0.34);
-  border-radius: 10px;
+  border: 1px solid rgba(104, 219, 255, 0.54);
+  border-radius: 12px;
   background:
-    radial-gradient(circle at 50% 45%, rgba(32, 132, 211, 0.12), transparent 34%),
-    radial-gradient(circle at 50% 92%, rgba(25, 106, 172, 0.10), transparent 42%),
-    linear-gradient(145deg, rgba(12, 38, 68, 0.96), rgba(4, 18, 36, 0.99) 72%),
-    #06162a;
+    radial-gradient(circle at 50% 42%, rgba(30, 154, 224, 0.16), transparent 34%),
+    radial-gradient(circle at 50% 92%, rgba(18, 107, 179, 0.12), transparent 44%),
+    linear-gradient(145deg, rgba(7, 32, 62, 0.98), rgba(2, 13, 29, 0.995) 72%),
+    #030d1d;
   box-shadow:
-    inset 0 0 72px rgba(74, 180, 238, 0.10),
-    inset 0 1px 0 rgba(208, 245, 255, 0.08),
-    0 16px 36px rgba(0, 17, 38, 0.24);
+    inset 0 0 82px rgba(63, 190, 245, 0.12),
+    inset 0 0 0 1px rgba(200, 247, 255, 0.055),
+    inset 0 1px 0 rgba(221, 250, 255, 0.13),
+    0 18px 40px rgba(0, 10, 31, 0.30),
+    0 0 24px rgba(65, 205, 255, 0.07);
 }
 
 .xrm-map-stage::before {
@@ -2803,11 +2960,15 @@ onUnmounted(() => {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.24;
+  opacity: 0.38;
   background-image:
-    linear-gradient(rgba(92, 185, 232, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(92, 185, 232, 0.08) 1px, transparent 1px);
-  background-size: 32px 32px;
+    radial-gradient(circle, rgba(143, 232, 255, 0.32) 0 1.2px, transparent 1.8px),
+    linear-gradient(rgba(91, 207, 247, 0.10) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91, 207, 247, 0.10) 1px, transparent 1px),
+    linear-gradient(90deg, transparent 0 20%, rgba(111, 224, 255, 0.13) 20% 58%, transparent 58%),
+    linear-gradient(transparent 0 42%, rgba(111, 224, 255, 0.11) 42% 70%, transparent 70%);
+  background-position: 8px 8px, 0 0, 0 0, 0 16px, 16px 0;
+  background-size: 48px 48px, 24px 24px, 24px 24px, 96px 96px, 96px 96px;
   mask-image: radial-gradient(circle at 50% 55%, #000 18%, transparent 72%);
 }
 
@@ -2837,7 +2998,23 @@ onUnmounted(() => {
   overscroll-behavior: contain;
   -webkit-user-select: none;
   user-select: none;
-  filter: drop-shadow(0 18px 18px rgba(0, 14, 36, 0.22));
+  filter:
+    drop-shadow(0 18px 18px rgba(0, 14, 36, 0.26))
+    drop-shadow(0 0 8px rgba(91, 220, 255, 0.12));
+  animation: xrm-map-edge-aura 4.2s ease-in-out infinite;
+}
+
+@keyframes xrm-map-edge-aura {
+  0%, 100% {
+    filter:
+      drop-shadow(0 18px 18px rgba(0, 14, 36, 0.26))
+      drop-shadow(0 0 6px rgba(91, 220, 255, 0.10));
+  }
+  50% {
+    filter:
+      drop-shadow(0 18px 20px rgba(0, 14, 36, 0.30))
+      drop-shadow(0 0 13px rgba(120, 232, 255, 0.24));
+  }
 }
 
 .xrm-map-breath-overlay {
@@ -2930,10 +3107,15 @@ onUnmounted(() => {
   z-index: 5;
   width: 200px;
   padding: 11px 12px;
-  border: 1px solid rgba(113, 216, 240, 0.25);
-  border-radius: 8px;
-  background: rgba(5, 23, 45, 0.82);
-  backdrop-filter: blur(5px);
+  border: 1px solid rgba(125, 229, 255, 0.48);
+  border-radius: 9px;
+  background:
+    linear-gradient(145deg, rgba(9, 39, 69, 0.93), rgba(3, 17, 34, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(225, 251, 255, 0.08),
+    0 10px 26px rgba(0, 8, 26, 0.34),
+    0 0 18px rgba(65, 207, 255, 0.08);
+  backdrop-filter: blur(8px);
 }
 
 .xrm-legend-header {
@@ -3019,8 +3201,8 @@ onUnmounted(() => {
 
 .xrm-legend-title {
   color: #dff8ff;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
   white-space: nowrap;
   flex: 0 0 auto;
 }
@@ -3029,14 +3211,14 @@ onUnmounted(() => {
   height: 8px;
   margin: 9px 0 5px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #167DBA 0%, #159BA8 25%, #B59242 50%, #D07036 75%, #D83C4B 100%);
+  background: linear-gradient(90deg, #1689C4 0%, #16A8B7 25%, #D4B64D 50%, #EC8438 75%, #E94B5B 100%);
 }
 
 .xrm-legend-scale {
   display: flex;
   justify-content: space-between;
   color: #94c5d9;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .xrm-legend-ranges {
@@ -3052,7 +3234,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 5px;
   color: #b8dceb;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.4;
   white-space: nowrap;
 }
@@ -3067,7 +3249,7 @@ onUnmounted(() => {
 
 .xrm-map-legend p {
   color: #7eafc5;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.5;
   white-space: normal;
   word-break: break-word;
@@ -3243,6 +3425,13 @@ onUnmounted(() => {
 .xrm-detail-chart {
   width: 100%;
   height: 230px;
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(68, 149, 202, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(68, 149, 202, 0.045) 1px, transparent 1px),
+    radial-gradient(ellipse at 50% 82%, rgba(65, 164, 218, 0.09), transparent 54%);
+  background-size: 28px 28px, 28px 28px, auto;
+  box-shadow: inset 0 -22px 42px rgba(0, 8, 24, 0.18);
 }
 
 .xrm-detail-chart.line {
@@ -4098,13 +4287,16 @@ onUnmounted(() => {
   color: #587f98;
 }
 
-/* 页头、筛选区和汇总区在现有基础上统一放大 2px。 */
+/* 关键标题遵循 24px 起的层级，辅助文字保持 14–16px，兼顾大屏可读性与地图密度。 */
 .xrm-page-header .eyebrow {
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .xrm-page-header .xrm-title-group h2 {
-  font-size: 25px;
+  font-size: clamp(28px, 2vw, 32px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 20px rgba(86, 221, 255, 0.24);
 }
 
 .xrm-page-header .xrm-title-group p {
@@ -4122,9 +4314,15 @@ onUnmounted(() => {
 }
 
 .xrm-filter-section .xrm-section-heading h3,
-.xrm-summary-section .xrm-section-heading h3,
+.xrm-summary-section .xrm-section-heading h3 {
+  font-size: 24px;
+  font-weight: 800;
+}
+
 .xrm-map-panel .xrm-panel-heading h3 {
-  font-size: 19px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
 }
 
 .xrm-filter-section .xrm-section-helper,
@@ -4156,7 +4354,7 @@ onUnmounted(() => {
 }
 
 .xrm-summary-section .xrm-summary-value {
-  font-size: 33px;
+  font-size: 36px;
 }
 
 .xrm-summary-section .xrm-summary-card small {
@@ -4179,7 +4377,7 @@ onUnmounted(() => {
 }
 
 .xrm-detail-header h3 {
-  font-size: 25px;
+  font-size: 27px;
 }
 
 .xrm-detail-meta {
@@ -4257,6 +4455,14 @@ onUnmounted(() => {
 .xrm-section-empty,
 .xrm-empty-data {
   font-size: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xrm-map-box,
+  .xrm-map-breath-overlay,
+  .xrm-status-dot {
+    animation: none !important;
+  }
 }
 
 

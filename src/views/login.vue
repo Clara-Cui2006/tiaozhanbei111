@@ -21,11 +21,10 @@
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { login } from '../services/auth'
 
 const router = useRouter()
-const route = useRoute()
 const form = reactive({ username: '', password: '' })
 const loading = ref(false)
 const errorMessage = ref('')
@@ -35,8 +34,7 @@ async function submit() {
   errorMessage.value = ''
   try {
     await login(form.username, form.password)
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
-    await router.replace(redirect)
+    await router.replace('/')
   } catch (error: any) {
     errorMessage.value = error.response?.data?.detail || '登录失败，请稍后重试'
   } finally {

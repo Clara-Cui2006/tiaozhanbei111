@@ -870,7 +870,6 @@ const mockArchiveItems: ArchiveItem[] = [
 
 const mockSiteFooterInfo: SiteFooterInfo = {
   recordNo: '',
-  publicSecurityNo: '',
   links: [
     { label: '政策法规', url: '#' },
     { label: '政务公开', url: '#' },
@@ -1057,47 +1056,49 @@ export async function fetchMultiTrend(): Promise<MultiTrendData[]> {
 }
 
 // --- Risk Analysis: Case Categories ---
-/* ---------- 真实数据：案件分类（由 cases.json 按一级/二级分类统计） ---------- */
+/* ---------- 开发演示：法定罪名与治理主题双层分类 ---------- */
 const mockCaseCategories: CaseCategory[] = [
   {
-    name: '侵财类犯罪',
-    value: 12,
-    children: [
-      { name: '盗窃罪', value: 8 },
-      { name: '诈骗罪（含电信网络诈骗）', value: 1 },
-      { name: '职务侵占罪', value: 1 },
-      { name: '抢夺罪', value: 1 },
-      { name: '行贿罪', value: 1 }
-    ]
-  },
-  {
-    name: '人身伤害类犯罪',
+    name: '诈骗罪',
     value: 4,
     children: [
-      { name: '故意伤害罪', value: 1 },
-      { name: '寻衅滋事罪', value: 1 },
-      { name: '非法拘禁罪', value: 1 },
-      { name: '聚众斗殴罪', value: 1 }
+      { name: '电信网络诈骗', value: 3 },
+      { name: '养老诈骗', value: 1 }
     ]
   },
   {
-    name: '危害公共安全类犯罪',
-    value: 3,
+    name: '盗窃罪',
+    value: 8,
     children: [
-      { name: '危险驾驶罪', value: 2 },
-      { name: '交通肇事罪', value: 1 }
+      { name: '停车位纠纷', value: 3 },
+      { name: '邻里纠纷', value: 3 },
+      { name: '涉老权益保护', value: 2 }
     ]
   },
   {
-    name: '妨害社会管理类犯罪',
-    value: 7,
+    name: '扰乱公共秩序',
+    value: 4,
     children: [
-      { name: '掩饰、隐瞒犯罪所得罪', value: 2 },
-      { name: '生产、销售有毒、有害食品罪', value: 1 },
-      { name: '侵犯公民个人信息罪', value: 1 },
-      { name: '虚开增值税专用发票罪', value: 1 },
-      { name: '帮助信息网络犯罪活动罪', value: 1 },
-      { name: '容留他人吸毒罪', value: 1 }
+      { name: '涉外风险', value: 2 },
+      { name: '大型活动秩序保障', value: 2 }
+    ]
+  },
+  {
+    name: '相邻关系纠纷',
+    value: 4,
+    children: [
+      { name: '涉老群体权益侵害', value: 2 },
+      { name: '环境噪声侵权', value: 2 }
+    ]
+  },
+  {
+    name: '侵权责任纠纷',
+    value: 6,
+    children: [
+      { name: '劳动用工纠纷', value: 2 },
+      { name: '产品质量侵权', value: 2 },
+      { name: '个人信息保护', value: 1 },
+      { name: '网络购物侵权', value: 1 }
     ]
   }
 ]
@@ -1148,7 +1149,20 @@ const categoryToCrime: Record<string, string[]> = {
   '侵财类犯罪': ['盗窃罪', '诈骗罪', '职务侵占罪', '抢夺罪', '行贿罪'],
   '人身伤害类犯罪': ['故意伤害罪', '寻衅滋事罪', '非法拘禁罪', '聚众斗殴罪'],
   '危害公共安全类犯罪': ['危险驾驶罪', '交通肇事罪'],
-  '妨害社会管理类犯罪': ['掩饰、隐瞒犯罪所得罪', '生产销售有毒有害食品罪', '侵犯公民个人信息罪', '虚开增值税专用发票罪', '帮助信息网络犯罪活动罪', '容留他人吸毒罪']
+  '妨害社会管理类犯罪': ['掩饰、隐瞒犯罪所得罪', '生产销售有毒有害食品罪', '侵犯公民个人信息罪', '虚开增值税专用发票罪', '帮助信息网络犯罪活动罪', '容留他人吸毒罪'],
+  '诈骗罪': ['诈骗罪', '帮助信息网络犯罪活动罪', '掩饰、隐瞒犯罪所得罪'],
+  '盗窃罪': ['盗窃罪', '职务侵占罪', '抢夺罪'],
+  '扰乱公共秩序': ['寻衅滋事罪', '聚众斗殴罪', '容留他人吸毒罪'],
+  '相邻关系纠纷': ['故意伤害罪', '非法拘禁罪', '危险驾驶罪', '交通肇事罪'],
+  '侵权责任纠纷': ['生产销售有毒有害食品罪', '侵犯公民个人信息罪', '虚开增值税专用发票罪', '行贿罪']
+}
+
+const classificationSourceCategory: Record<string, string> = {
+  '诈骗罪': '侵财类犯罪',
+  '盗窃罪': '侵财类犯罪',
+  '扰乱公共秩序': '人身伤害类犯罪',
+  '相邻关系纠纷': '危害公共安全类犯罪',
+  '侵权责任纠纷': '妨害社会管理类犯罪'
 }
 
 export async function fetchCaseSubjects(category?: string): Promise<CaseSubject[]> {
@@ -1197,7 +1211,8 @@ const mockCaseTimeTrends: CaseTimeTrend[] = [
 export async function fetchCaseTimeTrends(category?: string): Promise<CaseTimeTrend[]> {
   if (useMock) {
     if (!category) return Promise.resolve(mockCaseTimeTrends)
-    return Promise.resolve(mockCaseTimeTrends.filter((t) => t.category === category))
+    const sourceCategory = classificationSourceCategory[category] ?? category
+    return Promise.resolve(mockCaseTimeTrends.filter((t) => t.category === sourceCategory))
   }
   const { data } = await http.get<CaseTimeTrend[]>('/risk-analysis/case-time-trends', { params: { category } })
   return data
@@ -1249,7 +1264,12 @@ export async function fetchCaseFeatureWords(category?: string): Promise<CaseFeat
       '侵财类犯罪': ['入室盗窃', '扒窃', '网络诈骗', '电话诈骗', '居民小区', '商业区域', '交通工具内', '夜间作案', '单独作案', '团伙作案', '前科人员', '涉未成年人'],
       '人身伤害类犯罪': ['公共场所', '居民小区', '白天作案', '夜间作案', '单独作案', '累犯', '债务纠纷', '涉未成年人'],
       '危害公共安全类犯罪': ['醉酒驾驶', '公共场所', '白天作案', '夜间作案', '单独作案', '交通工具内'],
-      '妨害社会管理类犯罪': ['团伙作案', '公共场所', '居民小区', '夜间作案', '前科人员', '累犯', '涉未成年人']
+      '妨害社会管理类犯罪': ['团伙作案', '公共场所', '居民小区', '夜间作案', '前科人员', '累犯', '涉未成年人'],
+      '诈骗罪': ['口头诈骗', '使用他人银行卡取现', '提供银行卡', '单独作案'],
+      '盗窃罪': ['窃取车辆', '窃取快递', '趁人不备窃取', '藏匿商品于婴儿车', '团伙作案', '单独作案'],
+      '扰乱公共秩序': ['酒后打砸', '约架持械', '容留吸毒', '公共场所', '团伙作案'],
+      '相邻关系纠纷': ['踢踹', '拘禁', '醉酒驾驶', '超速驾驶', '居民小区'],
+      '侵权责任纠纷': ['出售行踪轨迹', '网店销售非法添加物', '虚开发票', '公司办公区', '线上淘宝店']
     }
     const words = catMap[category] ?? []
     return Promise.resolve(mockCaseFeatureWords.filter((w) => words.includes(w.name)))
@@ -1292,7 +1312,8 @@ export async function fetchCaseDetails(query?: CaseDetailQuery): Promise<CaseDet
   if (useMock) {
     let result = mockCaseDetails
     if (query?.category) {
-      result = result.filter((c) => c.category === query.category)
+      const sourceCategory = classificationSourceCategory[query.category] ?? query.category
+      result = result.filter((c) => c.category === sourceCategory)
     }
     if (query?.keyword) {
       const kw = query.keyword

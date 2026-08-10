@@ -25,15 +25,18 @@
       font-size: 14px;
     }
     html.mobile .header {
-      height: auto !important;
-      display: flex !important;
-      flex-direction: column !important;
-      padding: 6px 10px !important;
-      gap: 4px !important;
+      height: 68px !important;
+      min-height: 68px !important;
+      display: grid !important;
+      grid-template-columns: 126px minmax(0, 1fr) auto !important;
+      flex-direction: initial !important;
+      padding: 0 10px !important;
+      gap: 8px !important;
     }
     html.mobile .brand {
-      font-size: 13px !important;
-      justify-content: center !important;
+      font-size: 21px !important;
+      justify-content: initial !important;
+      text-align: left !important;
     }
     html.mobile .top-menu {
       width: 100% !important;
@@ -132,8 +135,7 @@
     html.mobile .map-intro,
     html.mobile .data-hint,
     html.mobile .classification-hint,
-    html.mobile .detail-panel,
-    html.mobile .urgency-card {
+    html.mobile .detail-panel {
       display: none !important;
     }
     /* radio/tabs横向滚动 */

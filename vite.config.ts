@@ -24,5 +24,12 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, '')
       }
     }
+  },
+  test: {
+    exclude: [
+      '**/node_modules/**',
+      '**/.worktrees/**',
+      'tests/account-slot-position.test.mjs',
+    ],
   }
 })

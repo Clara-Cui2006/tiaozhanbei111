@@ -227,8 +227,18 @@
             </div>
           </div>
 
-          <div class="xrm-map-stage">
+          <div class="xrm-map-stage" :style="{ height: `${mapDisplayHeight}px` }">
+            <XichengThreeMap
+              v-if="mapBoundaryMode === 'street' && mapViewMode === '3d' && overview"
+              ref="threeMapRef"
+              :streets="overview.streets"
+              :selected-street-name="activeStreetName"
+              @select="selectStreetFromThree"
+              @clear="clearSelection"
+              @error="handleThreeMapError"
+            />
             <div
+              v-else
               ref="mapRef"
               class="xrm-map-box"
               :style="{ height: `${mapDisplayHeight}px` }"
@@ -270,17 +280,17 @@
               </div>
               <div class="xrm-legend-gradient" :style="legendGradientStyle"></div>
               <div class="xrm-legend-scale">
-                <span>数量较少</span>
-                <span>数量较多</span>
+                <span>相对最少</span>
+                <span>相对最多</span>
               </div>
               <div class="xrm-legend-ranges">
-                <span v-for="item in quantityLegendItems" :key="`${item.min}-${item.max}`">
+                <span v-for="(item, index) in quantityLegendItems" :key="index">
                   <i :style="{ backgroundColor: item.color }"></i>
                   {{ item.label }}
                 </span>
               </div>
-              <p class="xrm-legend-difference">颜色仅表示数量差异</p>
-              <p class="xrm-legend-rule">按当前筛选结果中的街道最大案件数，以 20% 为间隔划分五档</p>
+              <p class="xrm-legend-difference">颜色表示15个街道的相对数量差异</p>
+              <p class="xrm-legend-rule">最低值映射为蓝色，最高值映射为红色，中间值连续渐变</p>
             </div>
             <button
               v-else
@@ -570,6 +580,13 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import * as echarts from 'echarts'
 import 'echarts-gl'
 import { patchMap3DStreetLift } from './map3d-street-lift'
+import XichengThreeMap from './xicheng-three-map/XichengThreeMap.vue'
+import {
+  QUANTITY_COLORS,
+  buildRelativeLegendStops,
+  getCaseCountExtent,
+  getRelativeCaseColor
+} from './xicheng-three-map/case-count-metrics'
 import type {
   StreetMapDetail,
   StreetMapFilters,
@@ -638,13 +655,6 @@ const EXPECTED_STREETS = [
   '陶然亭街道', '广安门内街道', '牛街街道', '白纸坊街道', '广安门外街道'
 ]
 const EXPECTED_STREET_SET = new Set(EXPECTED_STREETS)
-// 首页 3D 数量色：保持“冷蓝→青→金→橙→红”的数量分档，并提高暗色底图上的发光纯度。
-const QUANTITY_COLORS = ['#1689C4', '#16A8B7', '#D4B64D', '#EC8438', '#E94B5B']
-const HEAT_COLOR_STOPS: Array<[number, [number, number, number]]> = [
-  [0, [64, 205, 143]],
-  [0.48, [232, 196, 74]],
-  [1, [232, 76, 82]]
-]
 const MAP_DEFAULT_DISTANCE = 118
 const STREET_BASE_HEIGHT = 7.2
 // 选中时整个立体块平移的高度，不再改变街道自身厚度。
@@ -715,8 +725,15 @@ const STREET_LABEL_CONFIG: Record<string, StreetLabelConfig> = {
 }
 
 type MapBoundaryMode = 'street' | 'district'
+type XichengThreeMapExpose = {
+  zoomIn(): void
+  zoomOut(): void
+  reset(): void
+  focusStreet(streetName: string): void
+}
 
 const mapRef = ref<HTMLDivElement | null>(null)
+const threeMapRef = ref<XichengThreeMapExpose | null>(null)
 const mapPanelRef = ref<HTMLElement | null>(null)
 const subjectChartRef = ref<HTMLDivElement | null>(null)
 const behaviorChartRef = ref<HTMLDivElement | null>(null)
@@ -1238,95 +1255,24 @@ const renderDetailCharts = async () => {
   }
 }
 
-const getMaxCaseCount = () => {
+const getCurrentCaseCountExtent = () => {
   const values = overview.value?.streets.map((item) => item.caseCount) || []
-  return Math.max(0, ...values)
+  return getCaseCountExtent(values)
 }
 
-type QuantityRange = {
-  min: number
-  max: number
-  color: string
-  label: string
+const getMaxCaseCount = () => getCurrentCaseCountExtent().max
+const getCurrentQuantityColor = (value: number) => {
+  const { min, max } = getCurrentCaseCountExtent()
+  return getRelativeCaseColor(value, min, max)
 }
-
-const buildQuantityRanges = (maxValue: number): QuantityRange[] => {
-  const normalizedMax = Math.max(0, Math.floor(Number(maxValue) || 0))
-  if (normalizedMax === 0) {
-    return [{ min: 0, max: 0, color: QUANTITY_COLORS[0] ?? '#dbeafe', label: '0 件' }]
-  }
-
-  const starts = [
-    0,
-    Math.ceil(normalizedMax * 0.2),
-    Math.ceil(normalizedMax * 0.4),
-    Math.ceil(normalizedMax * 0.6),
-    Math.ceil(normalizedMax * 0.8)
-  ]
-
-  return starts
-    .map((min, index) => {
-      const nextStart = starts[index + 1] ?? normalizedMax
-      const max = index === starts.length - 1 ? normalizedMax : Math.min(normalizedMax, nextStart - 1)
-      return {
-        min,
-        max,
-        color: QUANTITY_COLORS[index] ?? QUANTITY_COLORS[0] ?? '#dbeafe',
-        label: min === max ? `${min} 件` : `${min}–${max} 件`
-      }
-    })
-    .filter((item) => item.min <= item.max)
-}
-
-const getQuantityColor = (value: number, maxValue: number) => {
-  const normalizedValue = Math.max(0, Math.floor(Number(value) || 0))
-  return buildQuantityRanges(maxValue).find((item) => normalizedValue >= item.min && normalizedValue <= item.max)?.color ?? QUANTITY_COLORS[0] ?? '#dbeafe'
-}
-
-// 2D 热力图使用 绿→黄→红 的渐变填色，颜色保持清透。
-const getHeatColor = (value: number, maxValue: number, alpha = 0.88) => {
-  const normalizedMax = Math.max(1, Number(maxValue) || 1)
-  const ratio = Math.max(0, Math.min(1, (Number(value) || 0) / normalizedMax))
-
-  let lower = HEAT_COLOR_STOPS[0]!
-  let upper = HEAT_COLOR_STOPS[HEAT_COLOR_STOPS.length - 1]!
-  for (let i = 0; i < HEAT_COLOR_STOPS.length - 1; i++) {
-    const from = HEAT_COLOR_STOPS[i]!
-    const to = HEAT_COLOR_STOPS[i + 1]!
-    if (ratio >= from[0] && ratio <= to[0]) {
-      lower = from
-      upper = to
-      break
-    }
-  }
-
-  const span = Math.max(0.0001, upper[0] - lower[0])
-  const t = (ratio - lower[0]) / span
-  const lowerRgb = lower[1]
-  const upperRgb = upper[1]
-  const rgb = lowerRgb.map((channel, index) =>
-    Math.round(channel + (upperRgb[index]! - channel) * t)
-  )
-  return `rgba(${rgb[0]!}, ${rgb[1]!}, ${rgb[2]!}, ${alpha})`
-}
-
-const getLegendColor = (value: number, maxValue: number) =>
-  mapViewMode.value === '2d'
-    ? getHeatColor(value, maxValue)
-    : getQuantityColor(value, maxValue)
 
 const quantityLegendItems = computed(() => {
-  const maxCaseCount = getMaxCaseCount()
-  return buildQuantityRanges(maxCaseCount).map((item) => ({
-    ...item,
-    color: getLegendColor(item.max, maxCaseCount)
-  }))
+  const { min, max } = getCurrentCaseCountExtent()
+  return buildRelativeLegendStops(min, max)
 })
 
 const legendGradientStyle = computed(() => ({
-  background: mapViewMode.value === '2d'
-    ? 'linear-gradient(90deg, #40CD8F 0%, #E8C44A 48%, #E84C52 100%)'
-    : `linear-gradient(90deg, ${QUANTITY_COLORS[0]} 0%, ${QUANTITY_COLORS[1]} 25%, ${QUANTITY_COLORS[2]} 50%, ${QUANTITY_COLORS[3]} 75%, ${QUANTITY_COLORS[4]} 100%)`
+  background: `linear-gradient(90deg, ${QUANTITY_COLORS[0]} 0%, ${QUANTITY_COLORS[1]} 25%, ${QUANTITY_COLORS[2]} 50%, ${QUANTITY_COLORS[3]} 75%, ${QUANTITY_COLORS[4]} 100%)`
 }))
 
 const getTooltipOption = () => {
@@ -1489,10 +1435,9 @@ const getCircuitDetailTexture = () => {
 const buildStreetMapData = () => {
   if (!overview.value) return []
   const hasSelection = Boolean(activeStreetName.value)
-  const maxCaseCount = getMaxCaseCount()
 
   return overview.value.streets.map((item) => {
-    const quantityColor = getQuantityColor(item.caseCount, maxCaseCount)
+    const quantityColor = getCurrentQuantityColor(item.caseCount)
     const selected = item.streetName === activeStreetName.value
     return {
       name: item.streetName,
@@ -1715,7 +1660,6 @@ const startMapEdgeAnimation = () => {
 const renderMap2D = () => {
   if (!chart || !overview.value) return
   const hasSelection = Boolean(activeStreetName.value)
-  const maxCaseCount = getMaxCaseCount()
   const chartTheme = getChartTheme()
 
   const geoRegions = overview.value.streets.map((item) => {
@@ -1723,8 +1667,7 @@ const renderMap2D = () => {
     return {
       name: item.streetName,
       itemStyle: {
-        // 绿→红热力填色，透明度高一些保持清透。
-        areaColor: getHeatColor(item.caseCount, maxCaseCount, selected ? 0.96 : 0.86),
+        areaColor: rgbaHex(getCurrentQuantityColor(item.caseCount), selected ? 0.96 : 0.86),
         borderColor: selected ? 'rgba(255, 255, 255, 0.96)' : 'rgba(198, 238, 255, 0.52)',
         borderWidth: selected ? 1.8 : 0.55,
         shadowBlur: selected ? 18 : 4,
@@ -1885,14 +1828,9 @@ const renderMap = async () => {
   }
 
   const hasSelection = Boolean(activeStreetName.value)
+  const quantityExtent = getCurrentCaseCountExtent()
   const maxCaseCount = getMaxCaseCount()
-  const quantityRanges = buildQuantityRanges(maxCaseCount)
-  const visualMapPieces = quantityRanges.map((item) => ({
-    gte: item.min,
-    lte: item.max,
-    color: item.color,
-    label: item.label
-  }))
+  const visualMapMax = quantityExtent.max > quantityExtent.min ? quantityExtent.max : quantityExtent.min + 1
   const chartTheme = getChartTheme()
   const map3DDistance = Math.max(MAP_MIN_DISTANCE, Math.min(MAP_MAX_DISTANCE, MAP_DEFAULT_DISTANCE / clampMapZoom(mapZoom.value)))
   const streetData = buildStreetMapData()
@@ -1920,8 +1858,10 @@ const renderMap = async () => {
       },
       visualMap: {
         show: false,
-        type: 'piecewise',
-        pieces: visualMapPieces
+        type: 'continuous',
+        min: quantityExtent.min,
+        max: visualMapMax,
+        inRange: { color: [...QUANTITY_COLORS] }
       },
       series: [
         {
@@ -2019,7 +1959,7 @@ const renderMap = async () => {
   const pointData = overview.value.streets.map((item) => {
     const coordinate = STREET_COORDINATES[item.streetName]
     const selected = item.streetName === activeStreetName.value
-    const quantityColor = getQuantityColor(item.caseCount, maxCaseCount)
+    const quantityColor = getCurrentQuantityColor(item.caseCount)
     const labelConfig = STREET_LABEL_CONFIG[item.streetName] || { position: 'top' as LabelPosition, offset: [0, -4] as [number, number] }
     return {
       name: item.streetName,
@@ -2063,8 +2003,10 @@ const renderMap = async () => {
     },
     visualMap: {
       show: false,
-      type: 'piecewise',
-      pieces: visualMapPieces,
+      type: 'continuous',
+      min: quantityExtent.min,
+      max: visualMapMax,
+      inRange: { color: [...QUANTITY_COLORS] },
       dimension: 2,
       seriesIndex: 0
     },
@@ -2128,6 +2070,12 @@ const selectStreet = (streetName: string) => {
   summaryExplanation.value = ''
 }
 
+const selectStreetFromThree = (streetName: string) => selectStreet(streetName)
+const handleThreeMapError = (message: string) => {
+  mapError.value = true
+  mapErrorMessage.value = message || '三维地图初始化失败'
+}
+
 const clearSelection = (resetView = false) => {
   activeStreetName.value = ''
   detail.value = null
@@ -2139,14 +2087,8 @@ const clearSelection = (resetView = false) => {
     map3DViewState.alpha = 46
     map3DViewState.beta = 0
     map3DViewState.center = [0, 0, 0]
-    if (chart && mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') {
-      chart.setOption({
-        series: [{
-          id: 'xrm-street-map-series',
-          viewControl: getCurrentMap3DViewControl()
-        }]
-      }, { notMerge: false, lazyUpdate: true })
-      scheduleCircuitTextureRestore()
+    if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') {
+      threeMapRef.value?.reset()
     } else if (chart && mapBoundaryMode.value === 'street' && mapViewMode.value === '2d') {
       chart.setOption({ geo: { id: 'xrm-street-map-2d-geo', zoom: 1, center: undefined } })
     }
@@ -2209,11 +2151,11 @@ const handleMapWheel = (event: WheelEvent) => {
 }
 
 const zoomIn = () => {
-  if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') applyMap3DDistance(map3DViewState.distance * 0.82)
+  if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') threeMapRef.value?.zoomIn()
   else applyMapZoom(mapZoom.value * 1.22)
 }
 const zoomOut = () => {
-  if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') applyMap3DDistance(map3DViewState.distance * 1.22)
+  if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') threeMapRef.value?.zoomOut()
   else applyMapZoom(mapZoom.value / 1.22)
 }
 const resetMap = () => {
@@ -2225,14 +2167,8 @@ const resetMap = () => {
   map3DViewState.alpha = 46
   map3DViewState.beta = 0
   map3DViewState.center = [0, 0, 0]
-  if (chart && mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') {
-    chart.setOption({
-      series: [{
-        id: 'xrm-street-map-series',
-        viewControl: getCurrentMap3DViewControl()
-      }]
-    }, { notMerge: false, lazyUpdate: true })
-    scheduleCircuitTextureRestore()
+  if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') {
+    threeMapRef.value?.reset()
   } else if (chart && mapBoundaryMode.value === 'street' && mapViewMode.value === '2d') {
     chart.setOption({ geo: { id: 'xrm-street-map-2d-geo', zoom: 1, center: undefined } })
   } else if (chart) {
@@ -2240,11 +2176,19 @@ const resetMap = () => {
   }
 }
 
-const setMapViewMode = (mode: '3d' | '2d') => {
+const setMapViewMode = async (mode: '3d' | '2d') => {
   if (mode === '2d' && mapBoundaryMode.value !== 'street') return
   if (mapViewMode.value === mode) return
+  if (mode === '3d' && chart) {
+    stopMapEdgeAnimation()
+    chart.dispose()
+    chart = null
+    lastRenderedMapMode = null
+  }
   mapViewMode.value = mode
-  renderMap()
+  await nextTick()
+  if (mode === '2d') await renderMap()
+  else if (activeStreetName.value) threeMapRef.value?.focusStreet(activeStreetName.value)
 }
 
 const formatRate = (rate: number | null) => {
@@ -2302,9 +2246,7 @@ watch(filters, async () => {
 watch(activeStreetName, async () => {
   await nextTick()
   if (mapBoundaryMode.value === 'street' && mapViewMode.value === '3d') {
-    // 选中/取消选中时同步真实相机状态，再连同 data 一起写回。
-    // 这样 map3D 重绘不会读取旧 distance，从而避免缩小后点击街道自动放大。
-    updateStreetMapSelectionVisuals()
+    if (activeStreetName.value) threeMapRef.value?.focusStreet(activeStreetName.value)
   } else {
     await renderMap()
   }

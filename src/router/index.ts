@@ -1,4 +1,4 @@
-import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import Home from '../views/home.vue'
 import Dashboard from '../views/index.vue'
 import RiskAnalysis from '../views/risk-analysis.vue'
@@ -162,13 +162,8 @@ const routes = [
   }
 ]
 
-const isElectron =
-  (typeof window !== 'undefined' &&
-    (window as Window & { process?: { type?: string } }).process?.type === 'renderer') ||
-  location.protocol === 'file:'
-
 const router = createRouter({
-  history: isElectron ? createWebHashHistory() : createWebHistory(),
+  history: createWebHashHistory(),
   routes
 })
 

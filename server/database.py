@@ -8,6 +8,7 @@ from typing import Any, Iterator
 
 from .config import settings
 from .security import hash_password
+from .reference_materials import seed_reference_materials
 
 
 def utc_now() -> str:
@@ -140,7 +141,9 @@ CREATE TABLE IF NOT EXISTS suggestions (
   department TEXT,
   created_by INTEGER NOT NULL,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  source_key TEXT UNIQUE,
+  built_in_reference INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS legal_plans (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -153,7 +156,9 @@ CREATE TABLE IF NOT EXISTS legal_plans (
   department TEXT,
   created_by INTEGER NOT NULL,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  source_key TEXT UNIQUE,
+  built_in_reference INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_legal_plans_status ON legal_plans(status);
 CREATE TABLE IF NOT EXISTS monthly_reports (
@@ -179,6 +184,7 @@ def init_database() -> None:
     with connect() as db:
         db.executescript(SCHEMA)
         _migrate_cases(db)
+        _migrate_reference_materials(db)
         count = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         if count == 0 and settings.bootstrap_password:
             db.execute(
@@ -186,6 +192,17 @@ def init_database() -> None:
                 (settings.bootstrap_username, "初始系统管理员", hash_password(settings.bootstrap_password), "system_admin", None,
                  json.dumps(["user:manage", "system:manage", "audit:read"], ensure_ascii=False), utc_now()),
             )
+        seed_reference_materials(db, utc_now())
+
+
+def _migrate_reference_materials(db: sqlite3.Connection) -> None:
+    for table in ("suggestions", "legal_plans"):
+        columns = {row["name"] for row in db.execute(f"PRAGMA table_info({table})").fetchall()}
+        if "source_key" not in columns:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN source_key TEXT")
+        if "built_in_reference" not in columns:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN built_in_reference INTEGER NOT NULL DEFAULT 0")
+        db.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS idx_{table}_source_key ON {table}(source_key)")
 
 
 def _migrate_cases(db: sqlite3.Connection) -> None:

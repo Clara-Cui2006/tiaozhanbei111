@@ -107,8 +107,11 @@
             </template>
             <template #actions="{ record }">
               <a-button size="small" type="primary" @click="handleView(record)">查看</a-button>
-              <a-button size="small" @click="handleEdit(record)">编辑</a-button>
-              <a-button size="small" @click="handleIgnore(record)">忽略</a-button>
+              <a-tag v-if="record.builtInReference" color="arcoblue" size="small">基础数据·只读</a-tag>
+              <template v-else>
+                <a-button size="small" @click="handleEdit(record)">编辑</a-button>
+                <a-button size="small" @click="handleIgnore(record)">忽略</a-button>
+              </template>
             </template>
           </a-table>
         </a-card>

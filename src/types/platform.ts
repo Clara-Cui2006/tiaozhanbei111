@@ -103,6 +103,7 @@ export interface LegalPlan {
   }
   legalBasis?: { type: string; name: string; content?: string }[]
   reviewStatus?: '待人工审核' | '已提交审核' | '已审核' | '已驳回' | string
+  builtInReference?: boolean
 }
 
 export interface PushTask {
@@ -248,9 +249,10 @@ export interface ProcuratorateSuggestion {
   content: string
   target: string
   issueDate: string
-  status: '待处理' | '处理中' | '已反馈' | '已驳回'
+  status: '待处理' | '处理中' | '已反馈' | '已驳回' | '参考材料待核验' | string
   ignored?: boolean
   isPolitical?: boolean
+  builtInReference?: boolean
 }
 
 export interface ProcuratorateSuggestionInput {
@@ -318,6 +320,7 @@ export interface LegalRecommendationV2 {
   approvalRate?: number
   pilotCommunities?: number
   resources: { icon: string; label: string; count: number }[]
+  builtInReference?: boolean
 }
 
 export interface LegalPushStats {

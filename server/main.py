@@ -19,6 +19,7 @@ from .schemas import (AIRequest, ChangePasswordRequest, LegalPlanPayload,
                       MonthlyReportTransitionRequest, MonthlyReportUpdateRequest,
                       SettingsPayload, SuggestionPayload, UserCreate)
 from .security import create_token, hash_password, verify_password
+from .reference_materials import suggestion_category_distribution, suggestion_monthly_trend
 
 settings.validate()
 app = FastAPI(title=settings.app_name, docs_url=None if settings.production else "/docs", redoc_url=None)
@@ -481,7 +482,7 @@ def save_settings(payload: SettingsPayload, request: Request,
 def _suggestion_dict(row: dict[str, Any]) -> dict[str, Any]:
     return {"id": row["id"], "title": row["title"], "type": row["type"], "content": row["content"], "target": row["target"],
             "issueDate": row["issue_date"], "status": row["status"], "isPolitical": bool(row["is_political"]),
-            "politicalCategory": row["political_category"]}
+            "politicalCategory": row["political_category"], "builtInReference": bool(row.get("built_in_reference"))}
 
 
 @app.get("/procuratorate/suggestions")
@@ -492,7 +493,7 @@ def suggestions(user: dict[str, Any] = Depends(get_current_user)) -> list[dict[s
         if "case:read:all" in permissions_for(user):
             rows = db.execute("SELECT * FROM suggestions ORDER BY id DESC").fetchall()
         else:
-            rows = db.execute("SELECT * FROM suggestions WHERE department=? ORDER BY id DESC", (user.get("department"),)).fetchall()
+            rows = db.execute("SELECT * FROM suggestions WHERE built_in_reference=1 OR department=? ORDER BY id DESC", (user.get("department"),)).fetchall()
     return [_suggestion_dict(dict(row)) for row in rows if not row["is_political"] or "political:read" in permissions_for(user)]
 
 
@@ -504,7 +505,7 @@ def suggestion_detail(suggestion_id: int, user: dict[str, Any] = Depends(get_cur
         raise HTTPException(status_code=404, detail="检察建议不存在")
     if row["is_political"] and "political:read" not in permissions_for(user):
         raise HTTPException(status_code=403, detail="未取得政治安全专项权限")
-    if "case:read:all" not in permissions_for(user) and row["department"] != user.get("department"):
+    if not row.get("built_in_reference") and "case:read:all" not in permissions_for(user) and row["department"] != user.get("department"):
         raise HTTPException(status_code=403, detail="不属于您的授权范围")
     return _suggestion_dict(row)
 
@@ -652,7 +653,7 @@ EMPTY_LIST_ENDPOINTS = [
     "/risk-analysis/case-time-trends", "/risk-analysis/case-feature-words", "/legal-recommend/recommendations",
     "/alert-push/tasks", "/effect-stats/community",
     "/effect-stats/trend", "/effect-stats/community-period", "/home/official-dynamics", "/archive/items",
-    "/procuratorate/feed", "/procuratorate/monthly-trend", "/procuratorate/category-distribution",
+    "/procuratorate/feed",
 ]
 
 
@@ -662,6 +663,18 @@ def _empty_list(user: dict[str, Any] = Depends(get_current_user)) -> list[Any]:
 
 for endpoint in EMPTY_LIST_ENDPOINTS:
     app.add_api_route(endpoint, _empty_list, methods=["GET"], response_model=None)
+
+
+@app.get("/procuratorate/category-distribution")
+def procuratorate_category_distribution(user: dict[str, Any] = Depends(get_current_user)) -> list[dict[str, object]]:
+    with connect() as db:
+        return suggestion_category_distribution(db)
+
+
+@app.get("/procuratorate/monthly-trend")
+def procuratorate_monthly_trend(user: dict[str, Any] = Depends(get_current_user)) -> list[dict[str, object]]:
+    with connect() as db:
+        return suggestion_monthly_trend(db)
 
 
 @app.get("/effect-stats/rates")
@@ -682,7 +695,7 @@ def _legal_plan_dict(row: dict[str, Any], include_content: bool = False) -> dict
               "scene": row["scene"] or "未填写", "type": "人工维护", "tags": [row["status"]],
               "autoGenNote": "AI内容须经人工审核" if row["status"] == "待人工审核" else "人工维护",
               "coverageTarget": 0, "durationDays": 0, "approvalRate": 0, "pilotCommunities": 0, "resources": [],
-              "reviewStatus": row["status"]}
+              "reviewStatus": row["status"], "builtInReference": bool(row.get("built_in_reference"))}
     if include_content:
         result.update({"content": row["content"], "updatedTime": row["updated_at"], "applicableGroup": row["audience_group"],
                        "triggerScene": row["scene"], "relatedCategory": "", "riskContext": {"trendPortrait": "暂无数据", "subjectPortrait": row["audience_group"] or "暂无数据", "featureWords": "暂无数据", "riskLevel": "不自动评级"}, "legalBasis": []})
@@ -695,7 +708,7 @@ def legal_plan_list(user: dict[str, Any] = Depends(get_current_user)) -> list[di
         if "case:read:all" in permissions_for(user):
             rows = db.execute("SELECT * FROM legal_plans ORDER BY id DESC").fetchall()
         else:
-            rows = db.execute("SELECT * FROM legal_plans WHERE department=? ORDER BY id DESC", (user.get("department"),)).fetchall()
+            rows = db.execute("SELECT * FROM legal_plans WHERE built_in_reference=1 OR department=? ORDER BY id DESC", (user.get("department"),)).fetchall()
     return [_legal_plan_dict(dict(row)) for row in rows]
 
 
@@ -716,7 +729,7 @@ def legal_plan_detail(plan_id: int, user: dict[str, Any] = Depends(get_current_u
         row = row_to_dict(db.execute("SELECT * FROM legal_plans WHERE id=?", (plan_id,)).fetchone())
     if not row:
         raise HTTPException(status_code=404, detail="普法方案不存在")
-    if "case:read:all" not in permissions_for(user) and row["department"] != user.get("department"):
+    if not row.get("built_in_reference") and "case:read:all" not in permissions_for(user) and row["department"] != user.get("department"):
         raise HTTPException(status_code=403, detail="不属于您的授权范围")
     return _legal_plan_dict(row, include_content=True)
 
@@ -728,6 +741,8 @@ def update_legal_plan(plan_id: int, payload: LegalPlanPayload, request: Request,
         row = row_to_dict(db.execute("SELECT * FROM legal_plans WHERE id=?", (plan_id,)).fetchone())
         if not row:
             raise HTTPException(status_code=404, detail="普法方案不存在")
+        if row.get("built_in_reference"):
+            raise HTTPException(status_code=409, detail="正式内置基础数据不可编辑")
         if "case:read:all" not in permissions_for(user) and row["department"] != user.get("department"):
             raise HTTPException(status_code=403, detail="不属于您的授权范围")
         db.execute("UPDATE legal_plans SET title=?,community=?,audience_group=?,scene=?,content=?,status='待人工审核',updated_at=? WHERE id=?",
@@ -745,6 +760,8 @@ def submit_legal_plan_review(plan_id: int, request: Request,
         row = row_to_dict(db.execute("SELECT * FROM legal_plans WHERE id=?", (plan_id,)).fetchone())
         if not row:
             raise HTTPException(status_code=404, detail="普法方案不存在")
+        if row.get("built_in_reference"):
+            raise HTTPException(status_code=409, detail="正式内置基础数据不可提交审核")
         if "case:read:all" not in permissions_for(user) and row["department"] != user.get("department"):
             raise HTTPException(status_code=403, detail="不属于您的授权范围")
         db.execute("UPDATE legal_plans SET status='已提交审核',updated_at=? WHERE id=?", (utc_now(), plan_id))
@@ -761,6 +778,8 @@ def delete_legal_plan(plan_id: int, request: Request,
         row = row_to_dict(db.execute("SELECT * FROM legal_plans WHERE id=?", (plan_id,)).fetchone())
         if not row:
             raise HTTPException(status_code=404, detail="普法方案不存在")
+        if row.get("built_in_reference"):
+            raise HTTPException(status_code=409, detail="正式内置参考数据不可删除")
         if "case:read:all" not in permissions_for(user) and row["department"] != user.get("department"):
             raise HTTPException(status_code=403, detail="不属于您的授权范围")
         db.execute("DELETE FROM legal_plans WHERE id=?", (plan_id,))
@@ -857,6 +876,8 @@ def update_suggestion(suggestion_id: int, payload: SuggestionPayload, request: R
         current = row_to_dict(db.execute("SELECT * FROM suggestions WHERE id=?", (suggestion_id,)).fetchone())
         if not current:
             raise HTTPException(status_code=404, detail="检察建议不存在")
+        if current.get("built_in_reference"):
+            raise HTTPException(status_code=409, detail="正式内置基础数据不可编辑")
         if "case:read:all" not in permissions_for(user) and current["department"] != user.get("department"):
             raise HTTPException(status_code=403, detail="不属于您的授权范围")
         if (current["is_political"] or payload.isPolitical) and "political:write" not in permissions_for(user):
@@ -877,6 +898,8 @@ def ignore_suggestion(suggestion_id: int, request: Request,
         current = row_to_dict(db.execute("SELECT * FROM suggestions WHERE id=?", (suggestion_id,)).fetchone())
         if not current:
             raise HTTPException(status_code=404, detail="检察建议不存在")
+        if current.get("built_in_reference"):
+            raise HTTPException(status_code=409, detail="正式内置参考数据不可删除或忽略")
         if "case:read:all" not in permissions_for(user) and current["department"] != user.get("department"):
             raise HTTPException(status_code=403, detail="不属于您的授权范围")
         db.execute("UPDATE suggestions SET status='已驳回',updated_at=? WHERE id=?", (utc_now(), suggestion_id))

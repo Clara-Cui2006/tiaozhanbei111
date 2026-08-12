@@ -87,6 +87,16 @@ def parse_import(filename: str, content: bytes) -> ParsedImport:
         if political_risk_level and political_risk_level not in ALLOWED_POLITICAL_RISK_LEVEL:
             errors.append({"row": number, "field": "政治安全风险等级", "message": "政治安全风险等级不符合规定口径"})
             continue
+        subject_age_text = _text(row, "当事人年龄")
+        try:
+            subject_age = int(subject_age_text) if subject_age_text else None
+        except ValueError:
+            errors.append({"row": number, "field": "当事人年龄", "message": "当事人年龄必须为整数"})
+            continue
+        subject_gender = _text(row, "当事人性别")
+        if subject_gender and subject_gender not in {"男", "女"}:
+            errors.append({"row": number, "field": "当事人性别", "message": "当事人性别仅支持男或女"})
+            continue
         normalized.append({
             "case_number": case_number,
             "case_name": _text(row, "案件名称"),
@@ -114,5 +124,10 @@ def parse_import(filename: str, content: bytes) -> ParsedImport:
             "political_spread_impact": _text(row, "传播影响"),
             "political_review_status": political_review_status,
             "political_risk_level": political_risk_level,
+            "subject_name": _text(row, "当事人姓名"),
+            "subject_age": subject_age,
+            "subject_gender": subject_gender,
+            "subject_occupation": _text(row, "当事人职业"),
+            "subject_special_identity": _text(row, "特殊身份"),
         })
     return ParsedImport(normalized, errors, hashlib.sha256(content).hexdigest())

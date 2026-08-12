@@ -394,7 +394,7 @@ const buildPieOption = () => {
   const isMobile = document.documentElement.classList.contains('mobile')
   const palette = getChartColors()
 
-  // 一级分类：彩虹分层 + 金/银交错描边 + 选中切片凸起
+  // 社会治理分类：彩虹分层 + 金/银交错描边 + 选中切片凸起
   const innerData = categories.value.map((cat, i) => {
     const isSelected = selected === cat.name
     const color = palette[i % palette.length]!
@@ -410,7 +410,7 @@ const buildPieOption = () => {
     }
   })
 
-  // 二级分类：根据一级分类联动。颜色相对一级错开，减少视觉重复。
+  // 刑法分则章名：根据社会治理分类联动。颜色相对内圈错开，减少视觉重复。
   const outerData: any[] = []
   if (!isMobile || selected) {
     categories.value.forEach((cat, catIdx) => {
@@ -436,12 +436,12 @@ const buildPieOption = () => {
     : ['13%', '34%']
   const outerRadius: [string, string] = isMobile ? ['43%', '59%'] : ['49%', '68%']
 
-  const innerDepth = buildPieDepthLayers('一级分类', innerData, innerRadius, center, 8, {
+  const innerDepth = buildPieDepthLayers('社会治理分类', innerData, innerRadius, center, 8, {
     startAngle: 96,
     clockwise: true,
     selectedOffset: 0
   })
-  const outerDepth = isMobileNoSelection ? [] : buildPieDepthLayers('二级分类', outerData, outerRadius, center, 8, {
+  const outerDepth = isMobileNoSelection ? [] : buildPieDepthLayers('刑法分则章名', outerData, outerRadius, center, 8, {
     startAngle: 96,
     clockwise: true,
     selectedOffset: 0
@@ -474,7 +474,7 @@ const buildPieOption = () => {
       ...innerDepth,
       ...outerDepth,
       {
-        name: '一级分类',
+        name: '社会治理分类',
         type: 'pie',
         radius: innerRadius,
         center,
@@ -519,7 +519,7 @@ const buildPieOption = () => {
         data: innerData
       },
       ...(isMobileNoSelection ? [] : [{
-        name: '二级分类',
+        name: '刑法分则章名',
         type: 'pie' as const,
         radius: outerRadius,
         center,
@@ -575,7 +575,7 @@ const renderPieChart = () => {
     })
     pieChart.on('click', (params: any) => {
       const clickedName = params.name as string
-      // Check if an inner ring (一级分类) was clicked
+      // Check if an inner-ring social-governance category was clicked
       const foundInner = categories.value.find(c => c.name === clickedName)
       if (foundInner) {
         // Toggle: clicking the same inner category again deselects it
@@ -589,7 +589,7 @@ const renderPieChart = () => {
         // Re-render to update outer ring linkage
         pieChart!.setOption(buildPieOption(), true)
       } else {
-        // Clicked a child (outer ring) — find and select its parent
+        // Clicked an outer-ring Criminal Law chapter — find and select its parent
         const parent = categories.value.find(c =>
           c.children.some(ch => ch.name === clickedName)
         )

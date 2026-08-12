@@ -1080,7 +1080,7 @@ const renderTimeCharts = () => {
         textStyle: { color: '#f8fbff', fontSize: 11, borderWidth: 2, borderColor: 'rgba(0, 10, 30, .68)' }
       },
       itemStyle: {
-        opacity: 0.76,
+        opacity: 0.5,
         shadowBlur: 20,
         shadowColor: 'rgba(54, 135, 255, .62)'
       },
@@ -1091,7 +1091,7 @@ const renderTimeCharts = () => {
           textStyle: { color: '#fff', fontSize: 12, fontWeight: 800 }
         },
         itemStyle: {
-          opacity: 0.9
+          opacity: 0.66
         }
       }
     }]

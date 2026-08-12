@@ -362,14 +362,14 @@
                   <small>当前周期内归属于该街道的去重案件</small>
                 </div>
                 <div class="xrm-metric-card">
-                  <span class="xrm-metric-label">环比变化</span>
+                  <span class="xrm-metric-label">月度变化</span>
                   <strong class="xrm-metric-change">{{ formatMom(detail) }}</strong>
-                  <small>与上一相邻周期比较</small>
+                  <small>与上月比较</small>
                 </div>
                 <div class="xrm-metric-card">
-                  <span class="xrm-metric-label">同比变化</span>
+                  <span class="xrm-metric-label">季度变化</span>
                   <strong class="xrm-metric-change">{{ formatYoy(detail) }}</strong>
-                  <small>与上年同期比较</small>
+                  <small>与上一季度比较</small>
                 </div>
               </div>
 
@@ -2208,8 +2208,8 @@ const formatChange = (count: number | null, rate: number | null, emptyText: stri
   return count === 0 ? countText : `${countText}（${formatRate(Math.abs(rate))}）`
 }
 
-const formatMom = (item: StreetMapDetail) => formatChange(item.momChangeCount, item.momRate, '暂无环比数据')
-const formatYoy = (item: StreetMapDetail) => formatChange(item.yoyChangeCount, item.yoyRate, '暂无同比数据')
+const formatMom = (item: StreetMapDetail) => formatChange(item.momChangeCount, item.momRate, '暂无月度数据')
+const formatYoy = (item: StreetMapDetail) => formatChange(item.yoyChangeCount, item.yoyRate, '暂无季度数据')
 const normalizeAttentionItem = (item: string) => item.startsWith('建议关注') ? item : `建议关注${item}`
 
 const reloadAll = async () => {

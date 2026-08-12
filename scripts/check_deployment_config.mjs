@@ -7,6 +7,8 @@ const androidWorkflow = read('.github/workflows/android.yml')
 assert.match(androidWorkflow, /working-directory:\s*android/)
 assert.match(androidWorkflow, /path:\s*android\/app\/build\/outputs\/apk\/debug\/\*\.apk/)
 assert.match(androidWorkflow, /npm ci/)
+assert.match(androidWorkflow, /npm run build/)
+assert.match(androidWorkflow, /npx cap sync android/)
 assert.match(androidWorkflow, /java-version:\s*['"]21['"]/)
 assert.match(androidWorkflow, /actions\/setup-java@v5/)
 

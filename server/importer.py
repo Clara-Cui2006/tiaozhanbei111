@@ -108,16 +108,87 @@ def _normalize_gender(value: Any) -> str:
     return "未知"
 
 
+def _parse_age(raw: str) -> int | None:
+    value = _clean(raw)
+    if not value:
+        return None
+    match = re.search(r"\d{1,3}", value)
+    if not match:
+        return None
+    age = int(match.group(0))
+    return age if 0 < age < 120 else None
+
+
+def _age_from_birth(raw: str) -> int | None:
+    value = _clean(raw)
+    if not value:
+        return None
+    match = re.search(r"(19\d{2}|20\d{2})[-/.年]?\s*(\d{1,2})?[-/.月]?\s*(\d{1,2})?", value)
+    if not match:
+        return None
+    year = int(match.group(1))
+    month = int(match.group(2) or 1)
+    day = int(match.group(3) or 1)
+    today = date.today()
+    age = today.year - year - ((today.month, today.day) < (month, day))
+    return age if 0 < age < 120 else None
+
+
+def _age_from_id_number(raw: str) -> int | None:
+    value = re.sub(r"\s", "", _clean(raw))
+    match = re.search(r"\d{6}(19\d{2}|20\d{2})(\d{2})(\d{2})\d{3}[\dXx]", value)
+    if not match:
+        return None
+    return _age_from_birth(f"{match.group(1)}-{match.group(2)}-{match.group(3)}")
+
+
+def _subject_age(row: dict[str, Any]) -> int | None:
+    age = _parse_age(_first_text(
+        row,
+        "年龄",
+        "人员年龄",
+        "当事人年龄",
+        "犯罪嫌疑人年龄",
+        "嫌疑人年龄",
+        "被告人年龄",
+        "被害人年龄",
+        "涉案人员年龄",
+        "年龄段",
+    ))
+    if age is not None:
+        return age
+    age = _age_from_birth(_first_text(
+        row,
+        "出生日期",
+        "出生年月",
+        "出生年月日",
+        "人员出生日期",
+        "当事人出生日期",
+        "犯罪嫌疑人出生日期",
+        "嫌疑人出生日期",
+        "被告人出生日期",
+    ))
+    if age is not None:
+        return age
+    return _age_from_id_number(_first_text(
+        row,
+        "身份证号",
+        "身份证号码",
+        "公民身份号码",
+        "证件号码",
+        "人员证件号码",
+        "犯罪嫌疑人身份证号",
+        "嫌疑人身份证号",
+        "被告人身份证号",
+    ))
+
+
 def _subject_from_row(row: dict[str, Any], case_number: str) -> dict[str, Any] | None:
     gender_raw = _first_text(row, "性别", "人员性别", "当事人性别", "犯罪嫌疑人性别")
     name = _first_text(row, "姓名（脱敏）", "姓名", "人员姓名", "当事人姓名", "犯罪嫌疑人姓名")
-    age_raw = _first_text(row, "年龄", "人员年龄", "当事人年龄", "犯罪嫌疑人年龄")
-    if not any((gender_raw, name, age_raw)):
+    age = _subject_age(row)
+    if not any((gender_raw, name, age is not None)):
         return None
-    try:
-        age = int(float(age_raw)) if age_raw else None
-    except ValueError:
-        age = None
     return {
         "case_number": case_number,
         "name": name or None,

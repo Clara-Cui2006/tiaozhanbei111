@@ -39,8 +39,32 @@
           </a-form-item>
         </section>
 
+        <section class="setting-section setting-section--violet setting-section--stacked">
+          <div class="setting-heading">
+            <span class="setting-icon"><icon-settings /></span>
+            <span><strong>AI 模型接口</strong><small>配置院内大模型服务地址与调用路径</small></span>
+          </div>
+          <div class="ai-setting-grid">
+            <a-form-item field="modelBaseUrl" label="模型服务地址">
+              <a-input v-model="form.modelBaseUrl" :disabled="loading || saving || loadFailed" placeholder="例如：http://192.168.3.100:7792/v1" />
+            </a-form-item>
+            <a-form-item field="modelChatPath" label="补全接口路径">
+              <a-input v-model="form.modelChatPath" :disabled="loading || saving || loadFailed" placeholder="例如：/chat/completions，也可填完整接口地址" />
+            </a-form-item>
+            <a-form-item field="modelName" label="模型名称">
+              <a-input v-model="form.modelName" :disabled="loading || saving || loadFailed" placeholder="例如：qwen36-27b-fp4" />
+            </a-form-item>
+            <a-form-item field="modelApiKey" label="API Key">
+              <a-input-password v-model="form.modelApiKey" :disabled="loading || saving || loadFailed" placeholder="无鉴权可留空" />
+            </a-form-item>
+            <a-form-item field="modelTimeoutSeconds" label="调用超时（秒）">
+              <a-input-number v-model="form.modelTimeoutSeconds" :disabled="loading || saving || loadFailed" :min="1" :max="600" />
+            </a-form-item>
+          </div>
+        </section>
+
         <div class="settings-actions">
-          <span><icon-info-circle /> 设置项不包含模型、数据库或外网连接参数</span>
+          <span><icon-info-circle /> AI 接口配置保存后即时生效，无需重新打包 Docker</span>
           <a-button v-if="loadFailed" type="outline" status="warning" @click="loadSettings">
             <template #icon><icon-refresh /></template>
             重新读取
@@ -65,7 +89,12 @@ import type { SystemSettings } from '../types/platform'
 
 const form = reactive<SystemSettings>({
   name: '',
-  dataScopeNotice: ''
+  dataScopeNotice: '',
+  modelBaseUrl: '',
+  modelChatPath: '/chat/completions',
+  modelName: '',
+  modelApiKey: '',
+  modelTimeoutSeconds: 60
 })
 const loading = ref(true)
 const saving = ref(false)
@@ -97,9 +126,19 @@ const loadSettings = async () => {
     const settings = await fetchSystemSettings()
     form.name = settings.name
     form.dataScopeNotice = settings.dataScopeNotice
+    form.modelBaseUrl = settings.modelBaseUrl || ''
+    form.modelChatPath = settings.modelChatPath || '/chat/completions'
+    form.modelName = settings.modelName || ''
+    form.modelApiKey = settings.modelApiKey || ''
+    form.modelTimeoutSeconds = Number(settings.modelTimeoutSeconds || 60)
   } catch (error: any) {
     form.name = ''
     form.dataScopeNotice = ''
+    form.modelBaseUrl = ''
+    form.modelChatPath = '/chat/completions'
+    form.modelName = ''
+    form.modelApiKey = ''
+    form.modelTimeoutSeconds = 60
     loadFailed.value = true
     Message.error(error.response?.data?.detail || '系统设置读取失败')
   } finally {
@@ -243,6 +282,8 @@ onMounted(loadSettings)
 }
 
 .setting-section--gold { --section-color: var(--settings-gold); }
+.setting-section--violet { --section-color: #8f7bff; }
+.setting-section--stacked { align-items: flex-start; }
 
 .setting-heading {
   display: flex;
@@ -281,13 +322,25 @@ onMounted(loadSettings)
 
 .setting-section :deep(.arco-form-item) { margin-bottom: 0; }
 
+.ai-setting-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+.ai-setting-grid :deep(.arco-form-item:nth-child(1)),
+.ai-setting-grid :deep(.arco-form-item:nth-child(2)) {
+  grid-column: 1 / -1;
+}
+
 .setting-section :deep(.arco-form-item-label-col > label) {
   color: #b9d9e8;
   font-size: 14px;
   font-weight: 600;
 }
 
-.setting-section :deep(.arco-input-wrapper) {
+.setting-section :deep(.arco-input-wrapper),
+.setting-section :deep(.arco-input-number) {
   min-height: 40px;
   border: 1px solid color-mix(in srgb, var(--section-color) 28%, transparent);
   border-radius: 4px;
@@ -295,7 +348,9 @@ onMounted(loadSettings)
 }
 
 .setting-section :deep(.arco-input-wrapper:hover),
-.setting-section :deep(.arco-input-wrapper.arco-input-focus) {
+.setting-section :deep(.arco-input-wrapper.arco-input-focus),
+.setting-section :deep(.arco-input-number:hover),
+.setting-section :deep(.arco-input-number.arco-input-focus) {
   border-color: var(--section-color);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--section-color) 10%, transparent);
 }
@@ -346,7 +401,8 @@ onMounted(loadSettings)
 :global(body.theme-light) .setting-heading strong,
 :global(body.theme-light) .setting-section :deep(.arco-form-item-label-col > label) { color: #173f58; }
 
-:global(body.theme-light) .setting-section :deep(.arco-input-wrapper) {
+:global(body.theme-light) .setting-section :deep(.arco-input-wrapper),
+:global(body.theme-light) .setting-section :deep(.arco-input-number) {
   border-color: color-mix(in srgb, var(--section-color) 34%, transparent);
   background: rgba(241, 249, 253, 0.9);
 }
@@ -360,6 +416,8 @@ onMounted(loadSettings)
     gap: 14px;
     padding: 14px;
   }
+
+  .ai-setting-grid { grid-template-columns: 1fr; }
 
   .settings-actions {
     align-items: stretch;

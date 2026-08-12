@@ -677,12 +677,12 @@ onUnmounted(() => {
 
 .feature-grid {
   display: grid;
-  gap: 16px;
+  gap: 18px;
   align-items: stretch;
   justify-content: center;
 }
 
-.feature-count-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.feature-count-6 { grid-template-columns: repeat(6, minmax(172px, 1fr)); }
 .feature-count-5 { grid-template-columns: repeat(5, minmax(250px, 290px)); }
 .feature-count-4 { grid-template-columns: repeat(4, minmax(250px, 290px)); }
 .feature-count-3 { grid-template-columns: repeat(3, minmax(250px, 290px)); }
@@ -693,12 +693,12 @@ onUnmounted(() => {
   position: relative;
   appearance: none;
   display: grid;
-  height: 144px;
+  height: 154px;
   min-width: 0;
-  grid-template-columns: 70px minmax(0, 1fr);
-  gap: 15px;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 16px;
   align-items: center;
-  padding: 18px 18px 18px 17px;
+  padding: 19px 19px 19px 18px;
   overflow: hidden;
   border: 1px solid rgba(139, 190, 218, 0.48);
   border-radius: 4px;
@@ -733,8 +733,8 @@ onUnmounted(() => {
 .feature-icon-wrap {
   position: relative;
   display: grid;
-  width: 60px;
-  height: 68px;
+  width: 64px;
+  height: 72px;
   place-items: center;
   clip-path: polygon(50% 0, 94% 24%, 94% 76%, 50% 100%, 6% 76%, 6% 24%);
   background: linear-gradient(180deg, rgba(4, 54, 104, 0.96), rgba(1, 22, 53, 0.98));
@@ -753,8 +753,8 @@ onUnmounted(() => {
 .feature-icon {
   position: relative;
   z-index: 1;
-  width: 35px;
-  height: 35px;
+  width: 38px;
+  height: 38px;
   stroke: #a9efff;
   stroke-width: 2.2;
   stroke-linecap: round;
@@ -766,15 +766,15 @@ onUnmounted(() => {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 6px;
-  padding-right: 13px;
+  gap: 8px;
+  padding-right: 16px;
 }
 
 .feature-copy strong {
   margin-bottom: 2px;
   overflow: hidden;
   color: #f5f6f4 !important;
-  font-size: clamp(16px, 0.94vw, 18px);
+  font-size: clamp(18px, 1.08vw, 21px);
   font-weight: 700;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -783,8 +783,8 @@ onUnmounted(() => {
 .feature-copy small {
   overflow: hidden;
   color: rgba(222, 207, 187, 0.82) !important;
-  font-size: clamp(11px, 0.69vw, 13px);
-  line-height: 1.35;
+  font-size: clamp(13px, 0.78vw, 15px);
+  line-height: 1.42;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -1261,24 +1261,36 @@ onUnmounted(() => {
   }
 
   .feature-grid {
-    gap: 12px;
+    gap: 16px;
   }
 
   .feature-card {
-    height: 132px;
-    grid-template-columns: 60px minmax(0, 1fr);
-    gap: 11px;
-    padding: 14px 13px;
+    height: 148px;
+    grid-template-columns: 68px minmax(0, 1fr);
+    gap: 14px;
+    padding: 17px 16px;
   }
 
   .feature-icon-wrap {
-    width: 54px;
-    height: 62px;
+    width: 60px;
+    height: 68px;
   }
 
   .feature-icon {
-    width: 31px;
-    height: 31px;
+    width: 35px;
+    height: 35px;
+  }
+
+  .feature-copy strong {
+    font-size: 18px;
+  }
+
+  .feature-copy small {
+    font-size: 13px;
+  }
+
+  .feature-count-6 {
+    grid-template-columns: repeat(3, minmax(250px, 1fr));
   }
 }
 
@@ -1302,7 +1314,7 @@ onUnmounted(() => {
   .feature-count-6,
   .feature-count-5,
   .feature-count-4 {
-    grid-template-columns: repeat(3, minmax(230px, 290px));
+    grid-template-columns: repeat(3, minmax(240px, 1fr));
   }
 
   .recommend-card :deep(.arco-list-content) {
@@ -1349,7 +1361,7 @@ onUnmounted(() => {
   .feature-count-4,
   .feature-count-3,
   .feature-count-2 {
-    grid-template-columns: repeat(2, minmax(230px, 290px));
+    grid-template-columns: repeat(2, minmax(240px, 1fr));
   }
 
   .home-data-section {
@@ -1386,7 +1398,7 @@ onUnmounted(() => {
   .feature-count-3,
   .feature-count-2,
   .feature-count-1 {
-    grid-template-columns: minmax(250px, 290px);
+    grid-template-columns: minmax(250px, 1fr);
   }
 }
 

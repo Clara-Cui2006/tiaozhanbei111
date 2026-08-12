@@ -391,6 +391,7 @@ const resetPieOverview = () => {
 
 const buildPieOption = () => {
   const selected = selectedPieCategory.value
+  const hasSelection = Boolean(selected)
   const isMobile = document.documentElement.classList.contains('mobile')
   const palette = getChartColors()
 
@@ -412,9 +413,8 @@ const buildPieOption = () => {
 
   // 二级分类：根据一级分类联动。颜色相对一级错开，减少视觉重复。
   const outerData: any[] = []
-  if (!isMobile || selected) {
-    categories.value.forEach((cat, catIdx) => {
-      if (selected && cat.name !== selected) return
+  categories.value.forEach((cat, catIdx) => {
+    if (selected && cat.name !== selected) return
       cat.children.forEach((child, childIdx) => {
         const color = palette[(catIdx * 3 + childIdx + 2) % palette.length]!
         const isChildSelected = selectedPieChild.value === child.name
@@ -423,25 +423,47 @@ const buildPieOption = () => {
           value: child.value,
           selected: isChildSelected,
           __baseColor: color,
-          itemStyle: sliceStyle(color, catIdx + childIdx + 1, isChildSelected)
+          label: { show: hasSelection },
+          labelLine: { show: hasSelection },
+          itemStyle: {
+            ...sliceStyle(color, catIdx + childIdx + 1, isChildSelected),
+            opacity: hasSelection ? 1 : 0.82
+          }
         })
       })
-    })
-  }
+  })
 
-  const isMobileNoSelection = isMobile && !selected
-  const center: [string, string] = isMobile ? ['50%', '49%'] : ['56%', '50%']
+  const center: [string, string] = isMobile ? ['50%', '49%'] : (hasSelection ? ['55%', '42%'] : ['50%', '45%'])
+  const innerLabelOutside = !hasSelection
   const innerRadius: [string, string] = isMobile
-    ? (isMobileNoSelection ? ['17%', '51%'] : ['13%', '33%'])
-    : ['13%', '34%']
-  const outerRadius: [string, string] = isMobile ? ['43%', '59%'] : ['49%', '68%']
+    ? (hasSelection ? ['14%', '34%'] : ['17%', '40%'])
+    : (hasSelection ? ['13%', '33%'] : ['18%', '42%'])
+  const outerRadius: [string, string] = isMobile
+    ? (hasSelection ? ['42%', '57%'] : ['46%', '59%'])
+    : (hasSelection ? ['43%', '58%'] : ['48%', '62%'])
+  const pieLabelLayout = {
+    hideOverlap: true,
+    moveOverlap: 'shiftY' as const,
+    draggable: false
+  }
+  // 标注线使用“从扇区径向射出、末端落字”的轨迹。一级标签需要先跨过外环，
+  // 因此概览态的引出距离明显长于普通饼图，避免线段和文字压在外环上。
+  const radialLabelLine = (crossOuterRing = false) => ({
+    length: isMobile
+      ? (crossOuterRing ? 46 : 30)
+      : (crossOuterRing ? 76 : 48),
+    length2: 0,
+    minTurnAngle: 180,
+    maxSurfaceAngle: 90,
+    smooth: false
+  })
 
   const innerDepth = buildPieDepthLayers('一级分类', innerData, innerRadius, center, 8, {
     startAngle: 96,
     clockwise: true,
     selectedOffset: 0
   })
-  const outerDepth = isMobileNoSelection ? [] : buildPieDepthLayers('二级分类', outerData, outerRadius, center, 8, {
+  const outerDepth = buildPieDepthLayers('二级分类', outerData, outerRadius, center, 8, {
     startAngle: 96,
     clockwise: true,
     selectedOffset: 0
@@ -461,13 +483,20 @@ const buildPieOption = () => {
       textStyle: { color: chartTextPrimary() }
     },
     legend: isMobile ? { show: false } : {
-      orient: 'vertical' as const,
-      left: 16,
-      top: 'middle',
+      show: true,
+      orient: 'horizontal' as const,
+      left: 'center',
+      bottom: 8,
       itemWidth: 12,
       itemHeight: 12,
-      itemGap: 13,
-      textStyle: { color: chartTextPrimary(), fontSize: 15, fontFamily: 'Microsoft YaHei' },
+      itemGap: 18,
+      textStyle: {
+        color: chartTextPrimary(),
+        fontSize: 14,
+        fontFamily: 'Microsoft YaHei',
+        textShadowBlur: 5,
+        textShadowColor: isLightTheme() ? 'rgba(68,115,198,.18)' : 'rgba(84,210,255,.24)'
+      },
       data: categories.value.map(c => c.name)
     },
     series: [
@@ -482,24 +511,44 @@ const buildPieOption = () => {
         selectedMode: 'single',
         selectedOffset: 0,
         padAngle: 2,
-        minShowLabelAngle: 0,
-        avoidLabelOverlap: false,
+        minShowLabelAngle: 6,
+        avoidLabelOverlap: true,
         z: 42,
         label: {
           show: true,
-          position: 'inside',
-          color: '#f8fbff',
-          fontSize: isMobile ? 11 : 15,
-          lineHeight: isMobile ? 14 : 19,
-          formatter: (params: any) => wrapChartLabel(params.name, isMobile ? 4 : 4),
+          position: innerLabelOutside ? 'outside' : 'inside',
+          color: innerLabelOutside
+            ? (isLightTheme() ? '#173f65' : '#e9fbff')
+            : '#ffffff',
+          fontSize: isMobile
+            ? (innerLabelOutside ? 12 : 13)
+            : (innerLabelOutside ? 16 : 18),
+          lineHeight: isMobile
+            ? (innerLabelOutside ? 16 : 16)
+            : (innerLabelOutside ? 21 : 23),
+          formatter: (params: any) => innerLabelOutside
+            ? `${wrapChartLabel(params.name, isMobile ? 4 : 5)}\n${params.percent}%`
+            : wrapChartLabel(params.name, isMobile ? 4 : 4),
           textBorderWidth: 2,
           textBorderColor: 'rgba(0, 15, 36, .72)',
+          textShadowBlur: innerLabelOutside ? 8 : 16,
+          textShadowColor: innerLabelOutside ? 'rgba(84, 210, 255, .38)' : 'rgba(84, 210, 255, .82)',
           fontWeight: 'bold',
           overflow: 'break',
-          width: isMobile ? 76 : 116
+          width: innerLabelOutside ? (isMobile ? 88 : 132) : (isMobile ? 76 : 116),
+          alignTo: innerLabelOutside ? 'labelLine' : undefined,
+          distanceToLabelLine: innerLabelOutside ? (isMobile ? 4 : 7) : undefined,
+          bleedMargin: innerLabelOutside ? 3 : undefined
         },
-        labelLine: { show: false },
-        labelLayout: { hideOverlap: false },
+        labelLine: {
+          show: innerLabelOutside,
+          ...radialLabelLine(true),
+          lineStyle: {
+            color: isLightTheme() ? 'rgba(80,122,204,.72)' : 'rgba(182,222,255,.74)',
+            width: 1.45
+          }
+        },
+        labelLayout: pieLabelLayout,
         itemStyle: { borderRadius: 4 },
         emphasis: {
           scale: true,
@@ -518,7 +567,7 @@ const buildPieOption = () => {
         },
         data: innerData
       },
-      ...(isMobileNoSelection ? [] : [{
+      {
         name: '二级分类',
         type: 'pie' as const,
         radius: outerRadius,
@@ -527,28 +576,31 @@ const buildPieOption = () => {
         selectedMode: 'single',
         selectedOffset: 0,
         padAngle: 2.5,
-        minShowLabelAngle: 0,
-        avoidLabelOverlap: false,
+        minShowLabelAngle: 3,
+        avoidLabelOverlap: true,
         z: 31,
         label: {
-          show: isMobile ? !!selected : true,
-          color: chartTextPrimary(),
-          fontSize: isMobile ? 11 : 14,
-          lineHeight: isMobile ? 15 : 19,
-          formatter: (params: any) => `${wrapChartLabel(params.name, isMobile ? 5 : 5)}\n${params.percent}%`,
+          show: hasSelection,
+          color: isLightTheme() ? '#244c7d' : '#cdefff',
+          fontSize: isMobile ? 12 : 14,
+          lineHeight: isMobile ? 16 : 18,
+          formatter: (params: any) => `${wrapChartLabel(params.name, isMobile ? 5 : 6)}\n${params.percent}%`,
           textBorderWidth: 2,
           textBorderColor: isLightTheme() ? 'rgba(255,255,255,.9)' : 'rgba(0,12,30,.9)',
+          textShadowBlur: 7,
+          textShadowColor: 'rgba(84, 210, 255, .32)',
           overflow: 'break',
-          width: isMobile ? 88 : 138
+          width: isMobile ? 98 : 138,
+          alignTo: 'labelLine',
+          distanceToLabelLine: 8,
+          bleedMargin: 4
         },
         labelLine: {
-          show: isMobile ? !!selected : true,
-          length: isMobile ? 10 : 16,
-          length2: isMobile ? 8 : 13,
-          smooth: 0.2,
-          lineStyle: { color: isLightTheme() ? 'rgba(86,121,207,.72)' : 'rgba(181,207,255,.72)', width: 1.2 }
+          show: hasSelection,
+          ...radialLabelLine(),
+          lineStyle: { color: isLightTheme() ? 'rgba(86,121,207,.82)' : 'rgba(202,228,255,.92)', width: 1.55 }
         },
-        labelLayout: { hideOverlap: false },
+        labelLayout: pieLabelLayout,
         itemStyle: { borderRadius: 4 },
         emphasis: {
           scale: true,
@@ -561,7 +613,7 @@ const buildPieOption = () => {
           }
         },
         data: outerData
-      }])
+      }
     ]
   }
 }
@@ -613,6 +665,7 @@ const renderSubjectCharts = () => {
   // --- Age distribution bar chart: 赤橙黄绿青，金属描边 + 阴影浮起 ---
   const ageBuckets: Record<string, number> = { '18-25': 0, '26-35': 0, '36-45': 0, '46-55': 0, '56+': 0 }
   subjects.value.forEach(s => {
+    if (s.age == null) return
     if (s.age <= 25) ageBuckets['18-25']!++
     else if (s.age <= 35) ageBuckets['26-35']!++
     else if (s.age <= 45) ageBuckets['36-45']!++
@@ -734,7 +787,7 @@ const renderSubjectCharts = () => {
   } as any, true)
 
   // --- Gender + Resident donut chart: 蓝紫/青色独立配色，双环 3D 浮起 ---
-  const genderCount = { '男': 0, '女': 0 }
+  const genderCount = { '男': 0, '女': 0, '未知': 0 }
   const residentCount = { '本地': 0, '外来': 0 }
   subjects.value.forEach(s => {
     genderCount[s.gender]++
@@ -744,12 +797,13 @@ const renderSubjectCharts = () => {
 
   if (!subjectDonut) subjectDonut = echarts.init(subjectDonutRef.value)
 
-  const genderColors = CHART_PALETTES.subject.slice(0, 2)
+  const genderColors = CHART_PALETTES.subject.slice(0, 3)
   const residentColors = CHART_PALETTES.subject.slice(2, 4)
   const genderData = [
     { value: genderCount['男'], name: '男', __baseColor: genderColors[0], itemStyle: sliceStyle(genderColors[0]!, 0) },
-    { value: genderCount['女'], name: '女', __baseColor: genderColors[1], itemStyle: sliceStyle(genderColors[1]!, 1) }
-  ]
+    { value: genderCount['女'], name: '女', __baseColor: genderColors[1], itemStyle: sliceStyle(genderColors[1]!, 1) },
+    { value: genderCount['未知'], name: '未知', __baseColor: genderColors[2], itemStyle: sliceStyle(genderColors[2]!, 2) }
+  ].filter(item => item.value > 0)
   const residentData = [
     { value: residentCount['本地'], name: '本地', __baseColor: residentColors[0], itemStyle: sliceStyle(residentColors[0]!, 2) },
     { value: residentCount['外来'], name: '外来', __baseColor: residentColors[1], itemStyle: sliceStyle(residentColors[1]!, 3) }
@@ -780,7 +834,7 @@ const renderSubjectCharts = () => {
       itemHeight: 12,
       itemGap: 18,
       textStyle: { color: chartTextSecondary(), fontSize: 14 },
-      data: ['男', '女', '本地', '外来']
+      data: [...genderData.map(item => item.name), '本地', '外来']
     },
     series: [
       ...buildPieDepthLayers('性别', genderData, genderRadius, donutCenter, 7, { startAngle: 90 }),
@@ -933,8 +987,8 @@ const renderTimeCharts = () => {
     return quarters.map(q => ({
       value: [q, cat, quarterMap.get(q)?.get(cat) || 0],
       itemStyle: {
-        color: rgbaHex(shadeHex(color, -24), 0.86),
-        borderColor: rgbaHex(shadeHex(color, 40), 0.78),
+        color: rgbaHex(shadeHex(color, -24), 0.74),
+        borderColor: rgbaHex(shadeHex(color, 40), 0.66),
         borderWidth: 1
       }
     }))
@@ -1026,7 +1080,7 @@ const renderTimeCharts = () => {
         textStyle: { color: '#f8fbff', fontSize: 11, borderWidth: 2, borderColor: 'rgba(0, 10, 30, .68)' }
       },
       itemStyle: {
-        opacity: 0.88,
+        opacity: 0.76,
         shadowBlur: 20,
         shadowColor: 'rgba(54, 135, 255, .62)'
       },
@@ -1037,7 +1091,7 @@ const renderTimeCharts = () => {
           textStyle: { color: '#fff', fontSize: 12, fontWeight: 800 }
         },
         itemStyle: {
-          opacity: 0.98
+          opacity: 0.9
         }
       }
     }]
@@ -1055,8 +1109,9 @@ const generateAiReport = async () => {
     // Gather current data context
     const subjectCount = subjects.value.length
     const maleCount = subjects.value.filter(s => s.gender === '男').length
-    const avgAge = subjects.value.length
-      ? Math.round(subjects.value.reduce((sum, s) => sum + s.age, 0) / subjects.value.length)
+    const knownAges = subjects.value.flatMap(s => s.age == null ? [] : [s.age])
+    const avgAge = knownAges.length
+      ? Math.round(knownAges.reduce((sum, age) => sum + age, 0) / knownAges.length)
       : 0
     const topWords = featureWords.value.slice(0, 5).map(w => w.name).join('、')
     const caseCount = caseDetails.value.length

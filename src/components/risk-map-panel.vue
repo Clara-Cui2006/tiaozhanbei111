@@ -3257,12 +3257,25 @@ onUnmounted(() => {
 }
 
 .xrm-detail-panel::-webkit-scrollbar {
-  width: 7px;
+  width: 9px;
 }
 
 .xrm-detail-panel::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(5, 18, 38, 0.86);
   border-radius: 99px;
-  background: rgba(104, 190, 224, 0.35);
+  background: linear-gradient(180deg, rgba(120, 238, 255, 0.9), rgba(27, 160, 232, 0.84) 58%, rgba(40, 92, 214, 0.8));
+  box-shadow: inset 0 1px 0 rgba(235, 253, 255, 0.52), 0 0 14px rgba(49, 209, 255, 0.32);
+}
+
+.xrm-detail-panel::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(174, 250, 255, 0.98), rgba(38, 191, 255, 0.92) 58%, rgba(60, 119, 239, 0.9));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 18px rgba(54, 220, 255, 0.5);
+}
+
+.xrm-detail-panel::-webkit-scrollbar-track {
+  border-radius: 99px;
+  background: linear-gradient(180deg, rgba(2, 12, 28, 0.78), rgba(7, 30, 58, 0.62));
+  box-shadow: inset 0 0 0 1px rgba(80, 176, 230, 0.12);
 }
 
 .xrm-detail-header {

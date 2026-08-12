@@ -136,6 +136,11 @@ export interface CommunityEffectStat {
 export interface SystemSettings {
   name: string
   dataScopeNotice: string
+  modelBaseUrl: string
+  modelChatPath: string
+  modelName: string
+  modelApiKey: string
+  modelTimeoutSeconds: number
 }
 
 export interface OfficialDynamic {
@@ -204,8 +209,8 @@ export interface CaseCategory {
 export interface CaseSubject {
   id: number
   name: string
-  age: number
-  gender: '男' | '女'
+  age: number | null
+  gender: '男' | '女' | '未知'
   occupation: string
   specialIdentity: string
   isResident: boolean

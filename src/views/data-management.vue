@@ -10,12 +10,12 @@
     <div class="workflow-strip" aria-label="数据导入流程">
       <div class="workflow-step workflow-step--cyan" :class="{ 'is-active': !batch }">
         <span class="step-index">01</span>
-        <span><strong>文件暂存</strong><small>选择批准的数据文件</small></span>
+        <span><strong>文件暂存</strong><small>选择业务系统导出表</small></span>
       </div>
       <span class="workflow-line" aria-hidden="true"></span>
       <div class="workflow-step workflow-step--gold" :class="{ 'is-active': batch && !confirmed }">
         <span class="step-index">02</span>
-        <span><strong>规则校验</strong><small>核对字段与数据口径</small></span>
+        <span><strong>规则校验</strong><small>自动识别多表字段</small></span>
       </div>
       <span class="workflow-line" aria-hidden="true"></span>
       <div class="workflow-step workflow-step--green" :class="{ 'is-active': confirmed && !rolledBack }">
@@ -24,14 +24,14 @@
       </div>
     </div>
 
-    <a-alert class="security-alert" type="warning">仅允许导入院内批准的数据文件。上传后先进入暂存校验区，人工确认前不参与任何统计。</a-alert>
+    <a-alert class="security-alert" type="warning">仅允许导入院内批准的数据文件。当前导入口径以检察业务系统导出的多工作表 Excel 为准，上传后先进入暂存校验区，人工确认前不参与任何统计。</a-alert>
 
     <a-card title="第一步：选择文件" :bordered="false" class="operation-card operation-card--cyan">
       <div class="upload-workbench">
         <div class="upload-icon" aria-hidden="true"><icon-upload /></div>
         <div class="upload-copy">
           <strong>{{ selectedFile?.name || '尚未选择数据文件' }}</strong>
-          <span>{{ selectedFile ? '文件已进入本地暂存，等待规则校验' : '支持 XLSX、CSV、JSON，单文件不超过 20MB' }}</span>
+          <span>{{ selectedFile ? '文件已进入本地暂存，等待规则校验' : '优先支持业务系统导出的 XLSX 多工作表文件，单文件不超过 20MB' }}</span>
         </div>
         <div class="upload-actions">
           <label class="file-select-button" for="case-data-file"><icon-file /> {{ selectedFile ? '重新选择' : '选择文件' }}</label>
@@ -43,9 +43,9 @@
         </div>
       </div>
       <div class="rule-list">
-        <p class="hint"><span>01</span>必填字段：案件编号、案件名称、业务条线、案件类别。</p>
-        <p class="hint"><span>02</span>法定罪名/案由与治理主题标签分层填写；街道归属只能为已确认街道、待确认地址、跨街道案件、与西城无地域关联。</p>
-        <p class="hint"><span>03</span>线索闭环字段支持：系统研判、人工复核、研判确认、内部移送、办理反馈、纳入统计；政治安全字段需经过人工复核后再纳入统计。</p>
+        <p class="hint"><span>01</span>按业务系统导出宽表读取全部工作表；核心字段取部门受案号、案件名称、承办部门、案件类别。</p>
+        <p class="hint"><span>02</span>地址字段自动识别西城街道，生成已确认街道、跨街道案件、待确认地址、与西城无地域关联四类归属状态。</p>
+        <p class="hint"><span>03</span>移送案由、涉嫌案由、审结案由、案件性质等会自动映射为案由；涉外、未检、专项活动、政治安全等字段会进入标签与研判口径。</p>
       </div>
     </a-card>
     <a-card v-if="batch" title="第二步：校验结果" :bordered="false" class="operation-card operation-card--gold result-card">
@@ -53,7 +53,7 @@
         <span class="batch-state" :class="{ 'is-confirmed': confirmed && !rolledBack, 'is-rollback': rolledBack }" aria-live="polite">
           <icon-history v-if="rolledBack" />
           <icon-check-circle v-else />
-          {{ rolledBack ? '批次已回滚' : confirmed ? '已人工确认入库' : '等待人工确认' }}
+          {{ rolledBack ? '批次已回滚' : confirmed ? appliedModeLabel : '等待人工确认' }}
         </span>
       </template>
 
@@ -90,9 +90,13 @@
       <div class="result-actions">
         <a-button type="primary" :disabled="batch.validRows === 0 || confirmed" @click="confirmBatch">
           <template #icon><icon-check /></template>
-          人工确认入库
+          追加入库
         </a-button>
-        <a-button status="danger" :disabled="!confirmed || rolledBack" @click="rollbackBatch">
+        <a-button status="danger" :disabled="batch.validRows === 0 || confirmed" @click="replaceBatch">
+          <template #icon><icon-check-circle /></template>
+          全量替换入库
+        </a-button>
+        <a-button status="danger" :disabled="!confirmed || rolledBack || appliedMode === 'replace'" @click="rollbackBatch">
           <template #icon><icon-history /></template>
           回滚本批次
         </a-button>
@@ -102,7 +106,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconCheck, IconCheckCircle, IconFile, IconHistory, IconSafe, IconUpload } from '@arco-design/web-vue/es/icon'
 import BackHome from '../components/back-home.vue'
@@ -114,12 +118,15 @@ const batch = ref<BatchResult | null>(null)
 const loading = ref(false)
 const confirmed = ref(false)
 const rolledBack = ref(false)
+const appliedMode = ref<'append' | 'replace' | null>(null)
+const appliedModeLabel = computed(() => appliedMode.value === 'replace' ? '已全量替换入库' : '已追加入库')
 
 function selectFile(event: Event) {
   selectedFile.value = (event.target as HTMLInputElement).files?.[0] || null
   batch.value = null
   confirmed.value = false
   rolledBack.value = false
+  appliedMode.value = null
 }
 
 async function validateFile() {
@@ -141,8 +148,25 @@ function confirmBatch() {
   Modal.confirm({ title: '确认入库', content: '确认后，有效数据将进入正式业务库并参与权限范围内的统计。', onOk: async () => {
     const { data } = await http.post(`/data/import/${batch.value!.batchId}/confirm`)
     confirmed.value = true
+    appliedMode.value = 'append'
     Message.success(`已入库 ${data.inserted} 条，重复 ${data.duplicates} 条`)
   } })
+}
+
+function replaceBatch() {
+  if (!batch.value) return
+  Modal.confirm({
+    title: '全量替换入库',
+    content: '此操作会先清空当前案件库，再写入本次校验通过的数据。适用于用一整张最新 Excel 替换旧数据，请确认已选对文件。',
+    okText: '确认替换',
+    okButtonProps: { status: 'danger' },
+    onOk: async () => {
+      const { data } = await http.post(`/data/import/${batch.value!.batchId}/replace`)
+      confirmed.value = true
+      appliedMode.value = 'replace'
+      Message.success(`已删除旧数据 ${data.deleted} 条，写入新数据 ${data.inserted} 条`)
+    }
+  })
 }
 
 function rollbackBatch() {

@@ -3,8 +3,6 @@
 
   <div v-else class="app-container" :class="`theme-${theme}`">
     <a-layout class="layout-shell">
-      <div v-if="isHomeRoute" id="home-account-layer" class="home-account-layer"></div>
-
       <a-layout-header class="header">
         <button class="brand" type="button" aria-label="返回首页" @click="goTo('/')">
           红墙智检
@@ -57,7 +55,6 @@
       <Teleport defer :to="accountTeleportTarget">
         <div
           class="account-slot"
-          :class="{ 'account-slot--hero': isHomeRoute }"
           @click.stop
         >
           <button
@@ -172,9 +169,7 @@ const newPassword = ref('')
 const footerInfo = ref<SiteFooterInfo>({ recordNo: '备案信息加载中', links: [] })
 
 const isHomeRoute = computed(() => route.path === '/')
-const accountTeleportTarget = computed(() =>
-  isHomeRoute.value ? '#home-account-layer' : '#header-account-layer'
-)
+const accountTeleportTarget = computed(() => '#header-account-layer')
 const primaryMenuItems = computed(() =>
   PRIMARY_NAVIGATION_ITEMS.filter((item) => hasPermissions(item.permissions, item.permissionMode))
 )
@@ -312,6 +307,15 @@ onBeforeUnmount(() => {
 
 :global(body.theme-light) {
   background: #f2f8ff;
+}
+
+:global(*) {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(60, 214, 255, 0.62) rgba(4, 20, 43, 0.62);
+}
+
+:global(body.theme-light *) {
+  scrollbar-color: rgba(22, 147, 215, 0.62) rgba(219, 239, 255, 0.72);
 }
 
 .app-container {
@@ -872,18 +876,51 @@ onBeforeUnmount(() => {
   color: var(--footer-text);
 }
 
-.content::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.content::-webkit-scrollbar,
+.content :deep(*::-webkit-scrollbar) {
+  width: 10px;
+  height: 10px;
 }
 
-.content::-webkit-scrollbar-thumb {
+.content::-webkit-scrollbar-track,
+.content :deep(*::-webkit-scrollbar-track) {
   border-radius: 999px;
-  background: color-mix(in srgb, var(--brand-dot) 45%, transparent);
+  background:
+    linear-gradient(180deg, rgba(3, 14, 31, 0.82), rgba(7, 29, 58, 0.74));
+  box-shadow: inset 0 0 0 1px rgba(76, 175, 232, 0.12);
 }
 
-.content::-webkit-scrollbar-track {
-  background: color-mix(in srgb, var(--header-bg) 55%, transparent);
+.content::-webkit-scrollbar-thumb,
+.content :deep(*::-webkit-scrollbar-thumb) {
+  border: 2px solid rgba(4, 18, 38, 0.88);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(115, 239, 255, 0.92), rgba(20, 156, 232, 0.86) 54%, rgba(35, 93, 219, 0.84));
+  box-shadow:
+    inset 0 1px 0 rgba(229, 253, 255, 0.55),
+    0 0 14px rgba(46, 204, 255, 0.34);
+}
+
+.content::-webkit-scrollbar-thumb:hover,
+.content :deep(*::-webkit-scrollbar-thumb:hover) {
+  background:
+    linear-gradient(180deg, rgba(166, 249, 255, 0.98), rgba(35, 190, 255, 0.94) 54%, rgba(50, 112, 238, 0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 0 18px rgba(52, 220, 255, 0.52);
+}
+
+.app-container.theme-light .content::-webkit-scrollbar-track,
+.app-container.theme-light .content :deep(*::-webkit-scrollbar-track) {
+  background: linear-gradient(180deg, rgba(228, 243, 255, 0.92), rgba(204, 229, 250, 0.86));
+  box-shadow: inset 0 0 0 1px rgba(57, 130, 193, 0.18);
+}
+
+.app-container.theme-light .content::-webkit-scrollbar-thumb,
+.app-container.theme-light .content :deep(*::-webkit-scrollbar-thumb) {
+  border-color: rgba(226, 241, 253, 0.92);
+  background: linear-gradient(180deg, rgba(82, 203, 237, 0.9), rgba(31, 139, 211, 0.86));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), 0 0 12px rgba(27, 147, 214, 0.25);
 }
 
 .content :deep(.arco-btn-primary) {
@@ -1110,10 +1147,10 @@ onBeforeUnmount(() => {
   height: 86px !important;
   min-height: 86px;
   display: grid !important;
-  grid-template-columns: 250px minmax(0, 1fr) 300px !important;
+  grid-template-columns: 230px minmax(0, 1fr) 280px !important;
   align-items: center;
-  gap: 22px !important;
-  padding: 0 42px !important;
+  gap: 18px !important;
+  padding: 0 34px !important;
   overflow: visible;
   background: rgba(2, 9, 22, 0.97) !important;
   border-bottom: 1px solid rgba(86, 148, 191, 0.22) !important;
@@ -1152,8 +1189,8 @@ onBeforeUnmount(() => {
   min-width: 0;
   height: 100%;
   align-items: center;
-  justify-content: flex-start;
-  gap: clamp(14px, 1.1vw, 22px);
+  justify-content: space-between;
+  gap: clamp(16px, 1.35vw, 28px);
   white-space: nowrap;
 }
 
@@ -1166,7 +1203,7 @@ onBeforeUnmount(() => {
   border-radius: 0;
   color: rgba(255, 255, 255, 0.88);
   font-family: "Microsoft YaHei UI", "PingFang SC", sans-serif;
-  font-size: clamp(16px, 1vw, 18px);
+  font-size: clamp(17px, 1.08vw, 20px);
   font-weight: 700;
   line-height: 86px;
   letter-spacing: 0;
@@ -1209,6 +1246,7 @@ onBeforeUnmount(() => {
   position: relative;
   display: block;
   height: 100%;
+  z-index: 260;
 }
 
 .more-trigger {
@@ -1233,7 +1271,7 @@ onBeforeUnmount(() => {
 .more-menu,
 .account-menu {
   position: absolute;
-  z-index: 180;
+  z-index: 2000;
   padding: 8px;
   border: 1px solid rgba(84, 176, 226, 0.28);
   background: rgba(3, 15, 32, 0.97);
@@ -1241,10 +1279,15 @@ onBeforeUnmount(() => {
 }
 
 .more-menu {
-  top: 70px;
-  left: 50%;
-  min-width: 176px;
-  transform: translateX(-50%);
+  top: calc(100% - 6px);
+  right: 0;
+  display: flex;
+  min-width: 196px;
+  max-height: min(60vh, 420px);
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  transform: none;
 }
 
 .more-menu-item,
@@ -1259,9 +1302,13 @@ onBeforeUnmount(() => {
 }
 
 .more-menu-item {
-  padding: 10px 14px;
-  font-size: 14px;
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  padding: 10px 16px;
+  font-size: 16px;
   border-radius: 2px;
+  white-space: nowrap;
 }
 
 .more-menu-item:hover,
@@ -1280,23 +1327,6 @@ onBeforeUnmount(() => {
 
 .header-account-layer {
   justify-self: end;
-}
-
-.home-account-layer {
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 90;
-  height: 0;
-  pointer-events: none;
-}
-
-.account-slot--hero {
-  position: absolute;
-  top: 122px;
-  right: 38px;
-  pointer-events: auto;
 }
 
 .account-trigger {
@@ -1561,9 +1591,9 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1500px) {
   .header {
-    grid-template-columns: 205px minmax(0, 1fr) 270px !important;
-    gap: 14px !important;
-    padding: 0 28px !important;
+    grid-template-columns: 190px minmax(0, 1fr) 238px !important;
+    gap: 12px !important;
+    padding: 0 24px !important;
   }
 
   .brand {
@@ -1571,11 +1601,11 @@ onBeforeUnmount(() => {
   }
 
   .top-nav {
-    gap: 12px;
+    gap: clamp(12px, 1vw, 18px);
   }
 
   .nav-link {
-    font-size: 15px;
+    font-size: 17px;
   }
 
   .account-org {
@@ -1588,7 +1618,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1180px) {
   .header {
-    grid-template-columns: 172px minmax(0, 1fr) auto !important;
+    grid-template-columns: 162px minmax(0, 1fr) auto !important;
     padding: 0 18px !important;
   }
 
@@ -1597,6 +1627,7 @@ onBeforeUnmount(() => {
   }
 
   .top-nav {
+    justify-content: flex-start;
     gap: 10px;
     overflow-x: auto;
     scrollbar-width: none;
@@ -1608,7 +1639,7 @@ onBeforeUnmount(() => {
 
   .nav-link {
     flex: 0 0 auto;
-    font-size: 14px;
+    font-size: 16px;
   }
 
   .account-slot .account-org {
@@ -1647,12 +1678,13 @@ onBeforeUnmount(() => {
   }
 
   .nav-link {
-    font-size: 13px;
+    font-size: 15px;
     line-height: 68px;
   }
 
   .more-menu {
-    top: 58px;
+    top: calc(100% - 4px);
+    right: 0;
   }
 
   .account-slot {

@@ -16,6 +16,11 @@ export interface StreetCaseMetric {
   color: string
 }
 
+export interface StreetMetricIdentity {
+  adcode: string
+  name: string
+}
+
 export const QUANTITY_COLORS: readonly string[] = [
   '#1689C4',
   '#16A8B7',
@@ -82,22 +87,64 @@ export function buildRelativeLegendStops(minValue: number, maxValue: number): Re
   })
 }
 
-export function buildStreetCaseMetrics(streets: StreetMapStreetStat[]): Record<string, StreetCaseMetric> {
-  const { min, max } = getCaseCountExtent(streets.map((street) => street.caseCount))
+const createMetric = (
+  adcode: string,
+  name: string,
+  caseCount: number,
+  min: number,
+  max: number,
+): StreetCaseMetric => {
+  const normalizedName = normalizeStreetName(name)
+  const normalizedCaseCount = normalizeCaseCount(caseCount)
+  const ratio = getRelativeCaseRatio(normalizedCaseCount, min, max)
 
-  return streets.reduce<Record<string, StreetCaseMetric>>((metrics, street) => {
-    const name = normalizeStreetName(street.streetName)
-    const ratio = getRelativeCaseRatio(street.caseCount, min, max)
-    const metric: StreetCaseMetric = {
-      adcode: street.streetCode,
-      name,
-      caseCount: street.caseCount,
-      level: Math.min(5, Math.floor(ratio * 5) + 1) as CaseCountLevel,
-      color: getRelativeCaseColor(street.caseCount, min, max)
-    }
+  return {
+    adcode,
+    name: normalizedName,
+    caseCount: normalizedCaseCount,
+    level: Math.min(5, Math.floor(ratio * 5) + 1) as CaseCountLevel,
+    color: getRelativeCaseColor(normalizedCaseCount, min, max)
+  }
+}
 
-    metrics[street.streetCode] = metric
-    metrics[name] = metric
-    return metrics
-  }, {})
+const indexMetric = (metrics: Record<string, StreetCaseMetric>, metric: StreetCaseMetric) => {
+  metrics[metric.adcode] = metric
+  metrics[metric.name] = metric
+}
+
+export function buildStreetCaseMetrics(
+  streets: StreetMapStreetStat[],
+  knownStreets: StreetMetricIdentity[] = [],
+): Record<string, StreetCaseMetric> {
+  const knownStreetValues = knownStreets.map(({ adcode, name }) => {
+    const matched = streets.find((street) => street.streetCode === adcode || normalizeStreetName(street.streetName) === normalizeStreetName(name))
+    return matched ? normalizeCaseCount(matched.caseCount) : 0
+  })
+  const { min, max } = getCaseCountExtent(knownStreets.length ? knownStreetValues : streets.map((street) => street.caseCount))
+
+  const metrics: Record<string, StreetCaseMetric> = {}
+
+  for (const street of knownStreets) {
+    const matched = streets.find((item) => item.streetCode === street.adcode || normalizeStreetName(item.streetName) === normalizeStreetName(street.name))
+    indexMetric(metrics, createMetric(
+      street.adcode,
+      street.name,
+      matched?.caseCount ?? 0,
+      min,
+      max,
+    ))
+  }
+
+  for (const street of streets) {
+    if (metrics[street.streetCode]) continue
+    indexMetric(metrics, createMetric(
+      street.streetCode,
+      street.streetName,
+      street.caseCount,
+      min,
+      max,
+    ))
+  }
+
+  return metrics
 }

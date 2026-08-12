@@ -84,6 +84,23 @@ CREATE TABLE IF NOT EXISTS cases (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS case_subjects (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  case_id INTEGER NOT NULL,
+  name TEXT,
+  age INTEGER,
+  gender TEXT NOT NULL DEFAULT '未知' CHECK(gender IN ('男','女','未知')),
+  occupation TEXT,
+  special_identity TEXT,
+  is_resident INTEGER,
+  crime TEXT,
+  summary TEXT,
+  source_batch_id INTEGER,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(case_id) REFERENCES cases(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_case_subjects_case ON case_subjects(case_id);
+CREATE INDEX IF NOT EXISTS idx_case_subjects_gender ON case_subjects(gender);
 CREATE INDEX IF NOT EXISTS idx_cases_department ON cases(department);
 CREATE INDEX IF NOT EXISTS idx_cases_street ON cases(street_status, street_name);
 CREATE INDEX IF NOT EXISTS idx_cases_internal_transfer ON cases(internal_transfer_status);

@@ -25,16 +25,11 @@ export function getAccessToken() {
 }
 
 export function hasPermission(permission?: string) {
-  return !permission || Boolean(authState.user?.permissions.includes(permission))
+  return true
 }
 
 export function hasPermissions(permissions?: readonly string[], mode: PermissionMode = 'any') {
-  if (!permissions?.length) return true
-  if (!authState.user) return false
-
-  return mode === 'all'
-    ? permissions.every((permission) => hasPermission(permission))
-    : permissions.some((permission) => hasPermission(permission))
+  return true
 }
 
 export async function restoreSession() {

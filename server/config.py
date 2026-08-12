@@ -15,6 +15,7 @@ class Settings:
     model_base_url: str = os.getenv("MODEL_BASE_URL", "").rstrip("/")
     model_api_key: str = os.getenv("MODEL_API_KEY", "")
     model_name: str = os.getenv("MODEL_NAME", "")
+    model_chat_path: str = os.getenv("MODEL_CHAT_PATH", "/chat/completions")
     model_timeout_seconds: float = float(os.getenv("MODEL_TIMEOUT_SECONDS", "60"))
     bootstrap_username: str = os.getenv("BOOTSTRAP_ADMIN_USERNAME", "admin")
     bootstrap_password: str = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")

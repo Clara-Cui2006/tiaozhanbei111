@@ -41,6 +41,11 @@ class LegalPlanPayload(BaseModel):
 class SettingsPayload(BaseModel):
     name: str = Field(default="西城区社区法治风险预警平台", max_length=100)
     dataScopeNotice: str = Field(default="仅展示已确认入库的数据", max_length=200)
+    modelBaseUrl: str = Field(default="", max_length=500)
+    modelChatPath: str = Field(default="/chat/completions", max_length=300)
+    modelName: str = Field(default="", max_length=200)
+    modelApiKey: str = Field(default="", max_length=500)
+    modelTimeoutSeconds: float = Field(default=60, ge=1, le=600)
 
 
 class SuggestionPayload(BaseModel):

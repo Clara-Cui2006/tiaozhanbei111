@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
-from .ai import generate
+from .ai import generate, get_runtime_model_settings
 from .auth import (can_read_case, client_ip, get_current_user, permissions_for,
                    public_user, require_permission)
 from .config import settings
@@ -42,7 +42,9 @@ def startup() -> None:
 def health() -> dict[str, str]:
     with connect() as db:
         db.execute("SELECT 1").fetchone()
-    return {"status": "ok", "database": "connected", "model": "configured" if settings.model_base_url else "not_configured"}
+    runtime_model = get_runtime_model_settings()
+    model_status = "configured" if runtime_model.base_url and runtime_model.model_name else "not_configured"
+    return {"status": "ok", "database": "connected", "model": model_status}
 
 
 @app.post("/auth/login")
@@ -159,13 +161,20 @@ STREET_CODES = {
 }
 
 STREET_COORDINATES = {
-    "西长安街街道": (116.375, 39.912), "新街口街道": (116.370, 39.945),
-    "月坛街道": (116.345, 39.915), "展览路街道": (116.345, 39.925),
-    "德胜街道": (116.378, 39.955), "金融街街道": (116.362, 39.915),
-    "什刹海街道": (116.385, 39.935), "大栅栏街道": (116.392, 39.895),
-    "天桥街道": (116.390, 39.885), "椿树街道": (116.372, 39.895),
-    "陶然亭街道": (116.372, 39.885), "广安门内街道": (116.360, 39.897),
-    "牛街街道": (116.360, 39.885), "白纸坊街道": (116.350, 39.880),
+    "西长安街街道": (116.375, 39.912),
+    "新街口街道": (116.370, 39.945),
+    "月坛街道": (116.345, 39.915),
+    "展览路街道": (116.345, 39.925),
+    "德胜街道": (116.378, 39.955),
+    "金融街街道": (116.362, 39.915),
+    "什刹海街道": (116.385, 39.935),
+    "大栅栏街道": (116.392, 39.895),
+    "天桥街道": (116.390, 39.885),
+    "椿树街道": (116.372, 39.895),
+    "陶然亭街道": (116.372, 39.885),
+    "广安门内街道": (116.360, 39.897),
+    "牛街街道": (116.360, 39.885),
+    "白纸坊街道": (116.350, 39.880),
     "广安门外街道": (116.335, 39.895),
 }
 
@@ -250,21 +259,201 @@ def _top_counts(rows: list[dict[str, Any]], field: str, fallback: str) -> list[d
             for name, count in sorted(counts.items(), key=lambda item: item[1], reverse=True)]
 
 
+def _case_type_expr() -> str:
+    return "COALESCE(NULLIF(legal_cause,''), NULLIF(crime,''), NULLIF(category,''), '未标注类型')"
+
+
+def _month_expr(field: str = "accepted_date") -> str:
+    return f"substr(COALESCE(NULLIF({field},''), created_at),1,7)"
+
+
+def _risk_level_by_score(score: int) -> str:
+    if score >= 80:
+        return "高"
+    if score >= 60:
+        return "中"
+    return "低"
+
+
+def _risk_analysis_case_clause(user: dict[str, Any], category: str | None = None) -> tuple[str, list[Any]]:
+    where, params = _case_scope(user)
+    clauses = [where]
+    values = list(params)
+    if category:
+        clauses.append("(category=? OR legal_cause=? OR crime=?)")
+        values.extend([category, category, category])
+    return " AND ".join(clauses), values
+
+
+def _split_plain_text(value: Any) -> list[str]:
+    if not value:
+        return []
+    text = str(value)
+    for separator in ("，", "、", ";", "；", "\n", "\t", " "):
+        text = text.replace(separator, ",")
+    return [item.strip() for item in text.split(",") if item.strip() and item.strip() not in {"无", "否", "不详"}]
+
+
+def _first_value(*groups: list[str], fallback: str = "未标注") -> str:
+    for group in groups:
+        for item in group:
+            if item:
+                return item
+    return fallback
+
+
+def _risk_score_for_case(row: dict[str, Any]) -> int:
+    score = 45
+    if row.get("internal_transfer_status") and row["internal_transfer_status"] != "未形成线索":
+        score += 18
+    if row.get("political_review_status") and row["political_review_status"] != "不属于政治安全":
+        score += 16
+    if row.get("political_risk_level") == "高风险":
+        score += 18
+    elif row.get("political_risk_level") == "中风险":
+        score += 10
+    elif row.get("political_risk_level") == "关注":
+        score += 5
+    if row.get("street_status") != "已确认街道":
+        score += 4
+    return max(0, min(100, score))
+
+
+@app.get("/risk-analysis/case-categories")
+def risk_case_categories(user: dict[str, Any] = Depends(get_current_user)) -> list[dict[str, Any]]:
+    where, params = _risk_analysis_case_clause(user)
+    with connect() as db:
+        rows = db.execute(f"""SELECT category,{_case_type_expr()} AS cause,COUNT(*) count
+                              FROM cases WHERE {where}
+                              GROUP BY category,cause
+                              ORDER BY category,count DESC""", params).fetchall()
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        category = row["category"] or "未标注类别"
+        cause = row["cause"] or category
+        item = grouped.setdefault(category, {"name": category, "children": [], "value": 0})
+        item["value"] += row["count"]
+        item["children"].append({"name": cause, "value": row["count"]})
+    return sorted(grouped.values(), key=lambda item: item["value"], reverse=True)
+
+
+@app.get("/risk-analysis/case-subjects")
+def risk_case_subjects(category: str | None = None,
+                       user: dict[str, Any] = Depends(get_current_user)) -> list[dict[str, Any]]:
+    where, params = _risk_analysis_case_clause(user, category)
+    subject_where = (where
+                     .replace("department", "c.department")
+                     .replace("category", "c.category")
+                     .replace("legal_cause", "c.legal_cause")
+                     .replace("crime", "c.crime"))
+    with connect() as db:
+        rows = db.execute(f"""SELECT s.*,c.case_name,c.department,c.street_status,c.legal_cause,c.crime AS case_crime,
+                                      c.category,c.summary AS case_summary,c.key_groups,c.key_industries
+                               FROM case_subjects s JOIN cases c ON c.id=s.case_id
+                               WHERE {subject_where}
+                               ORDER BY c.accepted_date DESC,s.id DESC LIMIT 1000""", params).fetchall()
+    subjects: list[dict[str, Any]] = []
+    for row in rows:
+        case = dict(row)
+        groups = _json_list(case.get("key_groups"))
+        industries = _json_list(case.get("key_industries"))
+        subjects.append({
+            "id": case["id"],
+            "name": case.get("name") or case["case_name"],
+            "age": case.get("age"),
+            "gender": case.get("gender") or "未知",
+            "occupation": case.get("occupation") or _first_value(industries, [case.get("department") or ""], fallback="未标注"),
+            "specialIdentity": case.get("special_identity") or _first_value(groups, fallback="普通案件主体"),
+            "isResident": bool(case.get("is_resident")) if case.get("is_resident") is not None else case.get("street_status") == "已确认街道",
+            "crime": case.get("crime") or case.get("legal_cause") or case.get("case_crime") or case.get("category") or "未标注",
+            "summary": case.get("summary") or case.get("case_summary") or "暂无摘要",
+        })
+    return subjects
+
+
+@app.get("/risk-analysis/case-time-trends")
+def risk_case_time_trends(category: str | None = None,
+                          user: dict[str, Any] = Depends(get_current_user)) -> list[dict[str, Any]]:
+    where, params = _risk_analysis_case_clause(user, category)
+    with connect() as db:
+        rows = db.execute(f"""SELECT {_month_expr()} AS month,{_case_type_expr()} AS cause,COUNT(*) count
+                              FROM cases WHERE {where}
+                              GROUP BY month,cause
+                              ORDER BY month,cause""", params).fetchall()
+    return [{"period": row["month"] or "未填日期", "count": row["count"], "category": row["cause"] or "未标注"} for row in rows]
+
+
+@app.get("/risk-analysis/case-feature-words")
+def risk_case_feature_words(category: str | None = None,
+                            user: dict[str, Any] = Depends(get_current_user)) -> list[dict[str, Any]]:
+    where, params = _risk_analysis_case_clause(user, category)
+    with connect() as db:
+        rows = db.execute(f"SELECT * FROM cases WHERE {where} LIMIT 1000", params).fetchall()
+    counts: dict[str, int] = {}
+    for row in rows:
+        case = dict(row)
+        values: list[str] = []
+        values.extend(_split_plain_text(case.get("keywords")))
+        values.extend(_json_list(case.get("governance_themes")))
+        values.extend(_json_list(case.get("key_groups")))
+        values.extend(_json_list(case.get("key_industries")))
+        values.extend(_split_plain_text(case.get("legal_cause") or case.get("crime") or case.get("category")))
+        if case.get("political_review_status") != "不属于政治安全":
+            values.extend(_split_plain_text(case.get("political_topic")))
+            values.extend(_split_plain_text(case.get("political_behavior_content")))
+            values.extend(_split_plain_text(case.get("political_subject")))
+        for value in set(values):
+            if len(value) > 24:
+                continue
+            counts[value] = counts.get(value, 0) + 1
+    return [{"name": name, "value": value} for name, value in sorted(counts.items(), key=lambda item: item[1], reverse=True)[:40]]
+
+
+@app.get("/risk-analysis/events")
+def risk_events(level: str | None = None, keyword: str | None = None, minRiskScore: int | None = None,
+                community: str | None = None,
+                user: dict[str, Any] = Depends(get_current_user)) -> list[dict[str, Any]]:
+    where, params = _risk_analysis_case_clause(user)
+    clauses, values = [where], list(params)
+    if keyword:
+        clauses.append("(case_name LIKE ? OR case_number LIKE ? OR keywords LIKE ? OR summary LIKE ?)")
+        values.extend([f"%{keyword}%"] * 4)
+    if community:
+        clauses.append("street_name=?")
+        values.append(community)
+    with connect() as db:
+        rows = db.execute(f"SELECT * FROM cases WHERE {' AND '.join(clauses)} ORDER BY accepted_date DESC, id DESC LIMIT 500", values).fetchall()
+    events: list[dict[str, Any]] = []
+    for row in rows:
+        case = dict(row)
+        score = _risk_score_for_case(case)
+        event_level = _risk_level_by_score(score)
+        if level and event_level != level:
+            continue
+        if minRiskScore is not None and score < minRiskScore:
+            continue
+        events.append({
+            "id": case["id"],
+            "community": case.get("street_name") or case.get("street_status") or "未确认区域",
+            "event": case.get("case_name") or "未命名案件",
+            "level": event_level,
+            "riskScore": score,
+            "time": case.get("accepted_date") or case.get("created_at") or "",
+            "status": case.get("internal_transfer_status") or case.get("status") or "未形成线索",
+            "detail": case.get("summary") or case.get("keywords") or "暂无详情",
+            "suggestion": "纳入政治安全专项研判" if case.get("political_review_status") != "不属于政治安全" else "纳入风险态势持续观察",
+        })
+    return events
+
+
 @app.get("/risk-analysis/case-details")
 def case_list(keyword: str | None = None, category: str | None = None,
               user: dict[str, Any] = Depends(get_current_user)) -> list[dict[str, Any]]:
-    where, params = _case_scope(user)
+    where, params = _risk_analysis_case_clause(user, category)
     clauses, values = [where], list(params)
     if keyword:
         clauses.append("(case_name LIKE ? OR case_number LIKE ? OR keywords LIKE ?)")
         values.extend([f"%{keyword}%"] * 3)
-    if category:
-        if category in GOVERNANCE_CATEGORIES:
-            clauses.append("governance_themes LIKE ?")
-            values.append(f'%"{category}"%')
-        else:
-            clauses.append("category=?")
-            values.append(category)
     with connect() as db:
         rows = db.execute(f"SELECT * FROM cases WHERE {' AND '.join(clauses)} ORDER BY accepted_date DESC LIMIT 500", values).fetchall()
     return [{"id": r["id"], "caseName": r["case_name"], "procedureType": r["status"] or "",
@@ -336,10 +525,113 @@ def dashboard_overview(user: dict[str, Any] = Depends(require_permission("dashbo
     where, params = _case_scope(user)
     with connect() as db:
         total = db.execute(f"SELECT COUNT(*) FROM cases WHERE {where}", params).fetchone()[0]
-        top = db.execute(f"SELECT category,COUNT(*) AS c FROM cases WHERE {where} GROUP BY category ORDER BY c DESC LIMIT 1", params).fetchone()
+        top = db.execute(f"SELECT {_case_type_expr()} AS name,COUNT(*) AS c FROM cases WHERE {where} GROUP BY name ORDER BY c DESC LIMIT 1", params).fetchone()
+        risk_alerts = db.execute(f"SELECT COUNT(*) FROM cases WHERE {where} AND internal_transfer_status!='未形成线索'", params).fetchone()[0]
         suggestions = db.execute("SELECT COUNT(*) FROM suggestions").fetchone()[0]
-    return {"totalCasesThisYear": total, "highIncidenceTypes": top["category"] if top else "暂无数据",
-            "riskAlertPushCount": 0, "procuratorateSuggestions": suggestions, "legalPushCount": 0}
+        legal_plans = db.execute("SELECT COUNT(*) FROM legal_plans").fetchone()[0]
+    return {"totalCasesThisYear": total, "highIncidenceTypes": top["name"] if top else "暂无数据",
+            "riskAlertPushCount": risk_alerts, "procuratorateSuggestions": suggestions, "legalPushCount": legal_plans}
+
+
+@app.get("/dashboard/risk-trend")
+def dashboard_risk_trend(user: dict[str, Any] = Depends(require_permission("dashboard:read"))) -> list[dict[str, Any]]:
+    where, params = _case_scope(user)
+    with connect() as db:
+        rows = db.execute(f"""SELECT {_month_expr()} AS month,COUNT(*) AS value
+                              FROM cases WHERE {where}
+                              GROUP BY month ORDER BY month DESC LIMIT 7""", params).fetchall()
+    return [{"date": row["month"] or "未填日期", "value": row["value"]} for row in reversed(rows)]
+
+
+@app.get("/dashboard/community-risk-points")
+def dashboard_community_risk_points(user: dict[str, Any] = Depends(require_permission("dashboard:read"))) -> list[dict[str, Any]]:
+    where, params = _case_scope(user)
+    with connect() as db:
+        case_rows = db.execute(f"""SELECT street_name,{_case_type_expr()} AS type_name,COUNT(*) count
+                                   FROM cases
+                                   WHERE {where} AND street_status='已确认街道' AND street_name IS NOT NULL AND street_name!=''
+                                   GROUP BY street_name,type_name""", params).fetchall()
+        alert_rows = db.execute(f"""SELECT street_name,COUNT(*) count
+                                    FROM cases
+                                    WHERE {where} AND street_status='已确认街道' AND internal_transfer_status!='未形成线索'
+                                    GROUP BY street_name""", params).fetchall()
+        plan_rows = db.execute("SELECT community,COUNT(*) count FROM legal_plans WHERE community IS NOT NULL AND community!='' GROUP BY community").fetchall()
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in case_rows:
+        street = row["street_name"]
+        item = grouped.setdefault(street, {"annualCases": 0, "types": {}})
+        item["annualCases"] += row["count"]
+        item["types"][row["type_name"]] = row["count"]
+    alert_counts = {row["street_name"]: row["count"] for row in alert_rows}
+    plan_counts = {row["community"]: row["count"] for row in plan_rows}
+    max_cases = max((item["annualCases"] for item in grouped.values()), default=0)
+    points: list[dict[str, Any]] = []
+    for street, item in grouped.items():
+        annual_cases = int(item["annualCases"])
+        score = round(annual_cases / max(1, max_cases) * 100) if max_cases else 0
+        longitude, latitude = STREET_COORDINATES.get(street, (116.366794, 39.915309))
+        top_types = sorted(item["types"].items(), key=lambda pair: pair[1], reverse=True)[:3]
+        points.append({
+            "community": street,
+            "longitude": longitude,
+            "latitude": latitude,
+            "level": _risk_level_by_score(score),
+            "riskScore": score,
+            "annualCases": annual_cases,
+            "alertPushCount": int(alert_counts.get(street, 0)),
+            "procuratorateSuggestionCount": 0,
+            "legalPlanDeliveryCount": int(plan_counts.get(street, 0)),
+            "highIncidenceTypes": "、".join(name for name, _ in top_types) or "暂无数据",
+            "dimensionScores": {},
+        })
+    return sorted(points, key=lambda item: item["annualCases"], reverse=True)
+
+
+@app.get("/dashboard/multi-trend")
+def dashboard_multi_trend(user: dict[str, Any] = Depends(require_permission("dashboard:read"))) -> list[dict[str, Any]]:
+    where, params = _case_scope(user)
+    with connect() as db:
+        months = [row["month"] for row in db.execute(f"""SELECT {_month_expr()} AS month
+                                                         FROM cases WHERE {where}
+                                                         GROUP BY month ORDER BY month DESC LIMIT 12""", params).fetchall()]
+        total_rows = db.execute(f"""SELECT {_month_expr()} AS month,COUNT(*) count
+                                    FROM cases WHERE {where}
+                                    GROUP BY month""", params).fetchall()
+        top_type = db.execute(f"""SELECT {_case_type_expr()} AS name,COUNT(*) count
+                                  FROM cases WHERE {where}
+                                  GROUP BY name ORDER BY count DESC LIMIT 1""", params).fetchone()
+        high_rows = db.execute(f"""SELECT {_month_expr()} AS month,COUNT(*) count
+                                   FROM cases
+                                   WHERE {where} AND {_case_type_expr()}=?
+                                   GROUP BY month""", (*params, top_type["name"] if top_type else "")).fetchall()
+        alert_rows = db.execute(f"""SELECT {_month_expr()} AS month,COUNT(*) count
+                                    FROM cases
+                                    WHERE {where} AND internal_transfer_status!='未形成线索'
+                                    GROUP BY month""", params).fetchall()
+        suggestion_rows = db.execute("""SELECT substr(COALESCE(NULLIF(issue_date,''), created_at),1,7) month,COUNT(*) count
+                                        FROM suggestions GROUP BY month""").fetchall()
+        plan_rows = db.execute("""SELECT substr(created_at,1,7) month,COUNT(*) count
+                                  FROM legal_plans GROUP BY month""").fetchall()
+    for row in suggestion_rows:
+        if row["month"] not in months:
+            months.append(row["month"])
+    for row in plan_rows:
+        if row["month"] not in months:
+            months.append(row["month"])
+    months = sorted(month for month in months if month)[-12:]
+    total_by_month = {row["month"]: row["count"] for row in total_rows}
+    high_by_month = {row["month"]: row["count"] for row in high_rows}
+    alert_by_month = {row["month"]: row["count"] for row in alert_rows}
+    suggestion_by_month = {row["month"]: row["count"] for row in suggestion_rows}
+    plan_by_month = {row["month"]: row["count"] for row in plan_rows}
+    return [{
+        "date": month,
+        "totalCases": int(total_by_month.get(month, 0)),
+        "highIncidenceCount": int(high_by_month.get(month, 0)),
+        "riskAlertPush": int(alert_by_month.get(month, 0)),
+        "procuratorateSuggestion": int(suggestion_by_month.get(month, 0)),
+        "legalPlanDelivery": int(plan_by_month.get(month, 0)),
+    } for month in months]
 
 
 @app.get("/dashboard/community-risk-points")
@@ -488,7 +780,7 @@ async def validate_import(request: Request, file: UploadFile = File(...),
         cursor = db.execute(
             "INSERT INTO import_batches(filename,file_sha256,status,total_rows,valid_rows,error_rows,errors,imported_by,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
             (file.filename, parsed.sha256, "待确认", len(parsed.rows) + len(parsed.errors), len(parsed.rows), len(parsed.errors),
-             json.dumps({"errors": parsed.errors, "rows": parsed.rows}, ensure_ascii=False), user["id"], utc_now()),
+             json.dumps({"errors": parsed.errors, "rows": parsed.rows, "subjects": parsed.subjects}, ensure_ascii=False), user["id"], utc_now()),
         )
         batch_id = cursor.lastrowid
     write_audit(user=user, action="VALIDATE", resource_type="import_batch", resource_id=batch_id,
@@ -523,10 +815,58 @@ def confirm_import(batch_id: int, request: Request,
                 inserted += 1
             except Exception:
                 duplicates += 1
+        for subject in stored.get("subjects", []):
+            case = db.execute("SELECT id FROM cases WHERE case_number=?", (subject["case_number"],)).fetchone()
+            if not case:
+                continue
+            db.execute("""INSERT INTO case_subjects(case_id,name,age,gender,occupation,special_identity,is_resident,crime,summary,source_batch_id,created_at)
+                          VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                       (case["id"], subject["name"], subject["age"], subject["gender"], subject["occupation"],
+                        subject["special_identity"], subject["is_resident"], subject["crime"], subject["summary"], batch_id, utc_now()))
         db.execute("UPDATE import_batches SET status='已入库', confirmed_at=? WHERE id=?", (utc_now(), batch_id))
     write_audit(user=user, action="CONFIRM", resource_type="import_batch", resource_id=batch_id,
                 detail={"inserted": inserted, "duplicates": duplicates}, client_ip=client_ip(request), success=True)
     return {"batchId": batch_id, "status": "已入库", "inserted": inserted, "duplicates": duplicates}
+
+
+@app.post("/data/import/{batch_id}/replace")
+def replace_import(batch_id: int, request: Request,
+                   user: dict[str, Any] = Depends(require_permission("data:import"))) -> dict[str, Any]:
+    with connect() as db:
+        batch = row_to_dict(db.execute("SELECT * FROM import_batches WHERE id=?", (batch_id,)).fetchone())
+        if not batch or batch["status"] != "待确认":
+            raise HTTPException(status_code=409, detail="导入批次不存在或当前状态不能替换")
+        stored = json.loads(batch["errors"])
+        deleted = db.execute("DELETE FROM cases").rowcount
+        inserted, duplicates = 0, 0
+        for row in stored.get("rows", []):
+            try:
+                db.execute("""INSERT INTO cases(case_number,case_name,department,category,crime,legal_cause,governance_themes,accepted_date,closed_date,status,street_status,street_name,address,keywords,summary,key_groups,key_industries,internal_transfer_status,prosecutorial_track,political_topic,political_location_factor,political_behavior_content,political_subject,political_spread_impact,political_review_status,political_risk_level,source_batch_id,created_at,updated_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (row["case_number"], row["case_name"], row["department"], row["category"], row["crime"], row["legal_cause"],
+                     json.dumps(row["governance_themes"], ensure_ascii=False), row["accepted_date"], row["closed_date"], row["status"],
+                     row["street_status"], row["street_name"], row["address"], row["keywords"], row["summary"],
+                     json.dumps(row["key_groups"], ensure_ascii=False), json.dumps(row["key_industries"], ensure_ascii=False),
+                     row["internal_transfer_status"], row["prosecutorial_track"], row["political_topic"],
+                     row["political_location_factor"], row["political_behavior_content"], row["political_subject"],
+                     row["political_spread_impact"], row["political_review_status"], row["political_risk_level"],
+                     batch_id, utc_now(), utc_now()))
+                inserted += 1
+            except Exception:
+                duplicates += 1
+        for subject in stored.get("subjects", []):
+            case = db.execute("SELECT id FROM cases WHERE case_number=?", (subject["case_number"],)).fetchone()
+            if not case:
+                continue
+            db.execute("""INSERT INTO case_subjects(case_id,name,age,gender,occupation,special_identity,is_resident,crime,summary,source_batch_id,created_at)
+                          VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                       (case["id"], subject["name"], subject["age"], subject["gender"], subject["occupation"],
+                        subject["special_identity"], subject["is_resident"], subject["crime"], subject["summary"], batch_id, utc_now()))
+        db.execute("UPDATE import_batches SET status='已替换入库', confirmed_at=? WHERE id=?", (utc_now(), batch_id))
+    write_audit(user=user, action="REPLACE", resource_type="import_batch", resource_id=batch_id,
+                detail={"deleted": deleted, "inserted": inserted, "duplicates": duplicates},
+                client_ip=client_ip(request), success=True)
+    return {"batchId": batch_id, "status": "已替换入库", "deleted": deleted, "inserted": inserted, "duplicates": duplicates}
 
 
 @app.post("/data/import/{batch_id}/rollback")
@@ -570,7 +910,19 @@ def audit_logs(limit: int = 100, user: dict[str, Any] = Depends(require_permissi
 def get_settings(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
     with connect() as db:
         row = db.execute("SELECT value FROM system_settings WHERE key='ui'").fetchone()
-    return json.loads(row["value"]) if row else {"name": settings.app_name, "dataScopeNotice": "仅展示已确认入库的数据"}
+    defaults = {
+        "name": settings.app_name,
+        "dataScopeNotice": "仅展示已确认入库的数据",
+        "modelBaseUrl": settings.model_base_url,
+        "modelChatPath": settings.model_chat_path or "/chat/completions",
+        "modelName": settings.model_name,
+        "modelApiKey": settings.model_api_key,
+        "modelTimeoutSeconds": settings.model_timeout_seconds,
+    }
+    if not row:
+        return defaults
+    value = json.loads(row["value"])
+    return {**defaults, **value}
 
 
 @app.put("/system-settings")
@@ -752,8 +1104,7 @@ def site_footer() -> dict[str, Any]:
 
 
 EMPTY_LIST_ENDPOINTS = [
-    "/dashboard/risk-trend", "/dashboard/multi-trend",
-    "/risk-analysis/events", "/legal-recommend/recommendations",
+    "/legal-recommend/recommendations",
     "/alert-push/tasks", "/effect-stats/community",
     "/effect-stats/trend", "/effect-stats/community-period", "/home/official-dynamics", "/archive/items",
     "/procuratorate/feed",

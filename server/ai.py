@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -22,9 +23,68 @@ SYSTEM_PROMPTS: dict[str, str] = {
     "political-security": "你是政治安全专项材料辅助工具。严格按最小必要原则处理材料，结果仅供内部人工研判。",
 }
 
+@dataclass(frozen=True)
+class RuntimeModelSettings:
+    base_url: str
+    chat_path: str
+    api_key: str
+    model_name: str
+    timeout_seconds: float
+
+
+def _clean_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def get_runtime_model_settings() -> RuntimeModelSettings:
+    model_base_url = settings.model_base_url
+    model_chat_path = settings.model_chat_path or "/chat/completions"
+    model_api_key = settings.model_api_key
+    model_name = settings.model_name
+    model_timeout_seconds = settings.model_timeout_seconds
+
+    try:
+        with connect() as db:
+            row = db.execute("SELECT value FROM system_settings WHERE key='ui'").fetchone()
+        if row:
+            value = json.loads(row["value"])
+            model_base_url = _clean_text(value.get("modelBaseUrl")) or model_base_url
+            model_chat_path = _clean_text(value.get("modelChatPath")) or model_chat_path
+            model_api_key = _clean_text(value.get("modelApiKey")) or model_api_key
+            model_name = _clean_text(value.get("modelName")) or model_name
+            raw_timeout = value.get("modelTimeoutSeconds")
+            if raw_timeout not in (None, ""):
+                model_timeout_seconds = float(raw_timeout)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
+
+    return RuntimeModelSettings(
+        base_url=model_base_url.rstrip("/"),
+        chat_path=model_chat_path,
+        api_key=model_api_key,
+        model_name=model_name,
+        timeout_seconds=max(1, min(float(model_timeout_seconds), 600)),
+    )
+
+
+def build_chat_completions_url(runtime: RuntimeModelSettings) -> str:
+    base_url = runtime.base_url.rstrip("/")
+    chat_path = runtime.chat_path.strip()
+
+    if not chat_path:
+      chat_path = "/chat/completions"
+    if chat_path.startswith("http://") or chat_path.startswith("https://"):
+        return chat_path
+
+    normalized_path = "/" + chat_path.lstrip("/")
+    if base_url.endswith(normalized_path):
+        return base_url
+    return f"{base_url}{normalized_path}"
+
 
 async def generate(*, user: dict[str, Any], module: str, prompt: str, case_ids: list[int]) -> dict[str, Any]:
-    if not settings.model_base_url or not settings.model_name:
+    runtime = get_runtime_model_settings()
+    if not runtime.base_url or not runtime.model_name:
         raise HTTPException(status_code=503, detail="院内统一模型尚未配置")
 
     digest = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
@@ -36,10 +96,10 @@ async def generate(*, user: dict[str, Any], module: str, prompt: str, case_ids: 
         call_id = int(cursor.lastrowid)
 
     headers = {"Content-Type": "application/json"}
-    if settings.model_api_key:
-        headers["Authorization"] = f"Bearer {settings.model_api_key}"
+    if runtime.api_key:
+        headers["Authorization"] = f"Bearer {runtime.api_key}"
     payload = {
-        "model": settings.model_name,
+        "model": runtime.model_name,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPTS.get(module, SYSTEM_PROMPTS["general"])},
             {"role": "user", "content": prompt},
@@ -47,8 +107,9 @@ async def generate(*, user: dict[str, Any], module: str, prompt: str, case_ids: 
         "temperature": 0.2,
     }
     try:
-        async with httpx.AsyncClient(timeout=settings.model_timeout_seconds, trust_env=False) as client:
-            response = await client.post(f"{settings.model_base_url}/chat/completions", headers=headers, json=payload)
+        chat_url = build_chat_completions_url(runtime)
+        async with httpx.AsyncClient(timeout=runtime.timeout_seconds, trust_env=False) as client:
+            response = await client.post(chat_url, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
         content = str(data["choices"][0]["message"]["content"])

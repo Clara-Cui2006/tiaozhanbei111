@@ -296,12 +296,15 @@ const getChartOption = (): echarts.EChartsOption => {
 const getDashboard3DChartOption = (): echarts.EChartsOption => {
   const light = isLightTheme.value
   const chartColors = getChartColors()
-  const dates = multiTrend.value.map((item) => item.date)
+  const sourceDates = multiTrend.value.map((item) => item.date)
+  const dates = sourceDates.length ? sourceDates : ['暂无数据']
   type MetricSeries = { name: string; values: number[] }
 
   const build3DOption = (title: string, metrics: MetricSeries[]) => {
-    const metricNames = metrics.map((item) => item.name)
-    const data = metrics.flatMap((metric, metricIndex) =>
+    const normalizedMetrics = metrics.length ? metrics : [{ name: '当前统计', values: dates.map(() => 0) }]
+    const metricNames = normalizedMetrics.map((item) => item.name)
+    const hasAnyValue = normalizedMetrics.some((metric) => metric.values.some((value) => value > 0))
+    const data = normalizedMetrics.flatMap((metric, metricIndex) =>
       dates.map((date, dateIndex) => {
         const color = chartColors[metricIndex % chartColors.length]!
         return {
@@ -339,6 +342,20 @@ const getDashboard3DChartOption = (): echarts.EChartsOption => {
           const date = dates[value[0]] ?? ''
           const metric = metricNames[value[1]] ?? ''
           return `${date}<br/>${metric}: ${value[2] ?? 0}`
+        }
+      },
+      graphic: hasAnyValue ? undefined : {
+        type: 'text',
+        left: 'center',
+        top: 'middle',
+        z: 100,
+        style: {
+          text: `${title}：当前统计为 0`,
+          fill: light ? '#1f5f91' : '#bdefff',
+          fontSize: 22,
+          fontWeight: 800,
+          textShadowBlur: light ? 0 : 18,
+          textShadowColor: 'rgba(60, 199, 255, 0.72)'
         }
       },
       xAxis3D: {
@@ -447,11 +464,7 @@ const getDashboard3DChartOption = (): echarts.EChartsOption => {
       ])
     case 'highIncidence':
       return build3DOption('高发案件类型', [
-        { name: '诈骗罪', values: multiTrend.value.map((item) => Math.round(item.highIncidenceCount * 0.34)) },
-        { name: '盗窃罪', values: multiTrend.value.map((item) => Math.round(item.highIncidenceCount * 0.26)) },
-        { name: '扰乱秩序', values: multiTrend.value.map((item) => Math.round(item.highIncidenceCount * 0.18)) },
-        { name: '相邻纠纷', values: multiTrend.value.map((item) => Math.round(item.highIncidenceCount * 0.12)) },
-        { name: '侵权纠纷', values: multiTrend.value.map((item) => Math.round(item.highIncidenceCount * 0.1)) }
+        { name: overview.value.highIncidenceTypes || '高发案件类型', values: multiTrend.value.map((item) => item.highIncidenceCount) }
       ])
     case 'riskAlert':
       return build3DOption('风险预警推送', [
@@ -459,16 +472,11 @@ const getDashboard3DChartOption = (): echarts.EChartsOption => {
       ])
     case 'procuratorate':
       return build3DOption('检察建议发送', [
-        { name: '刑事检察', values: multiTrend.value.map((item) => Math.round(item.procuratorateSuggestion * 0.36)) },
-        { name: '民事检察', values: multiTrend.value.map((item) => Math.round(item.procuratorateSuggestion * 0.26)) },
-        { name: '行政检察', values: multiTrend.value.map((item) => Math.round(item.procuratorateSuggestion * 0.22)) },
-        { name: '公益诉讼', values: multiTrend.value.map((item) => Math.round(item.procuratorateSuggestion * 0.16)) }
+        { name: '检察建议发送次数', values: multiTrend.value.map((item) => item.procuratorateSuggestion) }
       ])
     case 'legalPlan':
       return build3DOption('普法方案投递', [
-        { name: '线上推送', values: multiTrend.value.map((item) => Math.round(item.legalPlanDelivery * 0.46)) },
-        { name: '线下活动', values: multiTrend.value.map((item) => Math.round(item.legalPlanDelivery * 0.32)) },
-        { name: '社区宣讲', values: multiTrend.value.map((item) => Math.round(item.legalPlanDelivery * 0.22)) }
+        { name: '普法方案投递次数', values: multiTrend.value.map((item) => item.legalPlanDelivery) }
       ])
     default:
       return {}
@@ -560,84 +568,99 @@ onUnmounted(() => {
 /* ===== KPI 卡片条 ===== */
 .kpi-strip {
   display: flex;
-  gap: 16px;
+  gap: 18px;
 }
 
 .kpi-item {
+  --kpi-accent: #64d8ff;
   flex: 1;
   min-width: 0;
-  border-radius: 10px;
-  border: 1px solid rgba(93, 191, 255, 0.18);
-  background: linear-gradient(160deg, rgba(14, 39, 78, 0.82), rgba(8, 20, 44, 0.92));
-  padding: 0 0 18px;
+  position: relative;
+  padding: 22px 18px 20px;
   overflow: hidden;
-  transition: transform 0.2s;
+  border: 1px solid color-mix(in srgb, var(--kpi-accent) 40%, transparent);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 92% 86%, color-mix(in srgb, var(--kpi-accent) 13%, transparent), transparent 28%),
+    linear-gradient(145deg, color-mix(in srgb, var(--kpi-accent) 14%, transparent), transparent 50%),
+    linear-gradient(180deg, rgba(14, 39, 65, 0.84), rgba(7, 23, 40, 0.92));
+  box-shadow:
+    inset 0 0 26px color-mix(in srgb, var(--kpi-accent) 7%, transparent),
+    0 14px 28px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .kpi-item:hover {
   transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--kpi-accent) 58%, transparent);
+  box-shadow:
+    inset 0 0 28px color-mix(in srgb, var(--kpi-accent) 10%, transparent),
+    0 16px 30px rgba(0, 0, 0, 0.22),
+    0 0 22px color-mix(in srgb, var(--kpi-accent) 14%, transparent);
 }
 
-.kpi-accent {
-  height: 3px;
-  width: 100%;
-  margin-bottom: 14px;
+.kpi-item::before {
+  position: absolute;
+  inset: 0 18px auto;
+  height: 2px;
+  content: '';
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--kpi-accent), #eef2ee, var(--kpi-accent), transparent);
+  box-shadow: 0 0 13px color-mix(in srgb, var(--kpi-accent) 58%, transparent);
 }
 
-.kpi-red .kpi-accent   { background: linear-gradient(90deg, #e06c75, rgba(224,108,117,0.2)); }
-.kpi-cyan .kpi-accent   { background: linear-gradient(90deg, #5ad6ff, rgba(90,214,255,0.2)); }
-.kpi-orange .kpi-accent { background: linear-gradient(90deg, #ffb347, rgba(255,179,71,0.2)); }
-.kpi-yellow .kpi-accent { background: linear-gradient(90deg, #f5d862, rgba(245,216,98,0.2)); }
-.kpi-blue .kpi-accent   { background: linear-gradient(90deg, #5b9fd4, rgba(91,159,212,0.2)); }
-
-.kpi-red {
-  background: linear-gradient(160deg, rgba(78, 30, 42, 0.88), rgba(34, 14, 22, 0.94));
+.kpi-item::after {
+  position: absolute;
+  right: -18px;
+  bottom: -34px;
+  width: 96px;
+  height: 96px;
+  content: '';
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--kpi-accent) 28%, transparent);
+  border-radius: 50%;
+  box-shadow: inset 0 0 24px color-mix(in srgb, var(--kpi-accent) 8%, transparent);
+  opacity: 0.56;
 }
 
-.kpi-cyan {
-  background: linear-gradient(160deg, rgba(17, 52, 84, 0.86), rgba(9, 28, 50, 0.94));
-}
-
-.kpi-orange {
-  background: linear-gradient(160deg, rgba(82, 49, 18, 0.88), rgba(39, 23, 10, 0.94));
-}
-
-.kpi-yellow {
-  background: linear-gradient(160deg, rgba(74, 63, 21, 0.88), rgba(36, 30, 11, 0.94));
-}
-
-.kpi-blue {
-  background: linear-gradient(160deg, rgba(24, 52, 80, 0.88), rgba(11, 26, 41, 0.94));
-}
+.kpi-accent { display: none; }
+.kpi-red { --kpi-accent: #ff726b; }
+.kpi-cyan { --kpi-accent: #64d8ff; }
+.kpi-orange { --kpi-accent: #ff9b52; }
+.kpi-yellow { --kpi-accent: #f2c86f; }
+.kpi-blue { --kpi-accent: #5b9fd4; }
 
 .kpi-label {
-  font-size: 20px;
-  color: #7cc1ec;
-  padding: 0 16px;
-  margin-bottom: 8px;
+  position: relative;
+  z-index: 1;
+  margin-bottom: 18px;
+  padding: 0 10px;
+  color: color-mix(in srgb, var(--kpi-accent) 72%, #d9edf4);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.25;
   text-align: center;
-  transform: translateY(-10px);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--kpi-accent) 22%, transparent);
 }
 
 .kpi-value {
-  font-size: 32px;
-  font-weight: 800;
+  position: relative;
+  z-index: 1;
   padding: 0 16px;
+  color: var(--kpi-accent);
+  font-size: 40px;
+  font-weight: 800;
   line-height: 1;
   text-align: center;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 17px color-mix(in srgb, var(--kpi-accent) 50%, transparent);
 }
 
 .kpi-value-text {
-  font-size: 25px !important;
-  font-weight: 700;
-  padding-top: 6px;
+  font-size: 26px !important;
+  font-weight: 800;
+  line-height: 1.18;
 }
-
-.kpi-red .kpi-value   { color: #e8a0a5; }
-.kpi-cyan .kpi-value   { color: #5ad6ff; }
-.kpi-orange .kpi-value { color: #ffb347; }
-.kpi-yellow .kpi-value { color: #f5d862; }
-.kpi-blue .kpi-value   { color: #5b9fd4; }
 /* ===== /KPI ===== */
 
 .trend-card :deep(canvas) {
@@ -743,49 +766,24 @@ onUnmounted(() => {
 
 :global(body.theme-light) .dashboard .kpi-item {
   border-width: 1.5px !important;
-}
-
-:global(body.theme-light) .dashboard .kpi-red {
-  background: linear-gradient(160deg, rgba(255, 235, 238, 0.98), rgba(248, 213, 220, 0.98)) !important;
-}
-
-:global(body.theme-light) .dashboard .kpi-cyan {
-  background: linear-gradient(160deg, rgba(232, 247, 255, 0.98), rgba(204, 235, 252, 0.98)) !important;
-}
-
-:global(body.theme-light) .dashboard .kpi-orange {
-  background: linear-gradient(160deg, rgba(255, 244, 231, 0.98), rgba(252, 225, 194, 0.98)) !important;
-}
-
-:global(body.theme-light) .dashboard .kpi-yellow {
-  background: linear-gradient(160deg, rgba(255, 250, 230, 0.98), rgba(250, 238, 182, 0.98)) !important;
-}
-
-:global(body.theme-light) .dashboard .kpi-blue {
-  background: linear-gradient(160deg, rgba(235, 244, 255, 0.98), rgba(207, 227, 249, 0.98)) !important;
+  background:
+    radial-gradient(circle at 92% 86%, color-mix(in srgb, var(--kpi-accent) 13%, transparent), transparent 30%),
+    linear-gradient(145deg, color-mix(in srgb, var(--kpi-accent) 15%, transparent), rgba(255, 255, 255, 0.72) 54%),
+    linear-gradient(180deg, rgba(244, 249, 255, 0.96), rgba(220, 236, 255, 0.96)) !important;
+  box-shadow:
+    inset 0 0 22px color-mix(in srgb, var(--kpi-accent) 8%, transparent),
+    0 10px 20px rgba(48, 86, 104, 0.12) !important;
 }
 
 :global(body.theme-light) .dashboard .kpi-label {
-  color:rgb(30, 126, 215) !important;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-  background: rgba(226, 241, 253, 0.92) !important;
-  border: 1px solid rgba(96, 153, 205, 0.35) !important;
-  border-radius: 6px;
-  padding: 2px 8px;
-}
-
-:global(body.theme-light) .dashboard .kpi-value {
-  color: #0a2b48 !important;
+  color: color-mix(in srgb, var(--kpi-accent) 76%, #173f55) !important;
   text-shadow: none !important;
 }
 
-:global(body.theme-light) .dashboard .kpi-red .kpi-value { color: #9c2f3a !important; }
-:global(body.theme-light) .dashboard .kpi-cyan .kpi-value { color: #1a5a94 !important; }
-:global(body.theme-light) .dashboard .kpi-orange .kpi-value { color: #b55f1f !important; }
-:global(body.theme-light) .dashboard .kpi-yellow .kpi-value { color: #7a6f1f !important; }
-:global(body.theme-light) .dashboard .kpi-blue .kpi-value { color: #1a4a8a !important; }
+:global(body.theme-light) .dashboard .kpi-value {
+  color: color-mix(in srgb, var(--kpi-accent) 76%, #173f55) !important;
+  text-shadow: 0 0 14px color-mix(in srgb, var(--kpi-accent) 18%, transparent) !important;
+}
 
 :global(body.theme-light) .dashboard :deep(.arco-radio-group-button) {
   background: #e0f0ff !important;

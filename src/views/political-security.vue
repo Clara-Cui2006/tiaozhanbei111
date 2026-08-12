@@ -463,65 +463,99 @@ onUnmounted(() => {
 /* ===== KPI 卡片条：样式完全对标 index.vue ===== */
 .kpi-strip {
   display: flex;
-  gap: 16px;
+  gap: 18px;
   margin-top: 16px;
 }
 
 .kpi-item {
+  --kpi-accent: #64d8ff;
   flex: 1;
   min-width: 0;
-  border-radius: 10px;
-  border: 1px solid rgba(93, 191, 255, 0.18);
-  background: linear-gradient(160deg, rgba(14, 39, 78, 0.82), rgba(8, 20, 44, 0.92));
-  padding: 0 0 18px;
+  position: relative;
+  padding: 22px 18px 20px;
   overflow: hidden;
-  transition: transform 0.2s;
+  border: 1px solid color-mix(in srgb, var(--kpi-accent) 40%, transparent);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 92% 86%, color-mix(in srgb, var(--kpi-accent) 13%, transparent), transparent 28%),
+    linear-gradient(145deg, color-mix(in srgb, var(--kpi-accent) 14%, transparent), transparent 50%),
+    linear-gradient(180deg, rgba(14, 39, 65, 0.84), rgba(7, 23, 40, 0.92));
+  box-shadow:
+    inset 0 0 26px color-mix(in srgb, var(--kpi-accent) 7%, transparent),
+    0 14px 28px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .kpi-item:hover {
   transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--kpi-accent) 58%, transparent);
+  box-shadow:
+    inset 0 0 28px color-mix(in srgb, var(--kpi-accent) 10%, transparent),
+    0 16px 30px rgba(0, 0, 0, 0.22),
+    0 0 22px color-mix(in srgb, var(--kpi-accent) 14%, transparent);
 }
 
-.kpi-accent {
-  height: 3px;
-  width: 100%;
-  margin-bottom: 14px;
+.kpi-item::before {
+  position: absolute;
+  inset: 0 18px auto;
+  height: 2px;
+  content: '';
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--kpi-accent), #eef2ee, var(--kpi-accent), transparent);
+  box-shadow: 0 0 13px color-mix(in srgb, var(--kpi-accent) 58%, transparent);
 }
 
-.kpi-red .kpi-accent   { background: linear-gradient(90deg, #e06c75, rgba(224,108,117,0.2)); }
-.kpi-cyan .kpi-accent   { background: linear-gradient(90deg, #5ad6ff, rgba(90,214,255,0.2)); }
-.kpi-orange .kpi-accent { background: linear-gradient(90deg, #ffb347, rgba(255,179,71,0.2)); }
-.kpi-yellow .kpi-accent { background: linear-gradient(90deg, #f5d862, rgba(245,216,98,0.2)); }
-.kpi-blue .kpi-accent   { background: linear-gradient(90deg, #5b9fd4, rgba(91,159,212,0.2)); }
+.kpi-item::after {
+  position: absolute;
+  right: -18px;
+  bottom: -34px;
+  width: 96px;
+  height: 96px;
+  content: '';
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--kpi-accent) 28%, transparent);
+  border-radius: 50%;
+  box-shadow: inset 0 0 24px color-mix(in srgb, var(--kpi-accent) 8%, transparent);
+  opacity: 0.56;
+}
 
-.kpi-red { background: linear-gradient(160deg, rgba(78, 30, 42, 0.88), rgba(34, 14, 22, 0.94)); }
-.kpi-cyan { background: linear-gradient(160deg, rgba(17, 52, 84, 0.86), rgba(9, 28, 50, 0.94)); }
-.kpi-orange { background: linear-gradient(160deg, rgba(82, 49, 18, 0.88), rgba(39, 23, 10, 0.94)); }
-.kpi-yellow { background: linear-gradient(160deg, rgba(74, 63, 21, 0.88), rgba(36, 30, 11, 0.94)); }
-.kpi-blue { background: linear-gradient(160deg, rgba(24, 52, 80, 0.88), rgba(11, 26, 41, 0.94)); }
+.kpi-accent { display: none; }
+.kpi-red { --kpi-accent: #ff726b; }
+.kpi-cyan { --kpi-accent: #64d8ff; }
+.kpi-orange { --kpi-accent: #ff9b52; }
+.kpi-yellow { --kpi-accent: #f2c86f; }
+.kpi-blue { --kpi-accent: #5b9fd4; }
 
 .kpi-label {
-  font-size: 20px; /* 调大字号，对齐 index.vue */
-  color: #7cc1ec;
-  padding: 0 16px;
-  margin-bottom: 8px;
+  position: relative;
+  z-index: 1;
+  margin-bottom: 18px;
+  padding: 0 10px;
+  color: color-mix(in srgb, var(--kpi-accent) 72%, #d9edf4);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.25;
   text-align: center;
-  transform: translateY(-10px);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--kpi-accent) 22%, transparent);
 }
 
 .kpi-value {
-  font-size: 32px;
-  font-weight: 800;
+  position: relative;
+  z-index: 1;
   padding: 0 16px;
+  color: var(--kpi-accent);
+  font-size: 40px;
+  font-weight: 800;
   line-height: 1;
   text-align: center;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 17px color-mix(in srgb, var(--kpi-accent) 50%, transparent);
 }
 
 .kpi-value-text {
-  font-size: 24px !important; /* 调大字号，对齐 index.vue */
-  font-weight: 700;
-  padding-top: 6px;
-  line-height: 1.3;
+  font-size: 26px !important;
+  font-weight: 800;
+  line-height: 1.18;
 }
 
 .kpi-sub {
@@ -531,12 +565,6 @@ onUnmounted(() => {
   font-size: 13px;
   text-align: center;
 }
-
-.kpi-red .kpi-value   { color: #e8a0a5; }
-.kpi-cyan .kpi-value   { color: #5ad6ff; }
-.kpi-orange .kpi-value { color: #ffb347; }
-.kpi-yellow .kpi-value { color: #f5d862; }
-.kpi-blue .kpi-value   { color: #5b9fd4; }
 
 .chart-card {
   background: rgba(14, 39, 78, 0.78) !important;
@@ -1015,35 +1043,25 @@ onUnmounted(() => {
 }
 
 :global(body.theme-light .political-security-page .kpi-item) {
-  background: linear-gradient(180deg, #f4f9ff, #dcecff) !important;
-  border-color: #4a8ac4 !important;
-  box-shadow: 0 6px 16px rgba(42, 98, 158, 0.12) !important;
   border-width: 1.5px !important;
+  background:
+    radial-gradient(circle at 92% 86%, color-mix(in srgb, var(--kpi-accent) 13%, transparent), transparent 30%),
+    linear-gradient(145deg, color-mix(in srgb, var(--kpi-accent) 15%, transparent), rgba(255, 255, 255, 0.72) 54%),
+    linear-gradient(180deg, rgba(244, 249, 255, 0.96), rgba(220, 236, 255, 0.96)) !important;
+  box-shadow:
+    inset 0 0 22px color-mix(in srgb, var(--kpi-accent) 8%, transparent),
+    0 10px 20px rgba(48, 86, 104, 0.12) !important;
 }
-
-:global(body.theme-light .political-security-page .kpi-red) { background: linear-gradient(160deg, rgba(255, 235, 238, 0.98), rgba(248, 213, 220, 0.98)) !important; }
-:global(body.theme-light .political-security-page .kpi-cyan) { background: linear-gradient(160deg, rgba(232, 247, 255, 0.98), rgba(204, 235, 252, 0.98)) !important; }
-:global(body.theme-light .political-security-page .kpi-orange) { background: linear-gradient(160deg, rgba(255, 244, 231, 0.98), rgba(252, 225, 194, 0.98)) !important; }
-:global(body.theme-light .political-security-page .kpi-yellow) { background: linear-gradient(160deg, rgba(255, 250, 230, 0.98), rgba(250, 238, 182, 0.98)) !important; }
-:global(body.theme-light .political-security-page .kpi-blue) { background: linear-gradient(160deg, rgba(235, 244, 255, 0.98), rgba(207, 227, 249, 0.98)) !important; }
 
 :global(body.theme-light .political-security-page .kpi-label) {
-  color: rgb(30, 126, 215) !important;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-  background: rgba(226, 241, 253, 0.92) !important;
-  border: 1px solid rgba(96, 153, 205, 0.35) !important;
-  border-radius: 6px;
-  padding: 2px 8px;
+  color: color-mix(in srgb, var(--kpi-accent) 76%, #173f55) !important;
+  text-shadow: none !important;
 }
 
-:global(body.theme-light .political-security-page .kpi-value) { color: #0a2b48 !important; text-shadow: none !important; }
-:global(body.theme-light .political-security-page .kpi-red .kpi-value) { color: #9c2f3a !important; }
-:global(body.theme-light .political-security-page .kpi-cyan .kpi-value) { color: #1a5a94 !important; }
-:global(body.theme-light .political-security-page .kpi-orange .kpi-value) { color: #b55f1f !important; }
-:global(body.theme-light .political-security-page .kpi-yellow .kpi-value) { color: #7a6f1f !important; }
-:global(body.theme-light .political-security-page .kpi-blue .kpi-value) { color: #1a4a8a !important; }
+:global(body.theme-light .political-security-page .kpi-value) {
+  color: color-mix(in srgb, var(--kpi-accent) 76%, #173f55) !important;
+  text-shadow: 0 0 14px color-mix(in srgb, var(--kpi-accent) 18%, transparent) !important;
+}
 
 @media (max-width: 768px) {
   .kpi-strip { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -1053,7 +1071,7 @@ onUnmounted(() => {
   .review-metrics { grid-template-columns: 1fr; }
   .kpi-item { flex: none !important; }
   .kpi-item:last-child { grid-column: span 2; }
-  .kpi-label { font-size: 22px !important; transform: none !important; text-align: center !important; }
+  .kpi-label { font-size: 14px !important; transform: none !important; text-align: center !important; }
   .kpi-value { font-size: 22px !important; text-align: center !important; }
   .kpi-value-text { font-size: 13px !important; }
   .kpi-accent { height: 2px !important; margin-bottom: 10px !important; }

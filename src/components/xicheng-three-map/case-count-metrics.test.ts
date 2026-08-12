@@ -47,4 +47,18 @@ describe('case-count metrics', () => {
     expect(metrics['110102010']).toMatchObject({ name: '德胜街道', caseCount: 7, level: 1, color: '#1689C4' })
     expect(metrics['金融街街道']).toBe(metrics['110102011'])
   })
+
+  it('fills known streets without data as zero-case metrics', () => {
+    const metrics = buildStreetCaseMetrics(
+      [{ streetCode: '110102011', streetName: '金融街街道', caseCount: 23 }],
+      [
+        { adcode: '110102001', name: '西长安街街道' },
+        { adcode: '110102011', name: '金融街街道' }
+      ]
+    )
+
+    expect(metrics['110102001']).toMatchObject({ name: '西长安街街道', caseCount: 0, level: 1, color: '#1689C4' })
+    expect(metrics['西长安街街道']).toBe(metrics['110102001'])
+    expect(metrics['110102011']).toMatchObject({ caseCount: 23, level: 5, color: '#E94B5B' })
+  })
 })

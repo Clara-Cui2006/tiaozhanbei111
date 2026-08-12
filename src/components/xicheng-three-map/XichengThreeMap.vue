@@ -31,6 +31,14 @@ const findAdcode = (streetName: string) => {
 const findStreetName = (adcode: string) =>
   collection?.features.find((feature) => feature.properties.adcode === adcode)?.properties.name || ''
 
+const buildMetrics = (streets: StreetMapStreetStat[]) => buildStreetCaseMetrics(
+  streets,
+  collection?.features.map((feature) => ({
+    adcode: feature.properties.adcode,
+    name: feature.properties.name,
+  })) ?? [],
+)
+
 const syncSelection = (streetName: string, focus = false) => {
   const adcode = findAdcode(streetName)
   store.setSelected(adcode || null)
@@ -43,7 +51,7 @@ onMounted(async () => {
     collection = await loadStreetCollection('/maps/xicheng_15_streets_clean.geojson')
     scene = createMapScene(container.value, {
       collection,
-      metrics: buildStreetCaseMetrics(props.streets),
+      metrics: buildMetrics(props.streets),
       store,
       onSelect: (adcode) => {
         store.setSelected(adcode)
@@ -63,7 +71,7 @@ onMounted(async () => {
 
 watch(
   () => props.streets,
-  (streets) => scene?.updateMetrics(buildStreetCaseMetrics(streets)),
+  (streets) => scene?.updateMetrics(buildMetrics(streets)),
   { deep: true },
 )
 

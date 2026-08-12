@@ -156,6 +156,22 @@ CREATE TABLE IF NOT EXISTS legal_plans (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_legal_plans_status ON legal_plans(status);
+CREATE TABLE IF NOT EXISTS monthly_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  month TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  sections TEXT NOT NULL,
+  metrics TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('生成中','待审核','审核退回','已发布')),
+  generated_by_ai INTEGER NOT NULL DEFAULT 1,
+  created_by INTEGER NOT NULL,
+  reviewed_by INTEGER,
+  published_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_monthly_reports_month ON monthly_reports(month);
 """
 
 

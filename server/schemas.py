@@ -60,3 +60,18 @@ class ImportConfirmRequest(BaseModel):
 
 class GenericRecord(BaseModel):
     data: dict[str, Any]
+
+
+class MonthlyReportGenerateRequest(BaseModel):
+    month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+class MonthlyReportUpdateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    summary: str = Field(min_length=1, max_length=5000)
+    sections: dict[str, list[str]]
+    metrics: dict[str, Any]
+
+
+class MonthlyReportTransitionRequest(BaseModel):
+    status: Literal["待审核", "审核退回", "已发布"]

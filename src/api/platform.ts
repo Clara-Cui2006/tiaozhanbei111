@@ -24,6 +24,8 @@ import type {
   OfficialDynamicPayload,
   ProcuratorateFeedItem,
   ProcuratorateMonthlyTrend,
+  ProcuratorateMonthlyReport,
+  MonthlyReportStatus,
   ProcuratorateSuggestion,
   ProcuratorateSuggestionInput,
   PushTask,
@@ -2277,5 +2279,78 @@ export async function fetchXichengStreetMapDetail(streetName: string, filters?: 
   const { data } = await http.get<StreetMapDetail>('/dashboard/street-map/detail', {
     params: { streetName, ...filters }
   })
+  return data
+}
+
+const monthlyReportSections = {
+  recentChanges: ['风险事项总量较上月下降4.2%，总体态势平稳', '高发问题类型集中度上升，应持续跟踪', '重点街道间风险波动差异较为明显'],
+  highFrequencyIssues: ['物业服务合同纠纷数量居首', '邻里关系纠纷仍处于高位', '电信网络诈骗呈现持续性风险'],
+  keyStreets: ['广安门内街道风险事项6件，环比上升20.0%', '牛街街道风险事项5件，环比下降16.7%', '大栅栏街道风险事项4件，环比上升33.3%'],
+  keyGroups: ['老年人相关事项占比34.8%', '务工人员相关事项占比26.1%', '中青年群体相关事项占比21.7%', '未成年人相关事项占比17.4%'],
+  keyIndustries: ['物业服务领域占比34.8%', '餐饮服务领域占比21.7%', '互联网平台领域占比17.4%', '房屋租赁领域占比13.0%'],
+  causeAnalysis: ['物业服务矛盾相对集中，基层沟通机制仍需完善', '部分群体法治意识薄弱，纠纷前端化解不足', '新业态发展较快，相关规则指引需及时跟进'],
+  recommendations: ['加强与街道社区协同，推动物业矛盾源头治理', '围绕高发问题开展普法宣传，提升重点群体法治意识', '聚焦重点行业和新业态，加强风险研判与法律监督', '持续跟踪重点人群，完善矛盾预警与跨部门联动机制']
+}
+
+let mockMonthlyReport: ProcuratorateMonthlyReport = {
+  id: 1,
+  month: '2026-07',
+  title: '西城区社区法治风险月度简报',
+  summary: '本月共识别社区法治风险事件23件，较上月下降4.2%；重点关注物业纠纷、邻里纠纷、电信网络诈骗等问题。',
+  status: '待审核',
+  sections: structuredClone(monthlyReportSections),
+  metrics: {
+    total: 23,
+    monthOverMonth: -4.2,
+    issues: [
+      { name: '物业服务合同纠纷', value: 8, percentage: 34.8 }, { name: '邻里关系纠纷', value: 5, percentage: 21.7 },
+      { name: '电信网络诈骗', value: 4, percentage: 17.4 }, { name: '劳动争议', value: 3, percentage: 13 }, { name: '消费纠纷', value: 3, percentage: 13 }
+    ],
+    streets: [
+      { name: '广安门内街道', value: 6, percentage: 26.1, change: 20 }, { name: '牛街街道', value: 5, percentage: 21.7, change: -16.7 }, { name: '大栅栏街道', value: 4, percentage: 17.4, change: 33.3 }
+    ],
+    groups: [
+      { name: '老年人', value: 8, percentage: 34.8 }, { name: '务工人员', value: 6, percentage: 26.1 }, { name: '中青年群体', value: 5, percentage: 21.7 }, { name: '未成年人', value: 4, percentage: 17.4 }
+    ],
+    industries: [
+      { name: '物业服务', value: 8, percentage: 34.8 }, { name: '餐饮服务', value: 5, percentage: 21.7 }, { name: '互联网平台', value: 4, percentage: 17.4 }, { name: '房屋租赁', value: 3, percentage: 13 }, { name: '其他行业', value: 3, percentage: 13 }
+    ],
+    trend: [16, 18, 21, 17, 24, 20, 23, 19, 22, 18, 21, 23]
+  },
+  generatedByAi: true,
+  updatedAt: '2026-08-12 15:00:00',
+  publishedAt: null
+}
+
+export async function fetchProcuratorateMonthlyReport(month: string): Promise<ProcuratorateMonthlyReport> {
+  if (useMock) return Promise.resolve({ ...structuredClone(mockMonthlyReport), month })
+  const { data } = await http.get<ProcuratorateMonthlyReport>(`/procuratorate/monthly-reports/${month}`)
+  return data
+}
+
+export async function generateProcuratorateMonthlyReport(month: string): Promise<ProcuratorateMonthlyReport> {
+  if (useMock) {
+    mockMonthlyReport = { ...mockMonthlyReport, month, status: '待审核', updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }) }
+    return Promise.resolve(structuredClone(mockMonthlyReport))
+  }
+  const { data } = await http.post<ProcuratorateMonthlyReport>('/procuratorate/monthly-reports/generate', { month })
+  return data
+}
+
+export async function saveProcuratorateMonthlyReport(report: ProcuratorateMonthlyReport): Promise<ProcuratorateMonthlyReport> {
+  if (useMock) {
+    mockMonthlyReport = JSON.parse(JSON.stringify(report)) as ProcuratorateMonthlyReport
+    return Promise.resolve(structuredClone(mockMonthlyReport))
+  }
+  const { data } = await http.put<ProcuratorateMonthlyReport>(`/procuratorate/monthly-reports/${report.id}`, report)
+  return data
+}
+
+export async function transitionProcuratorateMonthlyReport(id: number, status: MonthlyReportStatus): Promise<ProcuratorateMonthlyReport> {
+  if (useMock) {
+    mockMonthlyReport = { ...mockMonthlyReport, status, updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }), publishedAt: status === '已发布' ? new Date().toISOString() : null }
+    return Promise.resolve(structuredClone(mockMonthlyReport))
+  }
+  const { data } = await http.post<ProcuratorateMonthlyReport>(`/procuratorate/monthly-reports/${id}/transition`, { status })
   return data
 }

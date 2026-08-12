@@ -3,6 +3,13 @@
     <BackHome />
     <a-page-header class="page-header" title="检察建议" subtitle="Procuratorate Recommend" />
 
+    <button class="monthly-report-entry" @click="router.push('/procuratorate-suggestion/monthly-report')">
+      <span class="entry-kicker">AI MONTHLY BRIEFING</span>
+      <span class="entry-title">检察业务月报智能生成</span>
+      <span class="entry-flow"><b>数据归集</b><i>→</i><b>风险识别</b><i>→</i><b>自动生成初稿</b><i>→</i><b>人工审核发布</b></span>
+      <span class="entry-action">进入月报工作台 →</span>
+    </button>
+
     <a-card class="content-card">
       <template #title>
         <div class="card-title">
@@ -334,6 +341,8 @@ onUnmounted(() => {
 .page-header {
   margin-bottom: 20px;
 }
+
+.monthly-report-entry{position:relative;width:100%;min-height:122px;margin:0 0 20px;padding:20px 230px 20px 26px;border:1px solid rgba(105,190,255,.58);border-radius:12px;text-align:left;color:#eff9ff;cursor:pointer;overflow:hidden;background:radial-gradient(circle at 80% 20%,rgba(45,153,255,.3),transparent 30%),linear-gradient(120deg,#082656,#074c9f);box-shadow:0 12px 28px rgba(0,9,35,.26)}.monthly-report-entry:before{content:"";position:absolute;right:40px;top:-70px;width:250px;height:250px;border:1px solid rgba(120,205,255,.2);border-radius:50%;box-shadow:0 0 0 25px rgba(120,205,255,.05),0 0 0 55px rgba(120,205,255,.04)}.entry-kicker,.entry-title,.entry-flow{display:block;position:relative}.entry-kicker{color:#e8c66e;font-size:11px;letter-spacing:2px}.entry-title{font-family:"STKaiti","KaiTi",serif;font-size:28px;font-weight:700;color:#f5db8a;margin:5px 0 10px}.entry-flow{display:flex;align-items:center;gap:10px;font-size:13px}.entry-flow i{font-style:normal;color:#60d7ff}.entry-action{position:absolute;right:28px;bottom:24px;border:1px solid rgba(255,224,143,.72);border-radius:6px;padding:10px 16px;color:#ffe199;background:rgba(2,35,85,.7);font-weight:700}.monthly-report-entry:hover{transform:translateY(-2px);border-color:#e8c66e;box-shadow:0 16px 34px rgba(0,15,55,.38)}
 
 .content-card {
   margin-bottom: 20px;

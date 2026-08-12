@@ -274,6 +274,36 @@ export interface ProcuratorateMonthlyTrend {
   count: number
 }
 
+export type MonthlyReportStatus = '生成中' | '待审核' | '审核退回' | '已发布'
+
+export interface MonthlyReportMetric {
+  name: string
+  value: number
+  percentage: number
+  change?: number
+}
+
+export interface ProcuratorateMonthlyReport {
+  id: number
+  month: string
+  title: string
+  summary: string
+  status: MonthlyReportStatus
+  sections: Record<string, string[]>
+  metrics: {
+    total: number
+    monthOverMonth: number
+    issues: MonthlyReportMetric[]
+    streets: MonthlyReportMetric[]
+    groups: MonthlyReportMetric[]
+    industries: MonthlyReportMetric[]
+    trend: number[]
+  }
+  generatedByAi: boolean
+  updatedAt: string
+  publishedAt?: string | null
+}
+
 export interface LegalRecommendationV2 {
   id: number
   title: string

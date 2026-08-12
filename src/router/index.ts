@@ -14,6 +14,7 @@ import LegalPlan from '../views/legal-plan.vue'
 import ProcuratorateSuggestion from '../views/procuratorate-suggestion.vue'
 import ProcuratorateSuggestionDetail from '../views/procuratorate-suggestion-detail.vue'
 import ProcuratorateSuggestionForm from '../views/procuratorate-suggestion-form.vue'
+import ProcuratorateMonthlyReport from '../views/procuratorate-monthly-report.vue'
 import PoliticalSecurity from '../views/political-security.vue'
 import LegalPlanForm from '../views/legal-plan-form.vue'
 import Login from '../views/login.vue'
@@ -92,6 +93,12 @@ const routes = [
     name: 'ProcuratorateSuggestionNew',
     component: ProcuratorateSuggestionForm,
     meta: permissionMeta(PERMISSION_RULES.procuratorateWriteAny)
+  },
+  {
+    path: '/procuratorate-suggestion/monthly-report',
+    name: 'ProcuratorateMonthlyReport',
+    component: ProcuratorateMonthlyReport,
+    meta: permissionMeta(PERMISSION_RULES.procuratorateReadAny)
   },
   {
     path: '/procuratorate-suggestion/edit/:id',

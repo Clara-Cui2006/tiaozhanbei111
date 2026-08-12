@@ -15,7 +15,9 @@ from .config import settings
 from .database import connect, init_database, row_to_dict, utc_now, write_audit
 from .importer import parse_import
 from .schemas import (AIRequest, ChangePasswordRequest, LegalPlanPayload,
-                      LoginRequest, SettingsPayload, SuggestionPayload, UserCreate)
+                      LoginRequest, MonthlyReportGenerateRequest,
+                      MonthlyReportTransitionRequest, MonthlyReportUpdateRequest,
+                      SettingsPayload, SuggestionPayload, UserCreate)
 from .security import create_token, hash_password, verify_password
 
 settings.validate()
@@ -518,6 +520,125 @@ def create_suggestion(payload: SuggestionPayload, request: Request,
         row = row_to_dict(db.execute("SELECT * FROM suggestions WHERE id=?", (cursor.lastrowid,)).fetchone())
     write_audit(user=user, action="CREATE", resource_type="suggestion", resource_id=row["id"], detail={}, client_ip=client_ip(request), success=True)
     return _suggestion_dict(row)
+
+
+MONTHLY_SECTION_KEYS = ["recentChanges", "highFrequencyIssues", "keyStreets", "keyGroups", "keyIndustries", "causeAnalysis", "recommendations"]
+MONTHLY_TRANSITIONS = {"生成中": {"待审核"}, "待审核": {"审核退回", "已发布"}, "审核退回": {"待审核"}, "已发布": set()}
+
+
+def _monthly_report_dict(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"], "month": row["month"], "title": row["title"], "summary": row["summary"],
+        "sections": json.loads(row["sections"]), "metrics": json.loads(row["metrics"]), "status": row["status"],
+        "generatedByAi": bool(row["generated_by_ai"]), "updatedAt": row["updated_at"], "publishedAt": row["published_at"]
+    }
+
+
+def _monthly_aggregate(month: str, user: dict[str, Any]) -> dict[str, Any]:
+    scope, params = _case_scope(user)
+    with connect() as db:
+        rows = [dict(row) for row in db.execute(
+            f"SELECT category,street_name,key_groups,key_industries,governance_themes FROM cases WHERE {scope} AND substr(COALESCE(accepted_date, created_at),1,7)=?",
+            (*params, month),
+        ).fetchall()]
+    total = len(rows)
+    def ranked(field: str, fallback: str) -> list[dict[str, Any]]:
+        counts: dict[str, int] = {}
+        for row in rows:
+            raw = row.get(field)
+            values: list[str] = []
+            if raw:
+                try:
+                    parsed = json.loads(raw)
+                    values = parsed if isinstance(parsed, list) else [str(parsed)]
+                except (TypeError, ValueError):
+                    values = [item.strip() for item in str(raw).replace("、", ",").split(",") if item.strip()]
+            if not values and field in {"category", "street_name"}: values = [str(raw or fallback)]
+            for value in values: counts[value] = counts.get(value, 0) + 1
+        return [{"name": name, "value": value, "percentage": round(value * 100 / total, 1) if total else 0} for name, value in sorted(counts.items(), key=lambda item: item[1], reverse=True)[:5]]
+    return {"total": total, "monthOverMonth": 0, "issues": ranked("governance_themes", "其他问题"), "streets": ranked("street_name", "待确认街道"), "groups": ranked("key_groups", "其他人群"), "industries": ranked("key_industries", "其他行业"), "trend": []}
+
+
+def _fallback_monthly_content(month: str, metrics: dict[str, Any]) -> dict[str, Any]:
+    def lines(key: str, empty: str) -> list[str]:
+        values = metrics.get(key) or []
+        return [f"{item['name']}相关事项{item['value']}件，占比{item['percentage']}%" for item in values] or [empty]
+    return {
+        "title": "西城区社区法治风险月度简报",
+        "summary": f"{month}共汇总授权范围内风险事项{metrics['total']}件。本简报由平台依据已确认数据生成，供检察机关内部审核参考。",
+        "sections": {
+            "recentChanges": [f"本月汇总风险事项{metrics['total']}件，数据变化需结合上期口径人工复核"],
+            "highFrequencyIssues": lines("issues", "本月暂无可归类的高发问题数据"),
+            "keyStreets": lines("streets", "本月暂无已确认唯一街道归属数据"),
+            "keyGroups": lines("groups", "本月暂无可用于汇总的重点人群标签"),
+            "keyIndustries": lines("industries", "本月暂无可用于汇总的重点行业标签"),
+            "causeAnalysis": ["原因分析需由承办检察官结合案件材料和治理背景补充审核"],
+            "recommendations": ["建议围绕高频问题开展专项核验并完善跨部门协同机制", "建议持续跟踪重点街道和重点行业变化，形成闭环治理台账"]
+        }
+    }
+
+
+@app.get("/procuratorate/monthly-reports/{month}")
+def monthly_report(month: str, user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
+    with connect() as db:
+        row = row_to_dict(db.execute("SELECT * FROM monthly_reports WHERE month=?", (month,)).fetchone())
+    if not row: raise HTTPException(status_code=404, detail="该月份尚未生成月报")
+    return _monthly_report_dict(row)
+
+
+@app.post("/procuratorate/monthly-reports/generate")
+async def generate_monthly_report(payload: MonthlyReportGenerateRequest, request: Request,
+                                  user: dict[str, Any] = Depends(require_permission("material:edit"))) -> dict[str, Any]:
+    metrics = _monthly_aggregate(payload.month, user)
+    content = _fallback_monthly_content(payload.month, metrics)
+    generated_by_ai = False
+    try:
+        prompt = "请根据以下脱敏汇总生成月报JSON，必须包含title、summary和sections；sections必须包含" + ",".join(MONTHLY_SECTION_KEYS) + "。数据：" + json.dumps(metrics, ensure_ascii=False)
+        result = await generate(user=user, module="monthlyReport", prompt=prompt, case_ids=[])
+        raw = result["content"].strip().removeprefix("```json").removesuffix("```").strip()
+        parsed = json.loads(raw)
+        if all(key in parsed.get("sections", {}) for key in MONTHLY_SECTION_KEYS):
+            content = parsed
+            generated_by_ai = True
+    except (HTTPException, ValueError, TypeError):
+        pass
+    now = utc_now()
+    with connect() as db:
+        db.execute("INSERT INTO monthly_reports(month,title,summary,sections,metrics,status,generated_by_ai,created_by,created_at,updated_at) VALUES(?,?,?,?,?,'待审核',?,?,?,?) ON CONFLICT(month) DO UPDATE SET title=excluded.title,summary=excluded.summary,sections=excluded.sections,metrics=excluded.metrics,status='待审核',generated_by_ai=excluded.generated_by_ai,updated_at=excluded.updated_at",
+                   (payload.month, content["title"], content["summary"], json.dumps(content["sections"], ensure_ascii=False), json.dumps(metrics, ensure_ascii=False), int(generated_by_ai), user["id"], now, now))
+        row = row_to_dict(db.execute("SELECT * FROM monthly_reports WHERE month=?", (payload.month,)).fetchone())
+    write_audit(user=user, action="GENERATE", resource_type="monthly_report", resource_id=row["id"], detail={"month": payload.month, "generatedByAi": generated_by_ai}, client_ip=client_ip(request), success=True)
+    return _monthly_report_dict(row)
+
+
+@app.put("/procuratorate/monthly-reports/{report_id}")
+def update_monthly_report(report_id: int, payload: MonthlyReportUpdateRequest, request: Request,
+                          user: dict[str, Any] = Depends(require_permission("material:edit"))) -> dict[str, Any]:
+    if any(not payload.sections.get(key) for key in MONTHLY_SECTION_KEYS): raise HTTPException(status_code=422, detail="月报七个章节均不能为空")
+    with connect() as db:
+        current = row_to_dict(db.execute("SELECT * FROM monthly_reports WHERE id=?", (report_id,)).fetchone())
+        if not current: raise HTTPException(status_code=404, detail="月报不存在")
+        if current["status"] == "已发布": raise HTTPException(status_code=409, detail="已发布月报不可直接修改")
+        db.execute("UPDATE monthly_reports SET title=?,summary=?,sections=?,metrics=?,updated_at=? WHERE id=?", (payload.title, payload.summary, json.dumps(payload.sections, ensure_ascii=False), json.dumps(payload.metrics, ensure_ascii=False), utc_now(), report_id))
+        row = row_to_dict(db.execute("SELECT * FROM monthly_reports WHERE id=?", (report_id,)).fetchone())
+    write_audit(user=user, action="UPDATE", resource_type="monthly_report", resource_id=report_id, detail={}, client_ip=client_ip(request), success=True)
+    return _monthly_report_dict(row)
+
+
+@app.post("/procuratorate/monthly-reports/{report_id}/transition")
+def transition_monthly_report(report_id: int, payload: MonthlyReportTransitionRequest, request: Request,
+                              user: dict[str, Any] = Depends(require_permission("material:edit"))) -> dict[str, Any]:
+    if payload.status in {"审核退回", "已发布"} and "material:publish" not in permissions_for(user):
+        raise HTTPException(status_code=403, detail="未取得月报审核发布权限")
+    with connect() as db:
+        current = row_to_dict(db.execute("SELECT * FROM monthly_reports WHERE id=?", (report_id,)).fetchone())
+        if not current: raise HTTPException(status_code=404, detail="月报不存在")
+        if payload.status not in MONTHLY_TRANSITIONS[current["status"]]: raise HTTPException(status_code=409, detail="当前状态不允许执行该操作")
+        published_at = utc_now() if payload.status == "已发布" else current["published_at"]
+        db.execute("UPDATE monthly_reports SET status=?,reviewed_by=?,published_at=?,updated_at=? WHERE id=?", (payload.status, user["id"], published_at, utc_now(), report_id))
+        row = row_to_dict(db.execute("SELECT * FROM monthly_reports WHERE id=?", (report_id,)).fetchone())
+    write_audit(user=user, action="PUBLISH" if payload.status == "已发布" else "REVIEW", resource_type="monthly_report", resource_id=report_id, detail={"status": payload.status}, client_ip=client_ip(request), success=True)
+    return _monthly_report_dict(row)
 
 
 @app.get("/site/footer")

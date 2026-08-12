@@ -267,6 +267,45 @@ def _month_expr(field: str = "accepted_date") -> str:
     return f"substr(COALESCE(NULLIF({field},''), created_at),1,7)"
 
 
+def _parse_month(value: str | None) -> tuple[int, int] | None:
+    if not value:
+        return None
+    try:
+        year, month = value[:7].split("-")
+        return int(year), int(month)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _shift_month(month: str | None, delta: int) -> str | None:
+    parsed = _parse_month(month)
+    if not parsed:
+        return None
+    year, value = parsed
+    index = year * 12 + value - 1 + delta
+    return f"{index // 12:04d}-{index % 12 + 1:02d}"
+
+
+def _quarter_bounds(month: str | None, delta: int = 0) -> tuple[str, str] | None:
+    parsed = _parse_month(month)
+    if not parsed:
+        return None
+    year, value = parsed
+    quarter_index = year * 4 + (value - 1) // 3 + delta
+    q_year = quarter_index // 4
+    q = quarter_index % 4
+    start_month = q * 3 + 1
+    end_month = start_month + 2
+    return f"{q_year:04d}-{start_month:02d}", f"{q_year:04d}-{end_month:02d}"
+
+
+def _change_pair(current: int, previous: int | None) -> tuple[int | None, float | None]:
+    if previous is None:
+        return None, None
+    change = current - previous
+    return change, None if previous == 0 else change / previous
+
+
 def _risk_level_by_score(score: int) -> str:
     if score >= 80:
         return "高"
@@ -730,7 +769,31 @@ def street_detail(streetName: str, period: str = "30d", caseType: str = "all", g
         trend_rows = db.execute(f"""SELECT substr(COALESCE(NULLIF(accepted_date,''), created_at),1,7) month,COUNT(*) count
                                     FROM cases WHERE {where} AND street_status='已确认街道' AND street_name=?
                                     GROUP BY month ORDER BY month LIMIT 18""", (*params, streetName)).fetchall()
+        current_month = db.execute(f"""SELECT MAX(substr(COALESCE(NULLIF(accepted_date,''), created_at),1,7))
+                                       FROM cases WHERE {where} AND street_status='已确认街道' AND street_name=?""",
+                                   (*params, streetName)).fetchone()[0]
+        previous_month = _shift_month(current_month, -1)
+        current_month_count = db.execute(f"""SELECT COUNT(*) FROM cases
+                                             WHERE {where} AND street_status='已确认街道' AND street_name=?
+                                             AND substr(COALESCE(NULLIF(accepted_date,''), created_at),1,7)=?""",
+                                         (*params, streetName, current_month)).fetchone()[0] if current_month else None
+        previous_month_count = db.execute(f"""SELECT COUNT(*) FROM cases
+                                              WHERE {where} AND street_status='已确认街道' AND street_name=?
+                                              AND substr(COALESCE(NULLIF(accepted_date,''), created_at),1,7)=?""",
+                                          (*params, streetName, previous_month)).fetchone()[0] if previous_month else None
+        current_quarter = _quarter_bounds(current_month)
+        previous_quarter = _quarter_bounds(current_month, -1)
+        current_quarter_count = db.execute(f"""SELECT COUNT(*) FROM cases
+                                               WHERE {where} AND street_status='已确认街道' AND street_name=?
+                                               AND substr(COALESCE(NULLIF(accepted_date,''), created_at),1,7) BETWEEN ? AND ?""",
+                                           (*params, streetName, *current_quarter)).fetchone()[0] if current_quarter else None
+        previous_quarter_count = db.execute(f"""SELECT COUNT(*) FROM cases
+                                                WHERE {where} AND street_status='已确认街道' AND street_name=?
+                                                AND substr(COALESCE(NULLIF(accepted_date,''), created_at),1,7) BETWEEN ? AND ?""",
+                                            (*params, streetName, *previous_quarter)).fetchone()[0] if previous_quarter else None
     cases = [dict(row) for row in case_rows]
+    month_change, month_rate = _change_pair(current_month_count or 0, previous_month_count)
+    quarter_change, quarter_rate = _change_pair(current_quarter_count or 0, previous_quarter_count)
     theme_counts: dict[str, int] = {}
     group_counts: dict[str, int] = {}
     industry_counts: dict[str, int] = {}
@@ -746,10 +809,10 @@ def street_detail(streetName: str, period: str = "30d", caseType: str = "all", g
         "streetCode": STREET_CODES.get(streetName, streetName),
         "streetName": streetName,
         "caseCount": total,
-        "momChangeCount": None,
-        "momRate": None,
-        "yoyChangeCount": None,
-        "yoyRate": None,
+        "momChangeCount": month_change,
+        "momRate": month_rate,
+        "yoyChangeCount": quarter_change,
+        "yoyRate": quarter_rate,
         "topCaseTypes": [{"name": r["name"] or "未填", "count": r["count"], "rate": (r["count"] / total if total else 0)} for r in categories],
         "topGovernanceIssues": [{"name": name, "count": count} for name, count in sorted(theme_counts.items(), key=lambda item: item[1], reverse=True)[:5]],
         "keyGroups": [{"label": name, "count": count} for name, count in sorted(group_counts.items(), key=lambda item: item[1], reverse=True)[:5]],

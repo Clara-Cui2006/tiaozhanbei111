@@ -24,14 +24,14 @@
       </div>
     </div>
 
-    <a-alert class="security-alert" type="warning">仅允许导入院内批准的数据文件。当前导入口径以检察业务系统导出的多工作表 Excel 为准，上传后先进入暂存校验区，人工确认前不参与任何统计。</a-alert>
+    <a-alert class="security-alert" type="warning">仅允许导入院内批准的数据文件。当前支持业务系统宽表与政治安全特殊案件简表，上传后先进入暂存校验区，人工确认前不参与任何统计。</a-alert>
 
     <a-card title="第一步：选择文件" :bordered="false" class="operation-card operation-card--cyan">
       <div class="upload-workbench">
         <div class="upload-icon" aria-hidden="true"><icon-upload /></div>
         <div class="upload-copy">
           <strong>{{ selectedFile?.name || '尚未选择数据文件' }}</strong>
-          <span>{{ selectedFile ? '文件已进入本地暂存，等待规则校验' : '优先支持业务系统导出的 XLSX 多工作表文件，单文件不超过 20MB' }}</span>
+          <span>{{ selectedFile ? '文件已进入本地暂存，等待规则校验' : '支持业务系统 XLSX 宽表，也支持政治安全特殊案件表头，单文件不超过 20MB' }}</span>
         </div>
         <div class="upload-actions">
           <label class="file-select-button" for="case-data-file"><icon-file /> {{ selectedFile ? '重新选择' : '选择文件' }}</label>
@@ -43,9 +43,9 @@
         </div>
       </div>
       <div class="rule-list">
-        <p class="hint"><span>01</span>按业务系统导出宽表读取全部工作表；核心字段取部门受案号、案件名称、承办部门、案件类别。</p>
-        <p class="hint"><span>02</span>地址字段自动识别西城街道，生成已确认街道、跨街道案件、待确认地址、与西城无地域关联四类归属状态。</p>
-        <p class="hint"><span>03</span>移送案由、涉嫌案由、审结案由、案件性质等会自动映射为案由；涉外、未检、专项活动、政治安全等字段会进入标签与研判口径。</p>
+        <p class="hint"><span>01</span>业务系统宽表核心字段取部门受案号、案件名称、承办部门、案件类别；政治安全特殊案件简表可使用序号、案件名称、姓名、性别、特殊身份、涉案地点、是否西城户籍、移送时间、案由、简要案情。</p>
+        <p class="hint"><span>02</span>政治安全特殊案件简表会自动生成内部案件编号，默认业务条线为政治安全专项、案件类别为政治安全特殊案件，并进入待人工复核口径。</p>
+        <p class="hint"><span>03</span>地址字段自动识别西城街道；案由映射为行为内容，特殊身份映射为涉及主体/重点专题，简要案情进入案件摘要。</p>
       </div>
     </a-card>
     <a-card v-if="batch" title="第二步：校验结果" :bordered="false" class="operation-card operation-card--gold result-card">

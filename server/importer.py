@@ -12,6 +12,18 @@ from typing import Any
 from openpyxl import load_workbook
 
 REQUIRED_FIELDS = ("案件编号", "案件名称", "业务条线", "案件类别")
+SPECIAL_POLITICAL_FIELDS = (
+    "序号",
+    "案件名称",
+    "姓名",
+    "性别",
+    "特殊身份",
+    "涉案地点（非西城区标注具体哪个外区、外省）",
+    "是否西城户籍",
+    "移送时间",
+    "案由",
+    "简要案情(一句话）",
+)
 ALLOWED_STREET_STATUS = {"已确认街道", "待确认地址", "跨街道案件", "与西城无地域关联"}
 ALLOWED_TRANSFER_STATUS = {"未形成线索", "系统研判", "人工复核", "研判确认", "内部移送", "办理反馈", "纳入统计"}
 ALLOWED_POLITICAL_REVIEW_STATUS = {"不属于政治安全", "待人工复核", "人工研判", "研判确认", "纳入统计"}
@@ -113,9 +125,9 @@ def _subject_from_row(row: dict[str, Any], case_number: str) -> dict[str, Any] |
         "gender": _normalize_gender(gender_raw),
         "occupation": _first_text(row, "职业", "工作单位/所在学校", "工作单位") or None,
         "special_identity": _first_text(row, "特殊身份", "身份", "其他关注身份") or None,
-        "is_resident": _first_text(row, "是否常住居民") == "是" if _first_text(row, "是否常住居民") else None,
-        "crime": _first_text(row, "涉及罪名", "罪名", "移送案由", "涉嫌案由", "审结案由") or None,
-        "summary": _first_text(row, "案情摘要", "案件摘要", "简要案情", "附注") or None,
+        "is_resident": _normalize_bool(_first_text(row, "是否常住居民", "是否西城户籍")),
+        "crime": _first_text(row, "涉及罪名", "罪名", "案由", "移送案由", "涉嫌案由", "审结案由") or None,
+        "summary": _first_text(row, "案情摘要", "案件摘要", "简要案情", "简要案情(一句话）", "附注") or None,
     }
 
 
@@ -140,6 +152,37 @@ def _split_tags(raw: str) -> list[str]:
         for item in raw.replace("，", ",").replace("、", ",").replace("；", ",").replace(";", ",").replace("\n", ",").split(",")
         if item.strip() and item.strip() not in EMPTY_VALUES
     ]
+
+
+def _normalize_bool(raw: str) -> bool | None:
+    value = _clean(raw).lower()
+    if not value or value in EMPTY_VALUES:
+        return None
+    if value in {"是", "有", "属实", "true", "yes", "y", "1"}:
+        return True
+    if value in {"否", "无", "false", "no", "n", "0"}:
+        return False
+    return None
+
+
+def _is_special_political_row(row: dict[str, Any]) -> bool:
+    headers = {key for key in row.keys() if not key.startswith("__")}
+    matched = sum(1 for field in SPECIAL_POLITICAL_FIELDS if field in headers)
+    return matched >= 7 and bool(_first_text(row, "案件名称", "案由"))
+
+
+def _generated_special_case_number(row: dict[str, Any], sheet: str, number: int) -> str:
+    source = "|".join([
+        sheet,
+        _first_text(row, "序号"),
+        _first_text(row, "案件名称"),
+        _first_text(row, "姓名"),
+        _first_text(row, "移送时间"),
+        _first_text(row, "案由"),
+        str(number),
+    ])
+    digest = hashlib.sha1(source.encode("utf-8")).hexdigest()[:12].upper()
+    return f"PS-{digest}"
 
 
 def _has_value(row: dict[str, Any], field: str) -> bool:
@@ -186,8 +229,9 @@ def _street_fields(row: dict[str, Any], address: str) -> tuple[str, str | None]:
 def _governance_themes(row: dict[str, Any]) -> list[str]:
     themes = _list_text(row, "治理主题标签")
     _append_unique(themes, _text(row, "专项活动名称"), _text(row, "专项活动重点工作"), _text(row, "案件性质"), _text(row, "专业化类型"))
-    if _is_yes(row, "涉政治安全类案件"):
+    if _is_yes(row, "涉政治安全类案件") or _is_special_political_row(row):
         _append_unique(themes, "政治安全线索")
+    _append_unique(themes, _text(row, "特殊身份"))
     if _is_yes(row, "是否涉外案件"):
         _append_unique(themes, "涉外风险")
     if _is_yes(row, "是否涉及单位犯罪"):
@@ -221,6 +265,8 @@ def _key_groups(row: dict[str, Any]) -> list[str]:
         _append_unique(groups, "残疾人")
     if _is_yes(row, "是否为单位"):
         _append_unique(groups, "单位主体")
+    if _normalize_bool(_first_text(row, "是否西城户籍")) is True:
+        _append_unique(groups, "西城户籍")
     return groups
 
 
@@ -232,18 +278,18 @@ def _key_industries(row: dict[str, Any]) -> list[str]:
 
 
 def _political_fields(row: dict[str, Any], legal_cause: str, street_name: str | None, address: str) -> tuple[str, str, str, str, str, str, str]:
-    is_political = _is_yes(row, "涉政治安全类案件")
+    is_political = _is_yes(row, "涉政治安全类案件") or _is_special_political_row(row)
     is_foreign = _is_yes(row, "是否涉外案件")
     review_status = _text(row, "政治安全研判状态") or ("待人工复核" if is_political else "不属于政治安全")
     risk_level = _text(row, "政治安全风险等级") or ("关注" if is_political else "")
-    topic = _text(row, "政治安全专题")
+    topic = _text(row, "政治安全专题") or _text(row, "特殊身份")
     if not topic:
         if is_political:
-            topic = "政治安全线索"
+            topic = "特殊案件线索" if _is_special_political_row(row) else "政治安全线索"
         elif is_foreign:
             topic = "涉外风险"
-    behavior = _text(row, "行为内容") or (legal_cause if is_political else "")
-    subject = _text(row, "涉及主体")
+    behavior = _text(row, "行为内容") or _text(row, "案由") or (legal_cause if is_political else "")
+    subject = _text(row, "涉及主体") or _text(row, "特殊身份")
     if not subject and is_political:
         if is_foreign:
             subject = "涉外关联人员"
@@ -267,6 +313,7 @@ def parse_import(filename: str, content: bytes) -> ParsedImport:
     for index, row in enumerate(rows, start=2):
         number = int(row.get("__row__") or index)
         sheet = _text(row, "__sheet__")
+        is_special_political = _is_special_political_row(row)
         case_number = _first_text(row, "案件编号", "部门受案号", "统一受案号")
         related_case_number = _first_text(row, "关联案号", "关联案件编号", "案号")
         # “涉案人员信息”等独立工作表通过关联案号连接案件，不再被误判为案件行。
@@ -276,9 +323,11 @@ def parse_import(filename: str, content: bytes) -> ParsedImport:
                 subjects.append(subject)
             continue
         case_number = case_number or related_case_number
+        if not case_number and is_special_political:
+            case_number = _generated_special_case_number(row, sheet, number)
         case_name = _first_text(row, "案件名称")
-        department = _first_text(row, "业务条线", "承办部门")
-        category = _first_text(row, "案件类别")
+        department = _first_text(row, "业务条线", "承办部门") or ("政治安全专项" if is_special_political else "")
+        category = _first_text(row, "案件类别") or ("政治安全特殊案件" if is_special_political else "")
         missing = []
         if not case_number:
             missing.append("部门受案号/案件编号")
@@ -295,7 +344,7 @@ def parse_import(filename: str, content: bytes) -> ParsedImport:
             errors.append({"row": number, "field": "部门受案号/案件编号", "message": f"{sheet} 文件内案件编号重复"})
             continue
         seen.add(case_number)
-        address = _first_text(row, "地址", "主要作案地", "住所地详细地址", "工作单位及地址", "联系地址")
+        address = _first_text(row, "地址", "涉案地点（非西城区标注具体哪个外区、外省）", "主要作案地", "住所地详细地址", "工作单位及地址", "联系地址")
         street_status, street_name = _street_fields(row, address)
         if street_status not in ALLOWED_STREET_STATUS:
             errors.append({"row": number, "field": "街道归属状态", "message": "街道状态不符合规定口径"})
@@ -309,8 +358,8 @@ def parse_import(filename: str, content: bytes) -> ParsedImport:
         if transfer_status not in ALLOWED_TRANSFER_STATUS:
             errors.append({"row": number, "field": "内部线索状态", "message": "内部线索状态不符合闭环口径"})
             continue
-        crime = _first_text(row, "罪名", "移送案由", "涉嫌案由", "审结案由")
-        legal_cause = _first_text(row, "法定罪名/案由", "移送案由（细分）", "涉嫌案由（细分）", "审结案由（细分）", "移送案由", "涉嫌案由", "审结案由", "案件性质", default=crime or category)
+        crime = _first_text(row, "罪名", "案由", "移送案由", "涉嫌案由", "审结案由")
+        legal_cause = _first_text(row, "法定罪名/案由", "案由", "移送案由（细分）", "涉嫌案由（细分）", "审结案由（细分）", "移送案由", "涉嫌案由", "审结案由", "案件性质", default=crime or category)
         political_topic, political_location_factor, political_behavior_content, political_subject, political_spread_impact, political_review_status, political_risk_level = _political_fields(row, legal_cause, street_name, address)
         if political_review_status not in ALLOWED_POLITICAL_REVIEW_STATUS:
             errors.append({"row": number, "field": "政治安全研判状态", "message": "政治安全研判状态不符合人工复核口径"})
@@ -336,14 +385,14 @@ def parse_import(filename: str, content: bytes) -> ParsedImport:
             "crime": crime,
             "legal_cause": legal_cause,
             "governance_themes": _governance_themes(row),
-            "accepted_date": _first_text(row, "受理日期", "检察机关受理日期", "民事部门收案日期"),
+            "accepted_date": _first_text(row, "受理日期", "移送时间", "检察机关受理日期", "民事部门收案日期"),
             "closed_date": _first_text(row, "办结日期", "审结日期", "结案日期", "全案_审结日期", "诉前终结案件日期", "审查起诉终结案件日期"),
             "status": _first_text(row, "审结处理结果", "结案情况", "全案_审结处理结果", "审查起诉结果", "案件状态"),
             "street_status": street_status,
             "street_name": street_name,
             "address": address,
             "keywords": "、".join(_governance_themes(row)[:8]),
-            "summary": _first_text(row, "案件摘要", "简要案情", "附注"),
+            "summary": _first_text(row, "案件摘要", "简要案情", "简要案情(一句话）", "附注"),
             "key_groups": _key_groups(row),
             "key_industries": _key_industries(row),
             "internal_transfer_status": transfer_status,

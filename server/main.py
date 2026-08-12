@@ -20,6 +20,13 @@ from .schemas import (AIRequest, ChangePasswordRequest, LegalPlanPayload,
                       SettingsPayload, SuggestionPayload, UserCreate)
 from .security import create_token, hash_password, verify_password
 from .reference_materials import suggestion_category_distribution, suggestion_monthly_trend
+from .risk_analysis import (
+    GOVERNANCE_CATEGORIES,
+    build_case_categories,
+    build_case_feature_words,
+    build_case_subjects,
+    build_case_time_trends,
+)
 
 settings.validate()
 app = FastAPI(title=settings.app_name, docs_url=None if settings.production else "/docs", redoc_url=None)
@@ -241,14 +248,56 @@ def case_list(keyword: str | None = None, category: str | None = None,
         clauses.append("(case_name LIKE ? OR case_number LIKE ? OR keywords LIKE ?)")
         values.extend([f"%{keyword}%"] * 3)
     if category:
-        clauses.append("category=?")
-        values.append(category)
+        if category in GOVERNANCE_CATEGORIES:
+            clauses.append("governance_themes LIKE ?")
+            values.append(f'%"{category}"%')
+        else:
+            clauses.append("category=?")
+            values.append(category)
     with connect() as db:
         rows = db.execute(f"SELECT * FROM cases WHERE {' AND '.join(clauses)} ORDER BY accepted_date DESC LIMIT 500", values).fetchall()
     return [{"id": r["id"], "caseName": r["case_name"], "procedureType": r["status"] or "",
              "caseNumber": r["case_number"], "keywords": r["keywords"] or "", "judgmentReason": r["summary"] or "",
              "category": r["category"], "legalCause": r["legal_cause"] or r["crime"] or r["category"],
              "governanceThemes": _json_list(r["governance_themes"])} for r in rows]
+
+
+def _scoped_cases(user: dict[str, Any], category: str | None = None) -> list[dict[str, Any]]:
+    where, params = _case_scope(user)
+    clauses, values = [where], list(params)
+    if category:
+        if category in GOVERNANCE_CATEGORIES:
+            clauses.append("governance_themes LIKE ?")
+            values.append(f'%"{category}"%')
+        else:
+            clauses.append("category=?")
+            values.append(category)
+    with connect() as db:
+        rows = db.execute(f"SELECT * FROM cases WHERE {' AND '.join(clauses)}", values).fetchall()
+    return [dict(row) for row in rows]
+
+
+@app.get("/risk-analysis/case-categories")
+def risk_case_categories(user: dict[str, Any] = Depends(get_current_user)) -> list[dict[str, Any]]:
+    return build_case_categories(_scoped_cases(user))
+
+
+@app.get("/risk-analysis/case-subjects")
+def risk_case_subjects(category: str | None = None,
+                       user: dict[str, Any] = Depends(get_current_user)) -> list[dict[str, Any]]:
+    return build_case_subjects(_scoped_cases(user, category))
+
+
+@app.get("/risk-analysis/case-time-trends")
+def risk_case_time_trends(category: str | None = None,
+                          user: dict[str, Any] = Depends(get_current_user)) -> list[dict[str, Any]]:
+    return build_case_time_trends(_scoped_cases(user, category))
+
+
+@app.get("/risk-analysis/case-feature-words")
+def risk_case_feature_words(category: str | None = None,
+                            user: dict[str, Any] = Depends(get_current_user)) -> list[dict[str, Any]]:
+    return build_case_feature_words(_scoped_cases(user, category))
 
 
 @app.get("/risk-analysis/case-details/{case_id}")
@@ -406,8 +455,8 @@ def confirm_import(batch_id: int, request: Request,
         inserted, duplicates = 0, 0
         for row in stored.get("rows", []):
             try:
-                db.execute("""INSERT INTO cases(case_number,case_name,department,category,crime,legal_cause,governance_themes,accepted_date,closed_date,status,street_status,street_name,address,keywords,summary,key_groups,key_industries,internal_transfer_status,prosecutorial_track,political_topic,political_location_factor,political_behavior_content,political_subject,political_spread_impact,political_review_status,political_risk_level,source_batch_id,created_at,updated_at)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                db.execute("""INSERT INTO cases(case_number,case_name,department,category,crime,legal_cause,governance_themes,accepted_date,closed_date,status,street_status,street_name,address,keywords,summary,key_groups,key_industries,internal_transfer_status,prosecutorial_track,political_topic,political_location_factor,political_behavior_content,political_subject,political_spread_impact,political_review_status,political_risk_level,subject_name,subject_age,subject_gender,subject_occupation,subject_special_identity,source_batch_id,created_at,updated_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (row["case_number"], row["case_name"], row["department"], row["category"], row["crime"], row["legal_cause"],
                      json.dumps(row["governance_themes"], ensure_ascii=False), row["accepted_date"], row["closed_date"], row["status"],
                      row["street_status"], row["street_name"], row["address"], row["keywords"], row["summary"],
@@ -415,6 +464,7 @@ def confirm_import(batch_id: int, request: Request,
                      row["internal_transfer_status"], row["prosecutorial_track"], row["political_topic"],
                      row["political_location_factor"], row["political_behavior_content"], row["political_subject"],
                      row["political_spread_impact"], row["political_review_status"], row["political_risk_level"],
+                     row["subject_name"], row["subject_age"], row["subject_gender"], row["subject_occupation"], row["subject_special_identity"],
                      batch_id, utc_now(), utc_now()))
                 inserted += 1
             except Exception:
@@ -649,8 +699,7 @@ def site_footer() -> dict[str, Any]:
 
 EMPTY_LIST_ENDPOINTS = [
     "/dashboard/risk-trend", "/dashboard/community-risk-points", "/dashboard/multi-trend",
-    "/risk-analysis/events", "/risk-analysis/case-categories", "/risk-analysis/case-subjects",
-    "/risk-analysis/case-time-trends", "/risk-analysis/case-feature-words", "/legal-recommend/recommendations",
+    "/risk-analysis/events", "/legal-recommend/recommendations",
     "/alert-push/tasks", "/effect-stats/community",
     "/effect-stats/trend", "/effect-stats/community-period", "/home/official-dynamics", "/archive/items",
     "/procuratorate/feed",

@@ -75,6 +75,11 @@ CREATE TABLE IF NOT EXISTS cases (
   political_spread_impact TEXT,
   political_review_status TEXT NOT NULL DEFAULT '不属于政治安全',
   political_risk_level TEXT,
+  subject_name TEXT,
+  subject_age INTEGER,
+  subject_gender TEXT,
+  subject_occupation TEXT,
+  subject_special_identity TEXT,
   source_batch_id INTEGER,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -221,6 +226,11 @@ def _migrate_cases(db: sqlite3.Connection) -> None:
         "political_spread_impact": "TEXT",
         "political_review_status": "TEXT NOT NULL DEFAULT '不属于政治安全'",
         "political_risk_level": "TEXT",
+        "subject_name": "TEXT",
+        "subject_age": "INTEGER",
+        "subject_gender": "TEXT",
+        "subject_occupation": "TEXT",
+        "subject_special_identity": "TEXT",
     }
     for name, definition in additions.items():
         if name not in columns:

@@ -1,6 +1,6 @@
 import { http } from './http'
 import {
-  RISK_GOVERNANCE_CATEGORIES,
+  RISK_PRIORITY_TOPICS,
   resolveRiskCrimes,
   resolveRiskFeatureWords,
   resolveRiskSourceCategories
@@ -731,7 +731,7 @@ export async function fetchMultiTrend(): Promise<MultiTrendData[]> {
 
 // --- Risk Analysis: Case Categories ---
 /* ---------- 开发演示：社会治理分类与刑法分则章名双层分类 ---------- */
-const mockCaseCategories: CaseCategory[] = RISK_GOVERNANCE_CATEGORIES
+const mockCaseCategories: CaseCategory[] = RISK_PRIORITY_TOPICS
 
 export async function fetchCaseCategories(): Promise<CaseCategory[]> {
   if (useMock) return Promise.resolve(mockCaseCategories)

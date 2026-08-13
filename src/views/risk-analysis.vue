@@ -4,7 +4,7 @@
     <a-page-header title="风险分析管理" subtitle="Risk Analysis Management" />
 
     <!-- Main Pie Chart Card -->
-    <a-card title="案件类型占比总览" :bordered="false" class="holo-card holo-card--gold" style="margin-top: 14px">
+    <a-card title="重点专题与刑法分则联动总览" :bordered="false" class="holo-card holo-card--gold" style="margin-top: 14px">
       <div class="chart-stage chart-stage--main">
         <div class="chart-stage__halo"></div>
         <div ref="pieChartRef" class="chart-canvas chart-canvas--main"></div>
@@ -119,6 +119,7 @@ import {
   fetchPriorityAlerts
 } from '../api/platform'
 import { PRIORITY_TAGS, type PriorityAlert, type PriorityTag } from '../features/priority-alerts'
+import { CRIMINAL_LAW_CHAPTERS, resolveVisibleChapters, resolveVisibleTopics } from '../features/risk-analysis/classification'
 import type {
   CaseCategory,
   CaseSubject,
@@ -406,9 +407,12 @@ const buildPieOption = () => {
   const isMobile = document.documentElement.classList.contains('mobile')
   const palette = getChartColors()
 
-  // 社会治理分类：彩虹分层 + 金/银交错描边 + 选中切片凸起
-  const innerData = categories.value.map((cat, i) => {
-    const isSelected = selected === cat.name
+  const visibleTopics = resolveVisibleTopics(selectedPieChild.value)
+  const visibleChapters = resolveVisibleChapters(selected)
+
+  // 七项重点专题：彩虹分层 + 金/银交错描边 + 选中切片凸起
+  const innerData = categories.value.filter((cat) => visibleTopics.includes(cat.name as PriorityTag)).map((cat, i) => {
+    const isSelected = selected === cat.name || !!selectedPieChild.value
     const color = palette[i % palette.length]!
     return {
       name: cat.name,
@@ -417,29 +421,27 @@ const buildPieOption = () => {
       __baseColor: color,
       itemStyle: {
         ...sliceStyle(color, i, isSelected),
-        opacity: selected && !isSelected ? 0.38 : 1
+        opacity: 1
       }
     }
   })
 
-  // 刑法分则章名：根据社会治理分类联动。颜色相对内圈错开，减少视觉重复。
-  const outerData: any[] = []
-  if (!isMobile || selected) {
-    categories.value.forEach((cat, catIdx) => {
-      if (selected && cat.name !== selected) return
-      cat.children.forEach((child, childIdx) => {
-        const color = palette[(catIdx * 3 + childIdx + 2) % palette.length]!
-        const isChildSelected = selectedPieChild.value === child.name
-        outerData.push({
-          name: child.name,
-          value: child.value,
-          selected: isChildSelected,
-          __baseColor: color,
-          itemStyle: sliceStyle(color, catIdx + childIdx + 1, isChildSelected)
-        })
-      })
-    })
-  }
+  // 刑法分则十个一级章名始终完整展示，按专题关联关系高亮或弱化。
+  const outerData = visibleChapters.map((chapter, chapterIdx) => {
+    const isChildSelected = selectedPieChild.value === chapter
+    const color = palette[(chapterIdx + 2) % palette.length]!
+    const value = Math.max(1, ...categories.value.flatMap((cat) => cat.children.filter((child) => child.name === chapter).map((child) => child.value)))
+    return {
+      name: chapter,
+      value,
+      selected: isChildSelected,
+      __baseColor: color,
+      itemStyle: {
+        ...sliceStyle(color, chapterIdx + 1, isChildSelected),
+        opacity: 1
+      }
+    }
+  })
 
   const isMobileNoSelection = isMobile && !selected
   const center: [string, string] = isMobile ? ['50%', '49%'] : ['56%', '50%']
@@ -448,12 +450,12 @@ const buildPieOption = () => {
     : ['13%', '34%']
   const outerRadius: [string, string] = isMobile ? ['43%', '59%'] : ['49%', '68%']
 
-  const innerDepth = buildPieDepthLayers('社会治理分类', innerData, innerRadius, center, 8, {
+  const innerDepth = buildPieDepthLayers('重点专题', innerData, innerRadius, center, 8, {
     startAngle: 96,
     clockwise: true,
     selectedOffset: 0
   })
-  const outerDepth = isMobileNoSelection ? [] : buildPieDepthLayers('刑法分则章名', outerData, outerRadius, center, 8, {
+  const outerDepth = isMobileNoSelection ? [] : buildPieDepthLayers('刑法分则一级章名', outerData, outerRadius, center, 8, {
     startAngle: 96,
     clockwise: true,
     selectedOffset: 0
@@ -486,7 +488,7 @@ const buildPieOption = () => {
       ...innerDepth,
       ...outerDepth,
       {
-        name: '社会治理分类',
+        name: '重点专题',
         type: 'pie',
         radius: innerRadius,
         center,
@@ -531,7 +533,7 @@ const buildPieOption = () => {
         data: innerData
       },
       ...(isMobileNoSelection ? [] : [{
-        name: '刑法分则章名',
+        name: '刑法分则一级章名',
         type: 'pie' as const,
         radius: outerRadius,
         center,
@@ -587,7 +589,7 @@ const renderPieChart = () => {
     })
     pieChart.on('click', (params: any) => {
       const clickedName = params.name as string
-      // Check if an inner-ring social-governance category was clicked
+      // 点击内圈专题：聚焦其关联的刑法一级章名。
       const foundInner = categories.value.find(c => c.name === clickedName)
       if (foundInner) {
         // Toggle: clicking the same inner category again deselects it
@@ -601,14 +603,16 @@ const renderPieChart = () => {
         // Re-render to update outer ring linkage
         pieChart!.setOption(buildPieOption(), true)
       } else {
-        // Clicked an outer-ring Criminal Law chapter — find and select its parent
-        const parent = categories.value.find(c =>
-          c.children.some(ch => ch.name === clickedName)
-        )
-        if (parent) {
-          selectedPieCategory.value = parent.name
-          selectedPieChild.value = clickedName
-          selectedCategory.value = parent.name
+        // 点击外圈章名：反向高亮所有相关专题，并以章名驱动下游筛选。
+        if (CRIMINAL_LAW_CHAPTERS.includes(clickedName as (typeof CRIMINAL_LAW_CHAPTERS)[number])) {
+          if (selectedPieChild.value === clickedName) {
+            selectedPieChild.value = ''
+            selectedCategory.value = categories.value[0]?.name || ''
+          } else {
+            selectedPieCategory.value = ''
+            selectedPieChild.value = clickedName
+            selectedCategory.value = clickedName
+          }
           pieChart!.setOption(buildPieOption(), true)
         }
       }

@@ -45,6 +45,7 @@ import type {
   PoliticalStreetStat,     // <--- 加上这一行
   PoliticalOverview
 } from '../types/platform'
+import { PRIORITY_ALERT_FIXTURES, type PriorityAlert } from '../features/priority-alerts'
 
 // Mock 仅允许在开发构建中显式开启；生产环境接口失败时不得回退演示数据。
 const useMock = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === 'true'
@@ -608,6 +609,10 @@ export async function fetchPushTasks(): Promise<PushTask[]> {
   return data
 }
 
+export async function fetchPriorityAlerts(): Promise<PriorityAlert[]> {
+  return Promise.resolve(PRIORITY_ALERT_FIXTURES)
+}
+
 export async function fetchEffectRates(): Promise<EffectRate> {
   if (useMock) return Promise.resolve(mockEffectRates)
   const { data } = await http.get<EffectRate>('/effect-stats/rates')
@@ -926,6 +931,14 @@ export async function fetchCaseDetails(query?: CaseDetailQuery): Promise<CaseDet
 
 //new
 export async function fetchCaseDetailById(id: number): Promise<CaseDetail> {
+  const alert = PRIORITY_ALERT_FIXTURES.find((item) => item.id === id)
+  if (alert) return Promise.resolve({
+    id: alert.id, caseName: alert.caseName, caseNumber: alert.caseNumber,
+    procedureType: alert.alertStatus, keywords: alert.aiHints.join(','), judgmentReason: alert.summary,
+    category: alert.caseType, street: alert.street, tags: alert.tags, riskLevel: alert.riskLevel,
+    alertStatus: alert.alertStatus, summary: alert.summary, ruleHits: alert.ruleHits,
+    aiHints: alert.aiHints, confidence: alert.confidence, subject: alert.subject
+  })
   if (useMock) {
     // 从本地模拟数据里找对应 ID 的案件
     const found = mockCaseDetails.find((c) => c.id === id)

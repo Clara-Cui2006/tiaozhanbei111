@@ -6,6 +6,21 @@
     </div>
     <a-page-header :title="caseData?.caseName || '案件详情'" subtitle="Case Detail" @back="router.back()" />
 
+    <div v-if="caseData" class="case-hero">
+      <div><span class="hero-kicker">单案画像 · 人工复核辅助</span><h2>{{ caseData.caseName }}</h2><p>{{ caseData.caseNumber }} · {{ caseData.street || '街道待确认' }}</p></div>
+      <div class="risk-orbit" :class="`risk-${caseData.riskLevel || '中'}`"><strong>{{ caseData.confidence || 68 }}%</strong><span>AI 辅助置信度</span></div>
+    </div>
+
+    <div v-if="caseData" class="portrait-grid">
+      <a-card title="案件基础信息" :bordered="false" class="portrait-card case-profile">
+        <div class="metric-row"><span>预警等级</span><b>{{ caseData.riskLevel || '中' }}风险</b></div><div class="metric-row"><span>预警状态</span><b>{{ caseData.alertStatus || '待人工复核' }}</b></div><div class="metric-row"><span>案件类型</span><b>{{ caseData.category }}</b></div>
+      </a-card>
+      <a-card title="人物画像" :bordered="false" class="portrait-card subject-profile">
+        <div class="subject-avatar">人</div><div class="subject-facts"><b>{{ caseData.subject?.name || '当事人信息已脱敏' }}</b><span>{{ caseData.subject?.age || '--' }} 岁 · {{ caseData.subject?.occupation || '职业待核' }}</span><em>{{ caseData.subject?.specialIdentity || '无特殊身份' }}</em></div>
+      </a-card>
+      <a-card title="重点标签" :bordered="false" class="portrait-card tag-profile"><span v-for="tag in caseData.tags || []" :key="tag">{{ tag }}</span></a-card>
+    </div>
+
     <a-card :bordered="false" style="margin-top: 16px" :loading="loading">
       <template v-if="caseData">
         <a-descriptions :column="2" bordered>
@@ -29,6 +44,11 @@
         <a-empty description="未找到该案件信息" />
       </template>
     </a-card>
+
+    <div v-if="caseData" class="analysis-grid">
+      <a-card title="固定规则命中" :bordered="false" class="evidence-card"><div v-if="caseData.ruleHits?.length"><p v-for="item in caseData.ruleHits" :key="item"><i></i>{{ item }}</p></div><a-empty v-else description="未命中强制规则" /></a-card>
+      <a-card title="AI 文本研判提示" :bordered="false" class="evidence-card ai-evidence"><p v-for="item in caseData.aiHints || []" :key="item"><i></i>{{ item }}</p><small>本区域仅展示可解释的风险特征，不展示涉密证据原文。</small></a-card>
+    </div>
 
     <a-card :bordered="false" style="margin-top: 16px" class="ai-card">
       <template #title>
@@ -154,6 +174,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 20px;
 }
+.case-hero{display:flex;align-items:center;justify-content:space-between;margin-top:16px;padding:24px 28px;border:1px solid rgba(74,185,240,.3);border-radius:14px;background:radial-gradient(circle at 85% 20%,rgba(31,159,207,.2),transparent 32%),linear-gradient(135deg,rgba(8,42,73,.96),rgba(4,21,39,.96));box-shadow:0 20px 45px rgba(0,0,0,.2)}.hero-kicker{color:#5ed8ff;font-size:11px;letter-spacing:.18em}.case-hero h2{margin:7px 0 4px;color:#f3fbff;font:700 28px Georgia,"Songti SC",serif}.case-hero p{margin:0;color:#82adc3}.risk-orbit{width:112px;height:112px;display:grid;place-content:center;text-align:center;border:1px solid currentColor;border-radius:50%;box-shadow:inset 0 0 22px currentColor,0 0 26px rgba(66,207,255,.16)}.risk-orbit strong{font-size:27px}.risk-orbit span{font-size:9px}.risk-高{color:#ff746e}.risk-中{color:#efc464}.risk-低{color:#54dca8}.portrait-grid{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:12px;margin-top:14px}.portrait-card{min-height:152px}.metric-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(105,181,218,.12);color:#79a8bf}.metric-row b{color:#eaf8ff}.subject-profile :deep(.arco-card-body){display:flex;align-items:center;gap:14px}.subject-avatar{width:58px;height:58px;display:grid;place-items:center;border:1px solid #5bd8ff;border-radius:50%;color:#6ce3ff;font-size:23px;background:rgba(23,137,180,.14)}.subject-facts b,.subject-facts span,.subject-facts em{display:block}.subject-facts b{color:#eefaff;font-size:17px}.subject-facts span{margin:6px 0;color:#8fb7ca}.subject-facts em{color:#f2c86f;font-size:11px;font-style:normal}.tag-profile span{display:inline-block;margin:4px;padding:5px 8px;border:1px solid rgba(71,194,239,.3);border-radius:4px;color:#68dcff;background:rgba(20,111,148,.12);font-size:11px}.analysis-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}.evidence-card p{margin:7px 0;color:#bfe1f0}.evidence-card p i{display:inline-block;width:6px;height:6px;margin-right:9px;border-radius:50%;background:#f2c86f;box-shadow:0 0 9px #f2c86f}.ai-evidence p i{background:#55dcff;box-shadow:0 0 9px #55dcff}.ai-evidence small{display:block;margin-top:14px;padding-top:10px;border-top:1px solid rgba(82,173,216,.15);color:#6f99ad}@media(max-width:800px){.portrait-grid,.analysis-grid{grid-template-columns:1fr}.case-hero{align-items:flex-start}.risk-orbit{width:84px;height:84px}}
 
 .nav-back-btn {
   cursor: pointer;

@@ -287,23 +287,11 @@
       </a-row>
     </section>
 
-    <section v-if="canViewOfficialDynamics" class="home-data-section news-section">
-      <a-card title="官方动态文章" :bordered="false" class="news-card dark-card">
-        <a-list :data="officialDynamics" :bordered="false">
-          <template #item="{ item }">
-            <a-list-item class="dark-list-item">
-              <a-list-item-meta>
-                <template #title>
-                  <a-link :hoverable="true" class="dark-link" @click="goArticle(item.id)">{{ item.title }}</a-link>
-                </template>
-                <template #description>
-                  <div class="desc">{{ item.summary }}</div>
-                  <div class="time">发布时间：{{ item.publishTime }}</div>
-                </template>
-              </a-list-item-meta>
-            </a-list-item>
-          </template>
-        </a-list>
+    <section v-if="canViewPriorityAlerts" class="home-data-section news-section">
+      <a-card :bordered="false" class="news-card dark-card home-alert-card">
+        <template #title><div class="home-alert-title"><span><i></i>重点预警条目</span><a-button size="small" type="outline" @click="router.push('/alert-push')">查看全部</a-button></div></template>
+        <PriorityTagStrip v-model="selectedPriorityTag" :alerts="priorityAlerts" title="首页重点预警" />
+        <PriorityAlertList :alerts="priorityAlerts" :tag="selectedPriorityTag" compact :limit="4" />
       </a-card>
     </section>
   </div>
@@ -312,17 +300,21 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, inject, onMounted, onUnmounted, ref, type Ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchCommunityRiskPoints, fetchLegalRecommendationsV2, fetchOfficialDynamics } from '../api/platform'
+import { fetchCommunityRiskPoints, fetchLegalRecommendationsV2, fetchPriorityAlerts } from '../api/platform'
 import { HOME_BUSINESS_ITEMS, PERMISSION_RULES } from '../config/navigation'
 import { hasPermissions } from '../services/auth'
-import type { CommunityRiskPoint, LegalRecommendationV2, OfficialDynamic } from '../types/platform'
+import type { CommunityRiskPoint, LegalRecommendationV2 } from '../types/platform'
+import PriorityTagStrip from '../components/priority-tag-strip.vue'
+import PriorityAlertList from '../components/priority-alert-list.vue'
+import { PRIORITY_TAGS, type PriorityAlert, type PriorityTag } from '../features/priority-alerts'
 
 const RiskMapPanel = defineAsyncComponent(() => import('../components/risk-map-panel.vue'))
 const router = useRouter()
 const appTheme = inject<Ref<'dark' | 'light'>>('appTheme', ref('dark'))
 
 const mapPoints = ref<CommunityRiskPoint[]>([])
-const officialDynamics = ref<OfficialDynamic[]>([])
+const priorityAlerts = ref<PriorityAlert[]>([])
+const selectedPriorityTag = ref<PriorityTag>(PRIORITY_TAGS[0])
 const legalRecommendations = ref<LegalRecommendationV2[]>([])
 const mapPanelRef = ref<HTMLElement | null>(null)
 const mapPanelVisible = ref(false)
@@ -345,7 +337,7 @@ const canViewRiskMap = computed(() =>
 const canViewLegalRecommendations = computed(() =>
   hasPermissions(PERMISSION_RULES.legalRecommendRead.permissions, PERMISSION_RULES.legalRecommendRead.permissionMode)
 )
-const canViewOfficialDynamics = computed(() =>
+const canViewPriorityAlerts = computed(() =>
   hasPermissions(PERMISSION_RULES.dashboardRead.permissions, PERMISSION_RULES.dashboardRead.permissionMode)
 )
 
@@ -360,11 +352,11 @@ const loadHomeData = async () => {
     )
   }
 
-  if (canViewOfficialDynamics.value) {
+  if (canViewPriorityAlerts.value) {
     tasks.push(
-      fetchOfficialDynamics()
-        .then((data) => { officialDynamics.value = data || [] })
-        .catch((error) => { console.error('加载首页官方动态失败:', error) })
+      fetchPriorityAlerts()
+        .then((data) => { priorityAlerts.value = data || [] })
+        .catch((error) => { console.error('加载首页预警条目失败:', error) })
     )
   }
 
@@ -422,7 +414,6 @@ const enterPlatform = () => {
   if (firstAccessibleBusiness.value) router.push(firstAccessibleBusiness.value.key)
 }
 
-const goArticle = (id: number) => router.push(`/official-article/${id}`)
 const goLegalRecommend = () => router.push('/legal-recommend')
 const goPlan = (planId: number) => router.push(`/legal-plan/${planId}`)
 

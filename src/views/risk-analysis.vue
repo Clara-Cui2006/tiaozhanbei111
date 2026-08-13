@@ -53,6 +53,12 @@
             </div>
           </div>
         </a-tab-pane>
+        <a-tab-pane key="priority-tags" title="重点标签联动分析">
+          <div class="priority-tab-panel">
+            <PriorityTopicTabs v-model="selectedPriorityTag" :alerts="priorityAlerts" compact />
+            <PriorityAlertList :alerts="priorityAlerts" :tag="selectedPriorityTag" />
+          </div>
+        </a-tab-pane>
       </a-tabs>
     </a-card>
 
@@ -100,6 +106,8 @@ import { useRouter } from 'vue-router' // 【新增】
 import * as echarts from 'echarts'
 import 'echarts-gl'
 import BackHome from '../components/back-home.vue'
+import PriorityAlertList from '../components/priority-alert-list.vue'
+import PriorityTopicTabs from '../components/priority-topic-tabs.vue'
 import { chatWithLLM } from '../services/llm'
 import { USER_PROMPT_TEMPLATES } from '../services/prompts'
 import {
@@ -107,8 +115,10 @@ import {
   fetchCaseSubjects,
   fetchCaseTimeTrends,
   fetchCaseFeatureWords,
-  fetchCaseDetails
+  fetchCaseDetails,
+  fetchPriorityAlerts
 } from '../api/platform'
+import { PRIORITY_TAGS, type PriorityAlert, type PriorityTag } from '../features/priority-alerts'
 import type {
   CaseCategory,
   CaseSubject,
@@ -132,6 +142,8 @@ const subjects = ref<CaseSubject[]>([])
 const timeTrends = ref<CaseTimeTrend[]>([])
 const featureWords = ref<CaseFeatureWord[]>([])
 const caseDetails = ref<CaseDetail[]>([])
+const priorityAlerts = ref<PriorityAlert[]>([])
+const selectedPriorityTag = ref<PriorityTag>(PRIORITY_TAGS[0])
 
 // AI Report
 const aiReportLoading = ref(false)
@@ -1144,7 +1156,7 @@ const handleResize = () => {
 }
 
 onMounted(async () => {
-  categories.value = await fetchCaseCategories()
+  ;[categories.value, priorityAlerts.value] = await Promise.all([fetchCaseCategories(), fetchPriorityAlerts()])
   renderPieChart()
   // Default to first category
   if (categories.value.length) {

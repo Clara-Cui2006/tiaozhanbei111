@@ -233,6 +233,15 @@ export interface CaseDetail {
   keywords: string
   judgmentReason: string
   category: string
+  street?: string
+  tags?: string[]
+  riskLevel?: RiskLevel
+  alertStatus?: string
+  summary?: string
+  ruleHits?: string[]
+  aiHints?: string[]
+  confidence?: number
+  subject?: { name: string; age: number; occupation: string; specialIdentity: string }
 }
 
 export interface CaseDetailQuery {

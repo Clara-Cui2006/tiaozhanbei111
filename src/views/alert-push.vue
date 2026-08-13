@@ -1,68 +1,36 @@
 <template>
   <div class="page-contrast" :class="{ 'theme-light': themeMode === 'light' }">
     <BackHome />
-    <a-page-header title="智能预警" subtitle="Intelligent Alert" />
+    <a-page-header title="预警条目" subtitle="Priority Alerts &amp; Human Review" />
 
-    <p class="data-hint">
-      下方「风险预警推送次数」与<strong>风险预警态势盘</strong>总览卡片同源；任务列表为近期推送<strong>示例明细</strong>（条数可与累计口径不同，联调时由后端对齐）。
-    </p>
+    <p class="data-hint">预警条目与首页、风险分析和政治安全模块共用同一案件数据。离线智能研判只提供风险提示，由检察官完成最终复核。</p>
 
     <a-row :gutter="16" class="stat-row">
       <a-col :span="6">
         <a-card :bordered="false" class="stat-card stat-card--red">
-          <div class="stat-label">风险预警推送次数</div>
-          <div class="stat-value">{{ overview.riskAlertPushCount }}</div>
-          <div class="stat-sub">态势盘总览</div>
+          <div class="stat-label">当前标签预警</div><div class="stat-value">{{ currentAlerts.length }}</div><div class="stat-sub">同源案件数据</div>
         </a-card>
       </a-col>
       <a-col :span="6">
         <a-card :bordered="false" class="stat-card stat-card--gold">
-          <div class="stat-label">本页任务条数</div>
-          <div class="stat-value">{{ tasks.length }}</div>
-          <div class="stat-sub">列表示例</div>
+          <div class="stat-label">高风险</div><div class="stat-value">{{ highCount }}</div><div class="stat-sub">需优先研判</div>
         </a-card>
       </a-col>
       <a-col :span="6">
         <a-card :bordered="false" class="stat-card stat-card--green">
-          <div class="stat-label">已发送</div>
-          <div class="stat-value stat-ok">{{ sentCount }}</div>
-          <div class="stat-sub">当前列表</div>
+          <div class="stat-label">已复核</div><div class="stat-value stat-ok">{{ reviewedCount }}</div><div class="stat-sub">人工已确认</div>
         </a-card>
       </a-col>
       <a-col :span="6">
         <a-card :bordered="false" class="stat-card stat-card--orange">
-          <div class="stat-label">待发送</div>
-          <div class="stat-value stat-warn">{{ pendingCount }}</div>
-          <div class="stat-sub">当前列表</div>
+          <div class="stat-label">待人工复核</div><div class="stat-value stat-warn">{{ pendingCount }}</div><div class="stat-sub">AI 不作最终判断</div>
         </a-card>
       </a-col>
     </a-row>
 
-    <a-alert
-      :type="socketConnected ? 'success' : 'info'"
-      :content="socketConnected ? 'WebSocket 已连接，正在接收实时推送回执。' : 'WebSocket 接口已预留（配置 VITE_WS_URL 后启用）。'"
-      style="margin-top: 16px"
-    />
-
-    <a-card title="推送任务" :bordered="false" class="task-card">
-      <a-tabs default-active-key="1">
-        <a-tab-pane key="1">
-          <template #title><span class="task-tab-label task-tab-label--regular"><i></i>常规预警</span></template>
-          <a-table :columns="columns" :data="regularTasks" :pagination="false" class="task-table task-table--regular">
-            <template #status="{ record }">
-              <a-tag :color="record.status === '已发送' ? 'green' : 'orange'">{{ record.status }}</a-tag>
-            </template>
-          </a-table>
-        </a-tab-pane>
-        <a-tab-pane key="2">
-          <template #title><span class="task-tab-label task-tab-label--political"><i></i>政治安全</span></template>
-          <a-table :columns="columns" :data="politicalTasks" :pagination="false" class="task-table task-table--political">
-            <template #status="{ record }">
-              <a-tag :color="record.status === '已发送' ? 'green' : 'orange'">{{ record.status }}</a-tag>
-            </template>
-          </a-table>
-        </a-tab-pane>
-      </a-tabs>
+    <a-card title="预警条目" :bordered="false" class="task-card">
+      <PriorityTopicTabs v-model="selectedTag" :alerts="alerts" compact />
+      <PriorityAlertList :alerts="alerts" :tag="selectedTag" compact :limit="20" />
     </a-card>
   </div>
 </template>
@@ -70,46 +38,16 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import BackHome from '../components/back-home.vue'
-import { fetchDashboardOverview, fetchPushTasks } from '../api/platform'
-import { createPlatformSocket } from '../services/platform-socket'
-import type { DashboardOverview, PushTask } from '../types/platform'
-
-const columns = [
-  { title: '推送主题', dataIndex: 'title' },
-  { title: '目标社区', dataIndex: 'community' },
-  { title: '渠道', dataIndex: 'channel' },
-  { title: '计划时间', dataIndex: 'time' },
-  { title: '状态', slotName: 'status' }
-]
-
-const tasks = ref<PushTask[]>([])
-const overview = ref<DashboardOverview>({
-  totalCasesThisYear: 0,
-  highIncidenceTypes: '',
-  riskAlertPushCount: 0,
-  procuratorateSuggestions: 0,
-  legalPushCount: 0
-})
-const socketConnected = ref(false)
-
-// 分类计算属性
-const regularTasks = computed(() => tasks.value.filter((t) => t.category !== '政治安全'))
-const politicalTasks = computed(() => tasks.value.filter((t) => t.category === '政治安全'))
-
-const sentCount = computed(() => tasks.value.filter((t) => t.status === '已发送').length)
-const pendingCount = computed(() => tasks.value.filter((t) => t.status === '待发送').length)
-
-const socket = createPlatformSocket({
-  onOpen: () => {
-    socketConnected.value = true
-  },
-  onClose: () => {
-    socketConnected.value = false
-  },
-  onError: () => {
-    socketConnected.value = false
-  }
-})
+import PriorityAlertList from '../components/priority-alert-list.vue'
+import PriorityTopicTabs from '../components/priority-topic-tabs.vue'
+import { fetchPriorityAlerts } from '../api/platform'
+import { PRIORITY_TAGS, type PriorityAlert, type PriorityTag } from '../features/priority-alerts'
+const alerts = ref<PriorityAlert[]>([])
+const selectedTag = ref<PriorityTag>(PRIORITY_TAGS[0])
+const currentAlerts = computed(() => alerts.value.filter(item => item.tags.includes(selectedTag.value)))
+const highCount = computed(() => currentAlerts.value.filter(item => item.riskLevel === '高').length)
+const reviewedCount = computed(() => currentAlerts.value.filter(item => item.alertStatus === '已复核').length)
+const pendingCount = computed(() => currentAlerts.value.filter(item => item.alertStatus === '待人工复核').length)
 
 // ---------- 主题检测（与之前项目风格一致） ----------
 const isLightTheme = () => localStorage.getItem('platform:theme-mode') === 'light'
@@ -135,10 +73,7 @@ const setupThemeObserver = () => {
 }
 
 onMounted(async () => {
-  const [taskList, dash] = await Promise.all([fetchPushTasks(), fetchDashboardOverview()])
-  tasks.value = taskList
-  overview.value = dash
-  socket.connect()
+  alerts.value = await fetchPriorityAlerts()
 
   // 初始化主题
   updateTheme()
@@ -147,7 +82,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  socket.disconnect()
   window.removeEventListener('storage', handleStorageChange)
   themeObserver?.disconnect()
 })

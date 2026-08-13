@@ -42,30 +42,44 @@
           <template #title>西城重点专题与复核状态</template>
           <div class="topic-card-layout">
             <div class="topic-list">
-              <a-tag v-for="topic in priorityTopics" :key="topic" color="orangered" size="large">{{ topic }}</a-tag>
+              <PriorityTopicTabs v-model="selectedPriorityTag" :alerts="priorityAlerts" />
             </div>
             <div class="review-metrics">
-              <div>
+              <div class="review-pod review-pod-cyan">
                 <div class="review-metric-copy">
-                  <span>人工复核案件总量</span>
-                  <strong>{{ overview.pendingManualReview || 0 }}</strong>
+                  <span class="review-pod-kicker">HUMAN REVIEW</span>
+                  <h3>人工复核案件总量</h3>
+                  <strong>{{ overview.pendingManualReview || 0 }}<small>件</small></strong>
+                  <p>进入人工复核流程的政治安全案件</p>
                 </div>
-                <div class="mini-ring" :style="ringStyle(overview.pendingManualReviewRate)">
-                  <i>{{ formatRate(overview.pendingManualReviewRate) }}</i>
+                <div class="review-ring" :style="ringStyle(overview.pendingManualReviewRate)">
+                  <div><i>{{ formatRate(overview.pendingManualReviewRate) }}</i><small>复核占比</small></div>
                 </div>
               </div>
-              <div>
+              <div class="review-pod review-pod-amber">
                 <div class="review-metric-copy">
-                  <span>重点专题案件总量</span>
-                  <strong>{{ overview.highConcernRisks || 0 }}</strong>
+                  <span class="review-pod-kicker">PRIORITY TOPICS</span>
+                  <h3>重点专题案件总量</h3>
+                  <strong>{{ overview.highConcernRisks || 0 }}<small>件</small></strong>
+                  <p>命中重点专题规则并纳入联动研判</p>
                 </div>
-                <div class="mini-ring" :style="ringStyle(overview.highConcernRiskRate)">
-                  <i>{{ formatRate(overview.highConcernRiskRate) }}</i>
+                <div class="review-ring" :style="ringStyle(overview.highConcernRiskRate)">
+                  <div><i>{{ formatRate(overview.highConcernRiskRate) }}</i><small>专题占比</small></div>
                 </div>
               </div>
-              <div class="review-metric-note">
-                <span>识别口径</span>
-                <p>结合案件分类标签、风险规则匹配和人工复核结果综合判断。</p>
+              <div class="review-pod review-pod-portrait">
+                <div class="portrait-heading">
+                  <span class="review-pod-kicker">TOPIC PORTRAIT</span>
+                  <em>动态画像</em>
+                </div>
+                <h3>重点专题画像</h3>
+                <strong class="portrait-topic">{{ selectedPriorityTag }}</strong>
+                <div class="portrait-facts">
+                  <div><span>关联案件</span><b>{{ selectedTopicAlerts.length }}</b><small>件</small></div>
+                  <div><span>高发街道</span><b>{{ selectedTopStreet }}</b></div>
+                  <div><span>待复核</span><b>{{ selectedPendingReview }}</b><small>件</small></div>
+                </div>
+                <p>综合专题规则命中、案件文本风险特征与人工复核状态，形成专题联动研判画像。</p>
               </div>
             </div>
           </div>
@@ -154,7 +168,9 @@ import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import BackHome from '../components/back-home.vue'
 import RiskMapPanel from '../components/risk-map-panel.vue'
-import { fetchPoliticalMonthlyTrend, fetchPoliticalStreetStats, fetchPoliticalOverview } from '../api/platform'
+import PriorityTopicTabs from '../components/priority-topic-tabs.vue'
+import { fetchPoliticalMonthlyTrend, fetchPoliticalStreetStats, fetchPoliticalOverview, fetchPriorityAlerts } from '../api/platform'
+import { PRIORITY_TAGS, type PriorityAlert, type PriorityTag } from '../features/priority-alerts'
 import type { PoliticalMonthlyTrend, PoliticalStreetStat, PoliticalOverview } from '../types/platform'
 import {
   CHART_PALETTES,
@@ -193,6 +209,15 @@ let themeObserver: MutationObserver | null = null
 
 const trendData = ref<PoliticalMonthlyTrend[]>([])
 const streetData = ref<PoliticalStreetStat[]>([])
+const priorityAlerts = ref<PriorityAlert[]>([])
+const selectedPriorityTag = ref<PriorityTag>(PRIORITY_TAGS[0])
+const selectedTopicAlerts = computed(() => priorityAlerts.value.filter(item => item.tags.includes(selectedPriorityTag.value)))
+const selectedTopStreet = computed(() => {
+  const counts: Record<string, number> = {}
+  selectedTopicAlerts.value.forEach(item => { counts[item.street] = (counts[item.street] || 0) + 1 })
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || '暂无'
+})
+const selectedPendingReview = computed(() => selectedTopicAlerts.value.filter(item => item.alertStatus === '待人工复核').length)
 
 // ================== AI 研判逻辑 ==================
 const overview = ref<PoliticalOverview>({
@@ -202,8 +227,6 @@ const overview = ref<PoliticalOverview>({
   procuratorateSuggestions: 0,
   majorEventCoupling: ''
 })
-const defaultPriorityTopics = ['涉外风险']
-const priorityTopics = computed(() => (overview.value.priorityTopics?.length ? overview.value.priorityTopics : defaultPriorityTopics).filter((topic) => topic === '涉外风险'))
 const aiAssessing = ref(false)
 const aiAssessment = ref('')
 
@@ -374,14 +397,16 @@ const renderCharts = () => {
 }
 
 const initDataAndRender = async () => {
-  const [tData, sData, oData] = await Promise.all([
+  const [tData, sData, oData, alertData] = await Promise.all([
     fetchPoliticalMonthlyTrend(),
     fetchPoliticalStreetStats(),
-    fetchPoliticalOverview()
+    fetchPoliticalOverview(),
+    fetchPriorityAlerts()
   ])
   trendData.value = tData
   streetData.value = sData
   overview.value = oData
+  priorityAlerts.value = alertData
   renderCharts()
 }
 
@@ -528,8 +553,8 @@ onUnmounted(() => {
 
 .topic-card-layout {
   display: grid;
-  grid-template-columns: minmax(160px, 0.28fr) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
   align-items: stretch;
 }
 
@@ -567,89 +592,170 @@ onUnmounted(() => {
 .topic-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
   align-content: flex-start;
+  padding: 2px 0 16px;
+  border-bottom: 1px solid rgba(82, 203, 255, 0.22);
+  box-shadow: 0 12px 26px -26px rgba(75, 205, 253, 0.85);
 }
 
 .review-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: minmax(220px, 0.92fr) minmax(220px, 0.92fr) minmax(300px, 1.3fr);
+  gap: 14px;
 }
 
-.review-metrics > div {
+.review-pod {
+  --pod-color: 75, 205, 253;
   position: relative;
   display: flex;
-  min-height: 112px;
+  min-height: 214px;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 16px;
-  border-radius: 8px;
-  border: 1px solid rgba(119, 190, 235, 0.22);
-  background: linear-gradient(135deg, rgba(27, 78, 120, 0.42), rgba(8, 30, 58, 0.72));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  gap: 18px;
+  overflow: hidden;
+  padding: 22px;
+  border: 1px solid rgba(var(--pod-color), 0.38);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 92% 12%, rgba(var(--pod-color), 0.16), transparent 38%),
+    linear-gradient(145deg, rgba(15, 55, 91, 0.82), rgba(5, 23, 48, 0.92));
+  box-shadow: 0 16px 34px rgba(0, 8, 28, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 0 32px rgba(var(--pod-color), 0.055);
 }
 
-.review-metrics span {
-  display: block;
-  margin-bottom: 8px;
-  color: #9fd9ff;
-  font-size: 14px;
-}
-
-.review-metrics strong {
-  display: block;
-  color: #d9f2ff;
-  font-size: 28px;
-}
-
-.review-metric-copy {
-  min-width: 0;
-}
-
-.mini-ring {
-  --ring-value: 0%;
-  position: relative;
-  width: 58px;
-  height: 58px;
-  flex: 0 0 58px;
-  border-radius: 50%;
-  background: conic-gradient(#69c7f3 var(--ring-value), rgba(120, 185, 225, 0.18) 0);
-  box-shadow: 0 8px 20px rgba(5, 28, 58, 0.24);
-}
-
-.mini-ring::after {
+.review-pod::before {
   content: '';
   position: absolute;
-  inset: 8px;
-  border-radius: 50%;
-  background: #0b2747;
+  top: 0;
+  left: 18px;
+  right: 18px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(var(--pod-color), 0.95), transparent);
+  box-shadow: 0 0 16px rgba(var(--pod-color), 0.78);
 }
 
-.mini-ring i {
+.review-pod::after {
+  content: '';
+  position: absolute;
+  right: -44px;
+  bottom: -44px;
+  width: 120px;
+  height: 120px;
+  border: 1px solid rgba(var(--pod-color), 0.14);
+  border-radius: 50%;
+  box-shadow: 0 0 0 18px rgba(var(--pod-color), 0.025), 0 0 0 36px rgba(var(--pod-color), 0.018);
+}
+
+.review-pod-amber { --pod-color: 255, 184, 77; }
+.review-pod-portrait { --pod-color: 78, 233, 185; display: block; }
+
+.review-pod-kicker {
+  display: block;
+  margin-bottom: 8px;
+  color: rgba(var(--pod-color), 0.82) !important;
+  font-size: 10px !important;
+  font-weight: 700;
+  letter-spacing: 1.35px;
+}
+
+.review-pod h3 {
+  margin: 0 0 12px;
+  color: #dbf4ff;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.review-metric-copy { min-width: 0; }
+
+.review-metric-copy > strong {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  color: rgb(var(--pod-color));
+  font-size: 46px;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 0 22px rgba(var(--pod-color), 0.3);
+}
+
+.review-metric-copy > strong small {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.review-metric-copy > p {
+  max-width: 150px;
+  margin: 12px 0 0;
+  color: #85b6d2;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.review-ring {
+  --ring-value: 0%;
+  position: relative;
+  width: 108px;
+  height: 108px;
+  flex: 0 0 108px;
+  border-radius: 50%;
+  background: conic-gradient(rgb(var(--pod-color)) var(--ring-value), rgba(var(--pod-color), 0.13) 0);
+  box-shadow: 0 0 25px rgba(var(--pod-color), 0.22), 0 12px 26px rgba(0, 10, 32, 0.32);
+}
+
+.review-ring::before,
+.review-ring::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+}
+
+.review-ring::before { inset: 9px; background: linear-gradient(145deg, #0c2d50, #071a35); }
+.review-ring::after { inset: -5px; border: 1px solid rgba(var(--pod-color), 0.16); }
+
+.review-ring > div {
   position: absolute;
   inset: 0;
   z-index: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #dff7ff;
-  font-size: 11px;
+}
+
+.review-ring i {
+  color: #f1fbff;
+  font-size: 18px;
   font-style: normal;
-  font-weight: 700;
+  font-weight: 800;
 }
 
-.review-metric-note {
-  align-items: flex-start !important;
-  justify-content: center !important;
+.review-ring small {
+  margin-top: 3px;
+  color: rgba(var(--pod-color), 0.78);
+  font-size: 10px;
 }
 
-.review-metric-note p {
+.portrait-heading { display: flex; align-items: center; justify-content: space-between; }
+.portrait-heading em { padding: 3px 8px; border: 1px solid rgba(78, 233, 185, 0.35); border-radius: 999px; color: #80eac5; background: rgba(32, 151, 112, 0.12); font-size: 10px; font-style: normal; }
+.portrait-topic { display: block; overflow: hidden; color: #e5fff6; font-size: 20px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+
+.portrait-facts {
+  display: grid;
+  grid-template-columns: 0.8fr 1.5fr 0.8fr;
+  gap: 7px;
+  margin: 14px 0 12px;
+}
+
+.portrait-facts > div { min-width: 0; padding: 8px 9px; border: 1px solid rgba(78, 233, 185, 0.14); border-radius: 9px; background: rgba(4, 34, 48, 0.42); }
+.portrait-facts span { display: block; margin-bottom: 4px; color: #7ebaa8; font-size: 10px; }
+.portrait-facts b { color: #dffff4; font-size: 15px; }
+.portrait-facts small { margin-left: 2px; color: #7ebaa8; font-size: 9px; }
+
+.review-pod-portrait > p {
   margin: 0;
-  color: #c2e8fb;
-  font-size: 13px;
-  line-height: 1.65;
+  color: #9cc8bd;
+  font-size: 11px;
+  line-height: 1.55;
 }
 
 .cockpit-grid {
@@ -830,33 +936,42 @@ onUnmounted(() => {
 }
 
 :global(body.theme-light .political-security-page .method-item span),
-:global(body.theme-light .political-security-page .review-metrics span) {
+:global(body.theme-light .political-security-page .review-pod-portrait > p),
+:global(body.theme-light .political-security-page .review-metric-copy > p) {
   color: #285b78 !important;
 }
 
-:global(body.theme-light .political-security-page .review-metrics > div) {
-  border-color: rgba(70, 136, 192, 0.24) !important;
-  background: linear-gradient(135deg, #f5fbff, #e7f3fd) !important;
+:global(body.theme-light .political-security-page .topic-list) {
+  border-bottom-color: rgba(47, 139, 198, 0.28) !important;
 }
 
-:global(body.theme-light .political-security-page .review-metrics strong) {
-  color: #0f4f7b !important;
+:global(body.theme-light .political-security-page .review-pod) {
+  border-color: rgba(var(--pod-color), 0.5) !important;
+  background: radial-gradient(circle at 92% 12%, rgba(var(--pod-color), 0.12), transparent 38%), linear-gradient(145deg, #f8fcff, #e5f2fc) !important;
+  box-shadow: 0 12px 26px rgba(42, 98, 158, 0.12), inset 0 1px 0 #fff !important;
 }
 
 :global(body.theme-light .political-security-page .kpi-sub) {
   color: #285b78 !important;
 }
 
-:global(body.theme-light .political-security-page .mini-ring::after) {
-  background: #f5fbff !important;
+:global(body.theme-light .political-security-page .review-pod h3),
+:global(body.theme-light .political-security-page .portrait-topic),
+:global(body.theme-light .political-security-page .portrait-facts b) {
+  color: #123e5d !important;
 }
 
-:global(body.theme-light .political-security-page .mini-ring i) {
-  color: #0f4f7b !important;
+:global(body.theme-light .political-security-page .review-ring::before) {
+  background: linear-gradient(145deg, #ffffff, #e8f4fb) !important;
 }
 
-:global(body.theme-light .political-security-page .review-metric-note p) {
-  color: #285b78 !important;
+:global(body.theme-light .political-security-page .review-ring i) {
+  color: #174c6d !important;
+}
+
+:global(body.theme-light .political-security-page .portrait-facts > div) {
+  border-color: rgba(38, 139, 109, 0.2) !important;
+  background: rgba(235, 249, 244, 0.86) !important;
 }
 
 :global(body.theme-light .political-security-page .cockpit-chart) {
@@ -945,5 +1060,13 @@ onUnmounted(() => {
   .cockpit-chart.is-active { min-height: 500px; }
   .cockpit-chart.is-active .chart-box { height: 438px; }
   .cockpit-return-bar { align-items: flex-start; flex-direction: column; }
+  .topic-list { padding-right: 0; padding-bottom: 16px; border-right: 0; border-bottom: 1px solid rgba(82, 203, 255, 0.22); box-shadow: none; }
+  .review-pod { min-height: 190px; }
+  .portrait-topic { white-space: normal; }
+}
+
+@media (min-width: 769px) and (max-width: 1080px) {
+  .review-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .review-pod-portrait { grid-column: span 2; }
 }
 </style>

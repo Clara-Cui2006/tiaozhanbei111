@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { StreetCaseMetric } from '../case-count-metrics'
+import { QUANTITY_COLORS, type StreetCaseMetric } from '../case-count-metrics'
 import type { MapSelectionState, StreetFeatureCollection } from '../types'
 import { disposeObject3D } from './dispose'
 import { featureToShape, projectRing } from './geometry'
@@ -33,6 +33,16 @@ export interface StreetLayerHandle {
 
 const EXTRUDE_DEPTH = 12
 
+function getStreetMetric(metrics: Record<string, StreetCaseMetric>, adcode: string, name: string): StreetCaseMetric {
+  return metrics[adcode] || metrics[name] || {
+    adcode,
+    name,
+    caseCount: 0,
+    level: 1,
+    color: QUANTITY_COLORS[0]!,
+  }
+}
+
 export function createStreetLayer(options: StreetLayerOptions): StreetLayerHandle {
   const group = new THREE.Group()
   group.name = 'xicheng-streets'
@@ -44,8 +54,7 @@ export function createStreetLayer(options: StreetLayerOptions): StreetLayerHandl
 
   for (const feature of options.collection.features) {
     const { adcode, name } = feature.properties
-    const metric = metrics[adcode]
-    if (!metric) throw new Error(`${name}缺少演示指标`)
+    const metric = getStreetMetric(metrics, adcode, name)
 
     const streetGroup = new THREE.Group()
     streetGroup.name = name
@@ -110,14 +119,10 @@ export function createStreetLayer(options: StreetLayerOptions): StreetLayerHandl
       }
     },
     updateMetrics: (nextMetrics) => {
-      for (const feature of options.collection.features) {
-        if (!nextMetrics[feature.properties.adcode]) {
-          throw new Error(`${feature.properties.name}缺少演示指标`)
-        }
-      }
       metrics = nextMetrics
       for (const [adcode, visual] of visuals) {
-        const metric = metrics[adcode]!
+        const name = visual.group.userData.name as string
+        const metric = getStreetMetric(metrics, adcode, name)
         const color = new THREE.Color(metric.color)
         visual.topMaterial.color.copy(color)
         visual.topMaterial.emissive.copy(color).multiplyScalar(0.24)

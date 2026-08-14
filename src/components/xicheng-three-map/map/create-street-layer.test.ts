@@ -73,6 +73,28 @@ describe('createStreetLayer', () => {
     layer.dispose()
   })
 
+  it('renders streets with zero-case fallback when backend metrics omit them', () => {
+    const [firstFeature] = streetCollection.features
+    if (!firstFeature) throw new Error('缺少街道数据')
+    const layer = createStreetLayer({
+      collection: streetCollection,
+      projection: createLocalProjection(streetCollection, 160),
+      metrics: {
+        [firstFeature.properties.adcode]: {
+          adcode: firstFeature.properties.adcode,
+          name: firstFeature.properties.name,
+          caseCount: 6,
+          level: 2,
+          color: QUANTITY_COLORS[1]!,
+        },
+      },
+    })
+
+    expect(layer.group.children).toHaveLength(15)
+    expect(() => layer.updateMetrics({})).not.toThrow()
+    layer.dispose()
+  })
+
   it('disposes geometry and materials owned by the layer', () => {
     const layer = createStreetLayer({
       collection: streetCollection,

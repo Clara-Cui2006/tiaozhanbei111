@@ -42,13 +42,13 @@
           <template #extra><span class="form-scope-note"><icon-safe /> 角色与专项权限分离配置</span></template>
           <a-form :model="form" layout="vertical" class="account-form">
             <div class="account-form-grid">
-              <a-form-item label="账号" class="form-field"><a-input v-model="form.username" placeholder="输入登录账号" /></a-form-item>
-              <a-form-item label="姓名" class="form-field"><a-input v-model="form.displayName" placeholder="输入用户姓名" /></a-form-item>
-              <a-form-item label="初始密码" class="form-field"><a-input-password v-model="form.password" placeholder="配置初始密码" /></a-form-item>
-              <a-form-item label="角色" class="form-field"><a-select v-model="form.role"><a-option v-for="item in roles" :key="item.value" :value="item.value">{{ item.label }}</a-option></a-select></a-form-item>
-              <a-form-item label="业务条线" class="form-field"><a-input v-model="form.department" placeholder="如：刑事检察" /></a-form-item>
+              <a-form-item label="账号" class="form-field"><a-input v-model="form.username" disabled placeholder="输入登录账号" /></a-form-item>
+              <a-form-item label="姓名" class="form-field"><a-input v-model="form.displayName" disabled placeholder="输入用户姓名" /></a-form-item>
+              <a-form-item label="初始密码" class="form-field"><a-input-password v-model="form.password" disabled placeholder="配置初始密码" /></a-form-item>
+              <a-form-item label="角色" class="form-field"><a-select v-model="form.role" disabled><a-option v-for="item in roles" :key="item.value" :value="item.value">{{ item.label }}</a-option></a-select></a-form-item>
+              <a-form-item label="业务条线" class="form-field"><a-input v-model="form.department" disabled placeholder="如：刑事检察" /></a-form-item>
               <a-form-item label="专项授权" class="form-field form-field--permissions">
-                <a-checkbox-group v-model="form.permissions" class="permission-options">
+                <a-checkbox-group v-model="form.permissions" disabled class="permission-options">
                   <a-checkbox value="political:read">政治安全查看</a-checkbox>
                   <a-checkbox value="political:write">政治安全编辑</a-checkbox>
                   <a-checkbox value="ai:use">AI辅助</a-checkbox>
@@ -57,7 +57,7 @@
             </div>
             <div class="account-form-actions">
               <span>未勾选的专项权限不会随角色自动授予</span>
-              <a-button type="primary" @click="createUser">
+              <a-button type="primary" disabled>
                 <template #icon><icon-user-add /></template>
                 创建账号
               </a-button>
@@ -112,15 +112,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { Message } from '@arco-design/web-vue'
+import { computed, reactive, ref } from 'vue'
 import { IconSafe, IconUser, IconUserAdd, IconUserGroup } from '@arco-design/web-vue/es/icon'
 import BackHome from '../components/back-home.vue'
-import { http } from '../api/http'
 import type { CurrentUser, UserRole } from '../services/auth'
 
-const users = ref<CurrentUser[]>([])
-const audits = ref<any[]>([])
+const users = ref<CurrentUser[]>([
+  { id: 1, username: 'business_user', displayName: '业务用户', role: 'ordinary', department: '刑事检察', permissions: [] },
+  { id: 2, username: 'department_lead', displayName: '部门主管', role: 'department_supervisor', department: '综合业务', permissions: ['political:read'] },
+  { id: 3, username: 'platform_admin', displayName: '平台管理员', role: 'system_admin', department: null, permissions: ['ai:use'] }
+])
+const audits = ref([
+  { created_at: '—', username: '业务用户', action: '查看', resource_type: '案件概览', resource_id: '—', client_ip: '—', success: true },
+  { created_at: '—', username: '部门主管', action: '研判', resource_type: '风险专题', resource_id: '—', client_ip: '—', success: true }
+])
 const form = reactive({ username: '', displayName: '', password: '', role: 'ordinary' as UserRole, department: '', permissions: [] as string[] })
 const roles = [
   { value: 'ordinary', label: '普通用户（所属条线）' }, { value: 'department_supervisor', label: '部门主任/主管（全院）' },
@@ -134,20 +139,6 @@ const permissionColor = (value: string) => value.startsWith('political:') ? 'red
 const fullScopeCount = computed(() => users.value.filter((item) => item.role === 'department_supervisor' || item.role === 'leadership').length)
 const politicalPermissionCount = computed(() => users.value.filter((item) => item.permissions.some((permission) => permission.startsWith('political:'))).length)
 
-async function load() {
-  const [userResult, auditResult] = await Promise.all([http.get('/users'), http.get('/audit-logs')])
-  users.value = userResult.data
-  audits.value = auditResult.data
-}
-async function createUser() {
-  try {
-    await http.post('/users', { ...form, department: form.department || null })
-    Message.success('账号已创建')
-    Object.assign(form, { username: '', displayName: '', password: '', role: 'ordinary', department: '', permissions: [] })
-    await load()
-  } catch (error: any) { Message.error(error.response?.data?.detail || '创建失败') }
-}
-onMounted(load)
 </script>
 
 <style scoped>

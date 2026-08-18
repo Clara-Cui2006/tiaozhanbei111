@@ -10,15 +10,6 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=256)
 
 
-class UserCreate(BaseModel):
-    username: str = Field(pattern=r"^[A-Za-z0-9_.-]{3,64}$")
-    displayName: str = Field(min_length=1, max_length=64)
-    password: str = Field(min_length=12, max_length=256)
-    role: Literal["ordinary", "department_supervisor", "leadership", "data_admin", "system_admin"]
-    department: str | None = Field(default=None, max_length=64)
-    permissions: list[str] = []
-
-
 class AIRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=20_000)
     module: str = Field(default="general", max_length=64)

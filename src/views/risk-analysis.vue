@@ -629,9 +629,10 @@ const renderSubjectCharts = () => {
   if (!subjectChartRef.value || !subjectDonutRef.value) return
 
   // --- Age distribution bar chart: 赤橙黄绿青，金属描边 + 阴影浮起 ---
-  const ageBuckets: Record<string, number> = { '18-25': 0, '26-35': 0, '36-45': 0, '46-55': 0, '56+': 0 }
+  const ageBuckets: Record<string, number> = { '18-25': 0, '26-35': 0, '36-45': 0, '46-55': 0, '56+': 0, '未知': 0 }
   subjects.value.forEach(s => {
-    if (s.age <= 25) ageBuckets['18-25']!++
+    if (s.age == null) ageBuckets['未知']!++
+    else if (s.age <= 25) ageBuckets['18-25']!++
     else if (s.age <= 35) ageBuckets['26-35']!++
     else if (s.age <= 45) ageBuckets['36-45']!++
     else if (s.age <= 55) ageBuckets['46-55']!++
@@ -752,7 +753,7 @@ const renderSubjectCharts = () => {
   } as any, true)
 
   // --- Gender + Resident donut chart: 蓝紫/青色独立配色，双环 3D 浮起 ---
-  const genderCount = { '男': 0, '女': 0 }
+  const genderCount: Record<'男' | '女' | '未知', number> = { '男': 0, '女': 0, '未知': 0 }
   const residentCount = { '本地': 0, '外来': 0 }
   subjects.value.forEach(s => {
     genderCount[s.gender]++
@@ -766,7 +767,8 @@ const renderSubjectCharts = () => {
   const residentColors = CHART_PALETTES.subject.slice(2, 4)
   const genderData = [
     { value: genderCount['男'], name: '男', __baseColor: genderColors[0], itemStyle: sliceStyle(genderColors[0]!, 0) },
-    { value: genderCount['女'], name: '女', __baseColor: genderColors[1], itemStyle: sliceStyle(genderColors[1]!, 1) }
+    { value: genderCount['女'], name: '女', __baseColor: genderColors[1], itemStyle: sliceStyle(genderColors[1]!, 1) },
+    { value: genderCount['未知'], name: '未知', __baseColor: '#8193A8', itemStyle: sliceStyle('#8193A8', 2) }
   ]
   const residentData = [
     { value: residentCount['本地'], name: '本地', __baseColor: residentColors[0], itemStyle: sliceStyle(residentColors[0]!, 2) },
@@ -1073,8 +1075,9 @@ const generateAiReport = async () => {
     // Gather current data context
     const subjectCount = subjects.value.length
     const maleCount = subjects.value.filter(s => s.gender === '男').length
-    const avgAge = subjects.value.length
-      ? Math.round(subjects.value.reduce((sum, s) => sum + s.age, 0) / subjects.value.length)
+    const knownAges = subjects.value.flatMap((subject) => subject.age == null ? [] : [subject.age])
+    const avgAge = knownAges.length
+      ? Math.round(knownAges.reduce((sum, age) => sum + age, 0) / knownAges.length)
       : 0
     const topWords = featureWords.value.slice(0, 5).map(w => w.name).join('、')
     const caseCount = caseDetails.value.length

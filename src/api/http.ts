@@ -1,5 +1,7 @@
 import axios from 'axios'
 
+const useStaticPreview = import.meta.env.VITE_STATIC_PREVIEW === 'true'
+
 export const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 15000
@@ -14,7 +16,7 @@ http.interceptors.request.use((config) => {
 http.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && window.location.pathname !== '/login') {
+    if (!useStaticPreview && error.response?.status === 401 && window.location.pathname !== '/login') {
       sessionStorage.removeItem('platform:access-token')
       window.location.assign('/login')
     }

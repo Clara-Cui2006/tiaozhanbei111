@@ -14,6 +14,15 @@ export interface CurrentUser {
 }
 
 const tokenKey = 'platform:access-token'
+const useStaticPreview = import.meta.env.VITE_STATIC_PREVIEW === 'true'
+const staticPreviewUser: CurrentUser = {
+  id: 0,
+  username: 'preview',
+  displayName: '平台预览',
+  role: 'system_admin',
+  department: null,
+  permissions: []
+}
 
 export const authState = reactive<{
   ready: boolean
@@ -33,6 +42,11 @@ export function hasPermissions(permissions?: readonly string[], mode: Permission
 }
 
 export async function restoreSession() {
+  if (useStaticPreview) {
+    authState.user = staticPreviewUser
+    authState.ready = true
+    return
+  }
   const token = getAccessToken()
   if (!token) {
     authState.ready = true
@@ -51,6 +65,11 @@ export async function restoreSession() {
 }
 
 export async function login(username: string, password: string) {
+  if (useStaticPreview) {
+    authState.user = staticPreviewUser
+    authState.ready = true
+    return
+  }
   const { data } = await http.post<{ accessToken: string; user: CurrentUser }>('/auth/login', { username, password })
   sessionStorage.setItem(tokenKey, data.accessToken)
   authState.user = data.user
@@ -58,6 +77,11 @@ export async function login(username: string, password: string) {
 }
 
 export async function logout() {
+  if (useStaticPreview) {
+    authState.user = staticPreviewUser
+    authState.ready = true
+    return
+  }
   try {
     await http.post('/auth/logout')
   } finally {

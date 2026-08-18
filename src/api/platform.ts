@@ -47,8 +47,8 @@ import type {
 } from '../types/platform'
 import { PRIORITY_ALERT_FIXTURES, type PriorityAlert } from '../features/priority-alerts'
 
-// Mock 仅允许在开发构建中显式开启；生产环境接口失败时不得回退演示数据。
-const useMock = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === 'true'
+// 演示数据只能由构建环境显式开启；真实部署接口失败时不得自动回退。
+const useMock = import.meta.env.VITE_USE_MOCK === 'true'
 
 export function getRiskLevelByScore(score: number): '高' | '中' | '低' {
   if (score >= 80) return '高'
@@ -1306,7 +1306,46 @@ export const fetchPoliticalOverview = async (): Promise<PoliticalOverview> => {
 
 // ========== 新增普法方案模拟接口 ==========
 // 内存存储，供当前页面生命周期内调用
-export const memoryLegalPlans: any[] = []
+export const memoryLegalPlans: any[] = [
+  {
+    id: 1,
+    planId: 1,
+    title: '电信网络诈骗社区普法方案',
+    group: '老年人及家庭成员',
+    scene: '社区反诈宣传',
+    type: '讲座 + 图文材料',
+    tags: ['反诈', '社区普法'],
+    autoGenNote: '结合近期风险趋势形成',
+    coverageTarget: 800,
+    durationDays: 14,
+    approvalRate: 96,
+    pilotCommunities: 3,
+    resources: [{ icon: '📄', label: '图文材料', count: 3 }],
+    content: '围绕常见电信网络诈骗类型、识别方法和报案流程开展社区普法。',
+    updatedTime: '2026-08-01',
+    applicableGroup: '老年人及家庭成员',
+    triggerScene: '社区反诈宣传'
+  },
+  {
+    id: 2,
+    planId: 2,
+    title: '未成年人网络安全普法方案',
+    group: '未成年人及监护人',
+    scene: '校园法治教育',
+    type: '情景课堂 + 宣传视频',
+    tags: ['未成年人保护', '网络安全'],
+    autoGenNote: '结合重点人群风险画像形成',
+    coverageTarget: 1200,
+    durationDays: 10,
+    approvalRate: 94,
+    pilotCommunities: 2,
+    resources: [{ icon: '🎬', label: '宣传视频', count: 2 }],
+    content: '通过情景案例讲解网络欺凌、个人信息保护和网络诈骗防范。',
+    updatedTime: '2026-08-03',
+    applicableGroup: '未成年人及监护人',
+    triggerScene: '校园法治教育'
+  }
+]
 
 export const createLegalRecommendation = async (data: any): Promise<any> => {
   if (!useMock) {
@@ -1392,13 +1431,17 @@ export const deleteLegalRecommendation = async (id: number): Promise<void> => {
 
 // 2. 替换原来的 fetchLegalRecommendationsV2 函数
 export async function fetchLegalRecommendationsV2(): Promise<LegalRecommendationV2[]> {
+  if (useMock) return Promise.resolve(memoryLegalPlans)
   const { data } = await http.get<LegalRecommendationV2[]>('/legal-recommend/v2/recommendations')
   return data
 }
 
 // 3. 替换原来的 fetchLegalPlanDetail 函数
 export async function fetchLegalPlanDetail(id: number): Promise<LegalPlan> {
-  // 【修改点】：进入函数第一步，先从内存数组里找是不是刚才手动新增的方案
+  if (useMock) {
+    const found = memoryLegalPlans.find((plan) => plan.id === id || plan.planId === id)
+    if (found) return Promise.resolve(found as LegalPlan)
+  }
   const { data } = await http.get<LegalPlan>(`/legal-recommend/plans/${id}`)
   return data
 }

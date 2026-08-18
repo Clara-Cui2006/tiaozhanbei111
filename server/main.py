@@ -158,6 +158,17 @@ STREET_CODES = {
     "广安门外街道": "110102020",
 }
 
+STREET_COORDINATES = {
+    "西长安街街道": (116.375, 39.912), "新街口街道": (116.370, 39.945),
+    "月坛街道": (116.345, 39.915), "展览路街道": (116.345, 39.925),
+    "德胜街道": (116.378, 39.955), "金融街街道": (116.362, 39.915),
+    "什刹海街道": (116.385, 39.935), "大栅栏街道": (116.392, 39.895),
+    "天桥街道": (116.390, 39.885), "椿树街道": (116.372, 39.895),
+    "陶然亭街道": (116.372, 39.885), "广安门内街道": (116.360, 39.897),
+    "牛街街道": (116.360, 39.885), "白纸坊街道": (116.350, 39.880),
+    "广安门外街道": (116.335, 39.895),
+}
+
 
 def _json_list(value: Any) -> list[str]:
     if not value:
@@ -329,6 +340,49 @@ def dashboard_overview(user: dict[str, Any] = Depends(require_permission("dashbo
         suggestions = db.execute("SELECT COUNT(*) FROM suggestions").fetchone()[0]
     return {"totalCasesThisYear": total, "highIncidenceTypes": top["category"] if top else "暂无数据",
             "riskAlertPushCount": 0, "procuratorateSuggestions": suggestions, "legalPushCount": 0}
+
+
+@app.get("/dashboard/community-risk-points")
+def dashboard_community_risk_points(
+    user: dict[str, Any] = Depends(require_permission("dashboard:read")),
+) -> list[dict[str, Any]]:
+    where, params = _case_scope(user)
+    case_type = "COALESCE(NULLIF(legal_cause,''), NULLIF(crime,''), NULLIF(category,''), '未标注类型')"
+    with connect() as db:
+        case_rows = db.execute(f"""SELECT street_name,{case_type} AS type_name,COUNT(*) count
+                                   FROM cases
+                                   WHERE {where} AND street_status='已确认街道' AND street_name IS NOT NULL AND street_name!=''
+                                   GROUP BY street_name,type_name""", params).fetchall()
+        alert_rows = db.execute(f"""SELECT street_name,COUNT(*) count
+                                    FROM cases
+                                    WHERE {where} AND street_status='已确认街道' AND internal_transfer_status!='未形成线索'
+                                    GROUP BY street_name""", params).fetchall()
+        plan_rows = db.execute("SELECT community,COUNT(*) count FROM legal_plans WHERE community IS NOT NULL AND community!='' GROUP BY community").fetchall()
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in case_rows:
+        item = grouped.setdefault(row["street_name"], {"annualCases": 0, "types": {}})
+        item["annualCases"] += row["count"]
+        item["types"][row["type_name"]] = row["count"]
+    alert_counts = {row["street_name"]: row["count"] for row in alert_rows}
+    plan_counts = {row["community"]: row["count"] for row in plan_rows}
+    max_cases = max((item["annualCases"] for item in grouped.values()), default=0)
+    points: list[dict[str, Any]] = []
+    for street, item in grouped.items():
+        annual_cases = int(item["annualCases"])
+        score = round(annual_cases / max_cases * 100) if max_cases else 0
+        longitude, latitude = STREET_COORDINATES.get(street, (116.366794, 39.915309))
+        top_types = sorted(item["types"].items(), key=lambda pair: pair[1], reverse=True)[:3]
+        points.append({
+            "community": street, "longitude": longitude, "latitude": latitude,
+            "level": "高" if score >= 80 else "中" if score >= 60 else "低",
+            "riskScore": score, "annualCases": annual_cases,
+            "alertPushCount": int(alert_counts.get(street, 0)),
+            "procuratorateSuggestionCount": 0,
+            "legalPlanDeliveryCount": int(plan_counts.get(street, 0)),
+            "highIncidenceTypes": "、".join(name for name, _ in top_types) or "暂无数据",
+            "dimensionScores": {},
+        })
+    return sorted(points, key=lambda item: item["annualCases"], reverse=True)
 
 
 @app.get("/dashboard/street-map/overview")
@@ -698,7 +752,7 @@ def site_footer() -> dict[str, Any]:
 
 
 EMPTY_LIST_ENDPOINTS = [
-    "/dashboard/risk-trend", "/dashboard/community-risk-points", "/dashboard/multi-trend",
+    "/dashboard/risk-trend", "/dashboard/multi-trend",
     "/risk-analysis/events", "/legal-recommend/recommendations",
     "/alert-push/tasks", "/effect-stats/community",
     "/effect-stats/trend", "/effect-stats/community-period", "/home/official-dynamics", "/archive/items",

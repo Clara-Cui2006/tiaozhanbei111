@@ -541,8 +541,8 @@ const buildPieOption = () => {
         selectedMode: 'single',
         selectedOffset: 0,
         padAngle: 2.5,
-        minShowLabelAngle: 0,
-        avoidLabelOverlap: false,
+        minShowLabelAngle: 2,
+        avoidLabelOverlap: true,
         z: 31,
         label: {
           show: isMobile ? !!selected : true,
@@ -553,7 +553,9 @@ const buildPieOption = () => {
           textBorderWidth: 2,
           textBorderColor: isLightTheme() ? 'rgba(255,255,255,.9)' : 'rgba(0,12,30,.9)',
           overflow: 'break',
-          width: isMobile ? 88 : 138
+          width: isMobile ? 88 : 138,
+          alignTo: 'edge',
+          edgeDistance: isMobile ? 8 : 18
         },
         labelLine: {
           show: isMobile ? !!selected : true,
@@ -562,7 +564,7 @@ const buildPieOption = () => {
           smooth: 0.2,
           lineStyle: { color: isLightTheme() ? 'rgba(86,121,207,.72)' : 'rgba(181,207,255,.72)', width: 1.2 }
         },
-        labelLayout: { hideOverlap: false },
+        labelLayout: { hideOverlap: true, moveOverlap: 'shiftY' },
         itemStyle: { borderRadius: 4 },
         emphasis: {
           scale: true,

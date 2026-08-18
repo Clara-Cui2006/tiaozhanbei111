@@ -47,7 +47,6 @@ __screenshots__/
 # Secrets
 .env
 .env.*
-!.env.example
 *.pem
 *.key
 *.p12

@@ -41,7 +41,7 @@ wsl -d Ubuntu-22.04 -- docker images
 首次运行前复制环境变量模板并修改密码：
 
 ```powershell
-Copy-Item .env.example .env
+Copy-Item docker.env.template .env
 docker compose up -d
 ```
 

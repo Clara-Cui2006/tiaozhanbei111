@@ -5,7 +5,7 @@
 在项目目录复制环境变量模板：
 
 ```powershell
-Copy-Item .env.example .env
+Copy-Item docker.env.template .env
 ```
 
 编辑 `.env`，至少修改 `JWT_SECRET` 和初始管理员密码。然后执行：

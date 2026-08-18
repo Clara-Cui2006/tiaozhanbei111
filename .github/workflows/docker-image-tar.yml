@@ -64,7 +64,7 @@ jobs:
           docker save "tiaozhanbei-platform:$IMAGE_TAG" -o "out/tiaozhanbei-${IMAGE_TAG}-linux-amd64.tar"
           sha256sum "out/tiaozhanbei-${IMAGE_TAG}-linux-amd64.tar" > "out/tiaozhanbei-${IMAGE_TAG}-linux-amd64.tar.sha256"
 
-          cp .env.example out/.env.example
+          cp docker.env.template out/.env.example
 
           cat > out/README-docker-tar.md <<'README'
           # Docker tar usage

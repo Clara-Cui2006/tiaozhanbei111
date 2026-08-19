@@ -2395,7 +2395,6 @@ onUnmounted(() => {
 .xrm-card--focus .xrm-filter-section,
 .xrm-card--focus .xrm-method-section,
 .xrm-card--focus .xrm-summary-section,
-.xrm-card--focus .xrm-detail-panel,
 .xrm-card--focus .xrm-footer {
   display: none;
 }
@@ -2417,8 +2416,7 @@ onUnmounted(() => {
   margin: 0;
 }
 
-.xrm-card--cockpit .xrm-layout,
-.xrm-card--focus .xrm-layout {
+.xrm-card--cockpit .xrm-layout {
   grid-template-columns: minmax(0, 1fr);
 }
 

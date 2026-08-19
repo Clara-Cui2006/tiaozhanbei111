@@ -2395,6 +2395,7 @@ onUnmounted(() => {
 .xrm-card--focus .xrm-filter-section,
 .xrm-card--focus .xrm-method-section,
 .xrm-card--focus .xrm-summary-section,
+.xrm-card--focus .xrm-detail-panel,
 .xrm-card--focus .xrm-footer {
   display: none;
 }
@@ -2405,6 +2406,10 @@ onUnmounted(() => {
   padding: 0;
 }
 
+.xrm-card--focus :deep(.arco-card-body) {
+  height: 100%;
+}
+
 .xrm-card--cockpit .xrm-layout,
 .xrm-card--focus .xrm-layout {
   height: 100%;
@@ -2412,7 +2417,8 @@ onUnmounted(() => {
   margin: 0;
 }
 
-.xrm-card--cockpit .xrm-layout {
+.xrm-card--cockpit .xrm-layout,
+.xrm-card--focus .xrm-layout {
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -2443,6 +2449,26 @@ onUnmounted(() => {
 
 .xrm-card--focus .xrm-layout {
   flex: 1;
+}
+
+.xrm-card--focus .xrm-map-panel {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+}
+
+.xrm-card--focus .xrm-panel-heading,
+.xrm-card--focus .xrm-map-caption {
+  flex: 0 0 auto;
+}
+
+.xrm-card--focus .xrm-map-stage {
+  height: auto !important;
+  flex: 1 1 auto;
+}
+
+.xrm-card--focus .xrm-map-box {
+  height: 100% !important;
 }
 
 .xrm-page-header {

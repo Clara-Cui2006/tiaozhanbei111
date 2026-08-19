@@ -111,11 +111,11 @@
         </div>
       </Teleport>
 
-      <a-layout-content class="content" :class="{ 'home-content': isHomeRoute }">
+      <a-layout-content class="content" :class="{ 'home-content': isHomeRoute, 'fixed-workspace-content': isFixedWorkspaceRoute }">
         <router-view />
       </a-layout-content>
 
-      <a-layout-footer v-if="!isHomeRoute" class="footer">
+      <a-layout-footer v-if="!isHomeRoute && !isFixedWorkspaceRoute" class="footer">
         <div class="footer-inner">
           <div class="record">
             <span>{{ footerInfo.recordNo }}</span>
@@ -186,6 +186,12 @@ const newPassword = ref('')
 const footerInfo = ref<SiteFooterInfo>({ recordNo: '备案信息加载中', links: [] })
 
 const isHomeRoute = computed(() => route.path === '/')
+const isFixedWorkspaceRoute = computed(() =>
+  route.path === '/dashboard'
+  || route.path === '/political-security'
+  || route.path === '/procuratorate-suggestion'
+  || route.path.startsWith('/petition-litigation')
+)
 const activeWorkspace = computed(() => BUSINESS_WORKSPACES.find((workspace) => {
   if (workspace.key === '/dashboard') return route.path === '/dashboard' || route.path.startsWith('/risk-analysis') || route.path.startsWith('/case-detail/')
   if (workspace.key === '/political-security') return route.path.startsWith('/political-security')
@@ -341,6 +347,7 @@ onBeforeUnmount(() => {
 }
 
 .app-container {
+  --app-header-height: 104px;
   min-height: 100vh;
   background: var(--app-bg);
   color: var(--text-main);
@@ -1216,6 +1223,19 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.content.fixed-workspace-content {
+  height: calc(100vh - var(--app-header-height, 104px));
+  min-height: 0;
+  flex: 0 0 calc(100vh - var(--app-header-height, 104px));
+  box-sizing: border-box;
+  padding: 12px 16px;
+  overflow: hidden;
+}
+
+.content.fixed-workspace-content > :deep(*) {
+  min-height: 0;
+}
+
 .nav-link,
 .workspace-title {
   position: relative;
@@ -1691,6 +1711,7 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1180px) {
+  .app-container { --app-header-height: 92px; }
   .header {
     height: 92px !important;
     min-height: 92px;
@@ -1735,6 +1756,7 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
+  .app-container { --app-header-height: 76px; }
   .nav-secondary-direct {
     display: none;
   }

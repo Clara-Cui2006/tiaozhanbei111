@@ -1,5 +1,5 @@
 <template>
-  <a-card :bordered="false" class="xrm-card" :class="{ 'xrm-theme-light': isLightTheme, 'xrm-theme-dark': !isLightTheme }">
+  <a-card :bordered="false" class="xrm-card" :class="[`xrm-card--${displayMode}`, { 'xrm-theme-light': isLightTheme, 'xrm-theme-dark': !isLightTheme }]">
     <header class="xrm-page-header">
       <div class="xrm-title-group">
         <span class="eyebrow">{{ isPoliticalMode ? '政治安全 · 空间与时间研判' : '西法智治 · 街道空间分析' }}</span>
@@ -617,13 +617,15 @@ const props = withDefaults(
     zoomScale?: number
     defaultCenter?: [number, number]
     defaultOverlayPolitical?: boolean
+    displayMode?: 'full' | 'cockpit' | 'focus'
   }>(),
   {
     points: () => [],
     height: 420,
     zoomScale: 1,
     defaultCenter: undefined,
-    defaultOverlayPolitical: false
+    defaultOverlayPolitical: false,
+    displayMode: 'full'
   }
 )
 
@@ -781,7 +783,13 @@ const activeDetailTab = ref<'metrics' | 'charts'>('metrics')
 const summaryExplanation = ref<StreetMapSummaryKey | ''>('')
 const politicalTopicFilter = ref('all')
 const politicalReviewFilter = ref('all')
-const mapDisplayHeight = computed(() => Math.max(460, Math.min(620, Number(props.height) || 520)))
+const displayMode = computed(() => props.displayMode)
+const mapDisplayHeight = computed(() => {
+  const requested = Number(props.height) || 520
+  if (displayMode.value === 'cockpit') return Math.max(250, Math.min(520, requested))
+  if (displayMode.value === 'focus') return Math.max(360, Math.min(620, requested))
+  return Math.max(460, Math.min(620, requested))
+})
 const detailPanelHeight = ref(0)
 const isLightTheme = ref(false)
 const mapZoom = ref(1)
@@ -2367,6 +2375,74 @@ onUnmounted(() => {
 .xrm-card :deep(.arco-card-body) {
   padding: 0;
   background: transparent;
+}
+
+.xrm-card--cockpit,
+.xrm-card--focus {
+  height: 100%;
+  border: 0 !important;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.xrm-card--cockpit .xrm-page-header,
+.xrm-card--cockpit .xrm-filter-section,
+.xrm-card--cockpit .xrm-method-section,
+.xrm-card--cockpit .xrm-summary-section,
+.xrm-card--cockpit .xrm-detail-panel,
+.xrm-card--cockpit .xrm-footer,
+.xrm-card--focus .xrm-page-header,
+.xrm-card--focus .xrm-filter-section,
+.xrm-card--focus .xrm-method-section,
+.xrm-card--focus .xrm-summary-section,
+.xrm-card--focus .xrm-footer {
+  display: none;
+}
+
+.xrm-card--cockpit .xrm-content,
+.xrm-card--focus .xrm-content {
+  height: 100%;
+  padding: 0;
+}
+
+.xrm-card--cockpit .xrm-layout,
+.xrm-card--focus .xrm-layout {
+  height: 100%;
+  min-height: 0 !important;
+  margin: 0;
+}
+
+.xrm-card--cockpit .xrm-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.xrm-card--cockpit .xrm-map-panel,
+.xrm-card--focus .xrm-map-panel {
+  min-height: 0;
+  padding: 8px;
+  border: 0;
+  border-radius: 0;
+}
+
+.xrm-card--cockpit .xrm-map-stage,
+.xrm-card--focus .xrm-map-stage {
+  min-height: 0;
+}
+
+.xrm-card--focus .xrm-filter-section,
+.xrm-card--focus .xrm-method-section {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+}
+
+.xrm-card--focus .xrm-content {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.xrm-card--focus .xrm-layout {
+  flex: 1;
 }
 
 .xrm-page-header {

@@ -1,8 +1,5 @@
 <template>
   <div class="page-contrast" :class="{ 'theme-light': themeMode === 'light' }">
-    <BackHome />
-    <a-page-header class="page-header" title="检察建议" subtitle="Procuratorate Recommend" />
-
     <button class="monthly-report-entry" @click="router.push('/procuratorate-suggestion/monthly-report')">
       <span class="entry-kicker">AI MONTHLY BRIEFING</span>
       <span class="entry-title">检察业务月报智能生成</span>
@@ -10,7 +7,7 @@
       <span class="entry-action">进入月报工作台 →</span>
     </button>
 
-    <a-card class="content-card">
+    <a-card class="content-card compact-filter-card">
       <template #title>
         <div class="card-title">
           <span>检察建议管理</span>
@@ -79,22 +76,22 @@
       </div>
     </a-card>
 
-    <a-row :gutter="16">
-      <a-col :span="6">
+    <div class="procuratorial-cockpit-grid" :class="{ 'procuratorial-cockpit-grid--focused': focusedPanel }">
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="analytics" title="检察建议分析" eyebrow="DISTRIBUTION · TREND">
         <a-card title="检察建议类别分布" :bordered="false" class="content-card">
           <div ref="pieChartRef" class="chart-container"></div>
         </a-card>
         <a-card title="近六个月建议数量趋势" :bordered="false" class="content-card">
           <div ref="lineChartRef" class="chart-container"></div>
         </a-card>
-      </a-col>
+      </DashboardFocusPanel>
 
-      <a-col :span="12">
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="list" title="检察建议列表" eyebrow="PROCURATORIAL WORKFLOW" class="suggestion-list-panel">
         <a-card title="检察建议列表" :bordered="false" class="content-card">
           <template #extra>
             <a-input-search v-model="filterForm.keyword" class="table-quick-search" placeholder="快速检索标题或正文" allow-clear @search="handleSearch" />
           </template>
-          <a-table :columns="columns" :data="filteredSuggestions" :loading="loading" row-key="id">
+          <a-table :columns="columns" :data="filteredSuggestions" :loading="loading" row-key="id" :scroll="{ y: focusedPanel === 'list' ? 430 : 270 }">
             <template #title="{ record }">
               <a-space>
                 {{ record.title }}
@@ -115,9 +112,9 @@
             </template>
           </a-table>
         </a-card>
-      </a-col>
+      </DashboardFocusPanel>
 
-      <a-col :span="6">
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="feed" title="办理反馈动态" eyebrow="LIVE FEEDBACK">
         <a-card title="实时动态流" :bordered="false" class="content-card">
           <div class="feed-list">
             <div v-for="item in feedItems" :key="item.time" class="feed-item">
@@ -126,17 +123,17 @@
             </div>
           </div>
         </a-card>
-      </a-col>
-    </a-row>
+      </DashboardFocusPanel>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, onActivated, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, onActivated, nextTick, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
-import BackHome from '../components/back-home.vue'
+import DashboardFocusPanel from '../components/dashboard-focus-panel.vue'
 import {
   fetchProcuratorateSuggestions,
   fetchProcuratorateFeed,
@@ -160,6 +157,7 @@ import {
 const router = useRouter()
 const isLightTheme = () => localStorage.getItem('platform:theme-mode') === 'light'
 const themeMode = ref<'light' | 'dark'>(isLightTheme() ? 'light' : 'dark')
+const focusedPanel = ref('')
 const updateTheme = () => { themeMode.value = isLightTheme() ? 'light' : 'dark' }
 const handleStorageChange = (e: StorageEvent) => { if (e.key === 'platform:theme-mode') updateTheme() }
 
@@ -265,6 +263,7 @@ const initLineChart = () => {
 }
 
 const handleChartResize = () => { pieChart?.resize(); lineChart?.resize() }
+watch(focusedPanel, async () => { await nextTick(); requestAnimationFrame(handleChartResize) })
 
 const handleSearch = () => { loading.value = true; setTimeout(() => { loading.value = false }, 500) }
 const handleReset = () => { filterForm.type = 'all'; filterForm.status = 'all' }
@@ -292,6 +291,63 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.page-contrast {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.page-contrast .monthly-report-entry {
+  min-height: 54px;
+  flex: 0 0 54px;
+  margin: 0;
+  padding: 7px 190px 7px 18px;
+}
+
+.page-contrast .entry-title { display: inline; margin: 0 18px 0 0; font-size: 21px; }
+.page-contrast .entry-kicker { display: inline; margin-right: 12px; }
+.page-contrast .entry-flow { display: inline-flex; }
+.page-contrast .entry-action { right: 16px; bottom: 10px; padding: 6px 10px; }
+
+.compact-filter-card {
+  flex: 0 0 130px;
+  margin: 0 !important;
+  overflow: hidden;
+}
+
+.compact-filter-card :deep(.arco-card-header) { min-height: 38px; padding: 0 12px; }
+.compact-filter-card :deep(.arco-card-body) { padding: 6px 12px; }
+.compact-filter-card .filter-section { padding: 0; }
+.compact-filter-card :deep(.arco-form-item) { margin-bottom: 5px; }
+.compact-filter-card :deep(.arco-form-item-label-col) { padding-bottom: 2px; }
+
+.procuratorial-cockpit-grid {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(250px, 1fr) minmax(0, 2fr) minmax(250px, 1fr);
+  gap: 8px;
+  overflow: hidden;
+}
+
+.procuratorial-cockpit-grid :deep(.focus-panel__body) { min-height: 0; }
+.procuratorial-cockpit-grid .content-card {
+  height: 50%;
+  margin: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+}
+.suggestion-list-panel .content-card,
+.procuratorial-cockpit-grid > :last-child .content-card { height: 100%; }
+.procuratorial-cockpit-grid :deep(.arco-card-header) { min-height: 36px; padding: 0 10px; }
+.procuratorial-cockpit-grid :deep(.arco-card-body) { padding: 8px; }
+.procuratorial-cockpit-grid .chart-container { height: calc(100% - 4px); min-height: 110px; }
+.procuratorial-cockpit-grid .feed-list { height: 100%; overflow: auto; }
+
 /* ===== 基础深色样式（默认） ===== */
 .page-contrast :deep(.arco-page-header-title) {
   color: #eff9ff;

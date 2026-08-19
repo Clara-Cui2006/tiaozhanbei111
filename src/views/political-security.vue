@@ -1,12 +1,5 @@
 <template>
-  <div class="political-security-page">
-    <BackHome />
-    <a-page-header title="政治安全态势" subtitle="Political Security Dashboard">
-      <template #tags>
-         <a-tag color="red" size="small">高保密级</a-tag>
-      </template>
-    </a-page-header>
-
+  <div class="political-security-page political-cockpit-page">
     <div class="kpi-strip">
       <div class="kpi-item kpi-red">
         <div class="kpi-accent"></div>
@@ -36,10 +29,15 @@
       </div>
     </div>
 
-    <a-row :gutter="16" class="dashboard-row">
-      <a-col :span="24">
+    <div class="political-cockpit-grid" :class="{ 'political-cockpit-grid--focused': focusedPanel }">
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="map" title="政治安全风险空间分布" eyebrow="FOUR-DIMENSIONAL ANALYSIS" class="political-map-panel">
+        <template #default="{ focused }">
+          <RiskMapPanel :height="focused ? 370 : 395" :default-overlay-political="true" :display-mode="focused ? 'focus' : 'cockpit'" />
+        </template>
+      </DashboardFocusPanel>
+
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="topics" title="重点专题与人工复核" eyebrow="PRIORITY TOPICS" class="political-topic-panel">
         <a-card :bordered="false" class="chart-card topic-card">
-          <template #title>西城重点专题与复核状态</template>
           <div class="topic-card-layout">
             <div class="topic-list">
               <PriorityTopicTabs v-model="selectedPriorityTag" :alerts="priorityAlerts" />
@@ -84,41 +82,19 @@
             </div>
           </div>
           <a-alert type="info" class="method-alert">“高风险/高关注”不单纯依据案件数量判断，需结合案件分类标签、风险规则匹配和人工复核结果；高发风险类型可按案件数量排序。</a-alert>
-        </a-card>
-      </a-col>
-    </a-row>
-
-    <a-row :gutter="16" class="dashboard-row">
-      <a-col :span="24">
-        <RiskMapPanel :height="660" :default-overlay-political="true" />
-      </a-col>
-    </a-row>
-
-    <a-row :gutter="16" class="dashboard-row">
-      <a-col :span="24">
-        <a-card :bordered="false" class="chart-card trend-card">
-          <template #title>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span>🤖 AI 核心政务区政治安全研判摘要</span>
-              <a-button type="primary" status="danger" size="small" :loading="aiAssessing" @click="generateAssessment">
-                {{ aiAssessment ? '重新研判' : '一键研判' }}
-              </a-button>
-            </div>
-          </template>
-          <div v-if="aiAssessing" class="ai-loading-text">
-            AI 正在高保密级环境下，综合分析核心政务区政治安全风险态势...
-          </div>
-          <div v-else-if="aiAssessment" class="ai-assessment" v-html="formatAssessment(aiAssessment)"></div>
-          <div v-else class="ai-empty-text">
-            点击「一键研判」，AI 将综合政治安全数据生成保密级宏观防范与管控决策建议
+          <div class="political-ai-strip">
+            <a-button type="primary" status="danger" size="small" :loading="aiAssessing" @click="generateAssessment">
+              {{ aiAssessment ? '重新生成草稿' : '生成研判草稿' }}
+            </a-button>
+            <div v-if="aiAssessing" class="ai-loading-text">AI 正在综合分析政治安全风险态势...</div>
+            <div v-else-if="aiAssessment" class="ai-assessment" v-html="formatAssessment(aiAssessment)"></div>
+            <div v-else class="ai-empty-text">AI 仅辅助生成草稿，最终结论须由人工复核。</div>
           </div>
         </a-card>
-      </a-col>
-    </a-row>
+      </DashboardFocusPanel>
 
-    <a-row :gutter="16" class="dashboard-row">
-      <a-col :span="24">
-        <a-card title="数据驾驶舱" class="chart-card" :bordered="false">
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="dimensions" title="四维研判数据驾驶舱" eyebrow="LOCATION · CONTENT · SUBJECT · TIME" class="political-dimension-panel">
+        <a-card class="chart-card" :bordered="false">
           <div v-if="activeCockpitPanel" class="cockpit-return-bar">
             <a-button size="small" type="outline" @click="closeCockpitPanel">返回数据驾驶舱</a-button>
             <span>{{ activeCockpitPanelTitle }}详情</span>
@@ -158,15 +134,15 @@
             </div>
           </div>
         </a-card>
-      </a-col>
-    </a-row>
+      </DashboardFocusPanel>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import * as echarts from 'echarts'
-import BackHome from '../components/back-home.vue'
+import DashboardFocusPanel from '../components/dashboard-focus-panel.vue'
 import RiskMapPanel from '../components/risk-map-panel.vue'
 import PriorityTopicTabs from '../components/priority-topic-tabs.vue'
 import { fetchPoliticalMonthlyTrend, fetchPoliticalStreetStats, fetchPoliticalOverview, fetchPriorityAlerts } from '../api/platform'
@@ -193,6 +169,7 @@ const subjectChartRef = ref<HTMLElement | null>(null)
 const timeChartRef = ref<HTMLElement | null>(null)
 type CockpitPanelKey = 'location' | 'behavior' | 'subject' | 'time'
 const activeCockpitPanel = ref<CockpitPanelKey | null>(null)
+const focusedPanel = ref('')
 const cockpitPanelTitles: Record<CockpitPanelKey, string> = {
   location: '地点因素',
   behavior: '行为内容',
@@ -436,6 +413,8 @@ const closeCockpitPanel = async () => {
   await resizeCockpitCharts()
 }
 
+watch(focusedPanel, resizeCockpitCharts)
+
 onMounted(() => {
   initDataAndRender()
   window.addEventListener('resize', handleResize)
@@ -457,6 +436,79 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.political-cockpit-page {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 0 !important;
+  overflow: hidden;
+}
+
+.political-cockpit-page .kpi-strip {
+  height: 92px;
+  flex: 0 0 92px;
+  gap: 10px;
+  margin: 0;
+}
+
+.political-cockpit-page .kpi-item { padding: 11px 10px 8px; }
+.political-cockpit-page .kpi-label { margin-bottom: 6px; font-size: 14px; }
+.political-cockpit-page .kpi-value { font-size: 27px; }
+.political-cockpit-page .kpi-value-text { font-size: 18px !important; }
+.political-cockpit-page .kpi-sub { margin-top: 4px; font-size: 11px; }
+
+.political-cockpit-grid {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1.7fr) minmax(430px, 1fr);
+  grid-template-rows: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 10px;
+  overflow: hidden;
+}
+
+.political-map-panel { grid-row: 1 / 3; }
+.political-topic-panel { grid-column: 2; grid-row: 1; }
+.political-dimension-panel { grid-column: 2; grid-row: 2; }
+
+.political-topic-panel .chart-card,
+.political-dimension-panel .chart-card {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.political-topic-panel.focus-panel--active .chart-card { overflow: auto; }
+
+.political-topic-panel :deep(.arco-card-body),
+.political-dimension-panel :deep(.arco-card-body) { padding: 8px; }
+
+.political-topic-panel .topic-card-layout { display: block; }
+.political-topic-panel .review-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.political-topic-panel .review-pod { min-height: 94px; padding: 8px; }
+.political-topic-panel .review-pod p,
+.political-topic-panel .method-alert { display: none; }
+.political-topic-panel .review-ring { width: 58px; height: 58px; }
+.political-topic-panel .topic-list { margin-bottom: 6px; }
+.political-ai-strip { display: flex; align-items: center; gap: 10px; margin-top: 7px; }
+.political-ai-strip .ai-empty-text,
+.political-ai-strip .ai-loading-text { flex: 1; padding: 4px; text-align: left; }
+.political-ai-strip .ai-assessment { max-height: 90px; overflow: auto; }
+
+.political-dimension-panel .cockpit-grid {
+  height: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.political-dimension-panel .cockpit-chart { min-height: 0; padding: 6px; }
+.political-dimension-panel .cockpit-chart h4 { margin: 0 0 2px; }
+.political-dimension-panel .chart-box { height: calc(100% - 22px); min-height: 70px; }
+
 .political-security-page { padding-bottom: 20px; }
 .dashboard-row { margin-top: 16px; margin-bottom: 16px; }
 

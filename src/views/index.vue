@@ -1,8 +1,5 @@
 <template>
-  <div class="dashboard">
-    <BackHome />
-    <a-page-header title="风险态势" subtitle="Risk Situation Dashboard" />
-
+  <div class="dashboard cockpit-page">
     <div class="kpi-strip">
       <div class="kpi-item kpi-red">
         <div class="kpi-accent"></div>
@@ -30,38 +27,20 @@
         <div class="kpi-value">{{ overview.legalPushCount }}</div>
       </div>
     </div>
+    <div class="cockpit-grid" :class="{ 'cockpit-grid--focused': focusedPanel }">
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="map" title="西城区风险空间态势" eyebrow="SPATIAL DISTRIBUTION" class="map-focus-panel">
+        <template #default="{ focused }">
+          <RiskMapPanel
+            :points="mapPoints"
+            :height="focused ? 370 : 395"
+            :display-mode="focused ? 'focus' : 'cockpit'"
+          />
+        </template>
+      </DashboardFocusPanel>
 
-    <a-row style="margin-top: 25px">
-      <a-col :span="24">
-        <RiskMapPanel :points="mapPoints" :height="620" />
-        <div class="map-note">
-          以上数据仅为预测的结果，不代表真实情况；地区的数据也不反映地区的治理能力的好坏
-        </div>
-      </a-col>
-    </a-row>
-
-    <a-card :bordered="false" class="trend-card" style="margin-top: 20px">
-      <template #title>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span>🤖 AI 风险研判摘要</span>
-          <a-button type="primary" size="small" :loading="aiAssessing" @click="generateAssessment">
-            {{ aiAssessment ? '重新研判' : '一键研判' }}
-          </a-button>
-        </div>
-      </template>
-      <div v-if="aiAssessing" class="ai-loading-text">
-        AI 正在综合分析社区风险态势...
-      </div>
-      <div v-else-if="aiAssessment" class="ai-assessment" v-html="formatAssessment(aiAssessment)"></div>
-      <div v-else class="ai-empty-text">
-        点击「一键研判」，AI 将综合态势盘数据生成宏观治理决策建议
-      </div>
-    </a-card>
-
-    <a-row :gutter="20" style="margin-top: 20px">
-      <a-col :span="24">
-        <a-card title="社区风险趋势图" :bordered="false" class="trend-card">
-          <template #extra>
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="trend" title="社区风险趋势" eyebrow="RISK TREND" class="trend-focus-panel">
+        <template #default="{ focused }">
+          <div class="trend-toolbar">
             <a-radio-group v-model="activeTab" type="button" size="small" @change="renderChart">
               <a-radio value="totalCases">案件总数</a-radio>
               <a-radio value="highIncidence">高发案件类型</a-radio>
@@ -69,19 +48,30 @@
               <a-radio value="procuratorate">检察建议发送次数</a-radio>
               <a-radio value="legalPlan">普法方案投递次数</a-radio>
             </a-radio-group>
-          </template>
-          <div ref="chartRef" class="dashboard-chart-stage"></div>
-        </a-card>
-      </a-col>
-    </a-row>
+          </div>
+          <div ref="chartRef" class="dashboard-chart-stage" :class="{ 'dashboard-chart-stage--focused': focused }"></div>
+        </template>
+      </DashboardFocusPanel>
+
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="assessment" title="AI 风险研判摘要" eyebrow="HUMAN REVIEW REQUIRED" class="assessment-focus-panel">
+        <div class="assessment-content">
+          <a-button type="primary" size="small" :loading="aiAssessing" @click="generateAssessment">
+            {{ aiAssessment ? '重新生成草稿' : '生成研判草稿' }}
+          </a-button>
+          <div v-if="aiAssessing" class="ai-loading-text">AI 正在综合分析社区风险态势...</div>
+          <div v-else-if="aiAssessment" class="ai-assessment" v-html="formatAssessment(aiAssessment)"></div>
+          <div v-else class="ai-empty-text">AI 仅辅助生成研判草稿，最终结论须由人工复核。</div>
+        </div>
+      </DashboardFocusPanel>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 import 'echarts-gl'
-import BackHome from '../components/back-home.vue'
+import DashboardFocusPanel from '../components/dashboard-focus-panel.vue'
 import RiskMapPanel from '../components/risk-map-panel.vue'
 import { fetchCommunityRiskPoints, fetchDashboardOverview, fetchRiskTrend, fetchMultiTrend } from '../api/platform'
 import { chatWithLLM } from '../services/llm'
@@ -111,6 +101,7 @@ const trend = ref<RiskTrendPoint[]>([])
 const mapPoints = ref<CommunityRiskPoint[]>([])
 const multiTrend = ref<MultiTrendData[]>([])
 const activeTab = ref('totalCases')
+const focusedPanel = ref('')
 
 // Reactive theme for dashboard
 const themeMode = ref<'light' | 'dark'>('dark')
@@ -496,6 +487,11 @@ watch(activeTab, () => {
   renderChart()
 })
 
+watch(focusedPanel, async () => {
+  await nextTick()
+  requestAnimationFrame(() => myChart?.resize())
+})
+
 onMounted(async () => {
   const [overviewData, trendData, mapData, multiTrendData] = await Promise.all([
     fetchDashboardOverview(),
@@ -527,6 +523,87 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.cockpit-page {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.cockpit-page .kpi-strip {
+  height: 92px;
+  flex: 0 0 92px;
+  gap: 10px;
+}
+
+.cockpit-page .kpi-item {
+  padding: 12px 10px 10px;
+}
+
+.cockpit-page .kpi-label {
+  margin-bottom: 8px;
+  font-size: 15px;
+}
+
+.cockpit-page .kpi-value { font-size: 28px; }
+.cockpit-page .kpi-value-text { font-size: 19px !important; }
+
+.cockpit-grid {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 2fr) minmax(330px, 1fr);
+  grid-template-rows: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 10px;
+  overflow: hidden;
+}
+
+.map-focus-panel { grid-row: 1 / 3; }
+.trend-focus-panel { grid-column: 2; grid-row: 1; }
+.assessment-focus-panel { grid-column: 2; grid-row: 2; }
+
+.trend-toolbar {
+  position: absolute;
+  z-index: 2;
+  top: 5px;
+  right: 8px;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+}
+
+.trend-focus-panel :deep(.focus-panel__body) { position: relative; }
+
+.trend-toolbar :deep(.arco-radio-group) {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.dashboard-chart-stage {
+  width: 100%;
+  height: 100% !important;
+  min-height: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding-top: 32px;
+}
+
+.assessment-content {
+  position: relative;
+  height: 100%;
+  padding: 12px;
+  overflow: auto;
+}
+
+.assessment-content > .arco-btn { float: right; margin: 0 0 8px 10px; }
+.assessment-content .ai-empty-text,
+.assessment-content .ai-loading-text { padding: 34px 10px 10px; }
+
+.cockpit-grid--focused .assessment-content { padding: 24px; }
+
 .dashboard :deep(.arco-page-header) {
   background: linear-gradient(90deg, rgba(79, 174, 255, 0.18), rgba(14, 34, 68, 0.65));
   border-radius: 10px;

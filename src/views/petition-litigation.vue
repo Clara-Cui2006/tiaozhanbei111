@@ -37,12 +37,14 @@
           </button>
         </section>
 
-        <section class="overview-grid">
-          <div class="tech-panel map-panel">
-            <div class="panel-title"><span>西城区街道事项分布</span><small>点击街道后同步筛选指标、结构与列表</small></div>
-            <RiskMapPanel :points="mapPoints" :height="510" @street-change="selectStreet" />
-          </div>
-          <div class="structure-column">
+        <div class="petition-dashboard-grid" :class="{ 'petition-dashboard-grid--focused': focusedPanel }">
+          <DashboardFocusPanel v-model="focusedPanel" panel-key="map" title="西城区街道事项分布" eyebrow="12345 · 综治中心">
+            <template #default="{ focused }">
+              <RiskMapPanel :points="mapPoints" :height="focused ? 370 : 275" :display-mode="focused ? 'focus' : 'cockpit'" @street-change="selectStreet" />
+            </template>
+          </DashboardFocusPanel>
+          <DashboardFocusPanel v-model="focusedPanel" panel-key="structure" title="事项结构" eyebrow="RISK · SOURCE · CATEGORY">
+            <div class="structure-column">
             <div class="tech-panel compact-panel">
               <div class="panel-title"><span>风险等级结构</span><small>可点击筛选</small></div>
               <button v-for="item in riskDistribution" :key="item.name" type="button" class="distribution-row" @click="selectRisk(item.name)">
@@ -61,18 +63,22 @@
                 <button v-for="item in categoryDistribution" :key="item.name" type="button" @click="filters.eventCategory = item.name">{{ item.name }} <b>{{ item.value }}</b></button>
               </div>
             </div>
-          </div>
-        </section>
-
-        <ItemTable :items="filteredItems" @open="openItem" />
+            </div>
+          </DashboardFocusPanel>
+          <DashboardFocusPanel v-model="focusedPanel" panel-key="items" title="涉访涉诉事项" eyebrow="HUMAN REVIEW REQUIRED">
+            <ItemTable :items="filteredItems" @open="openItem" />
+          </DashboardFocusPanel>
+        </div>
       </template>
 
       <template v-else-if="section === 'clues'">
+        <DashboardFocusPanel v-model="focusedPanel" panel-key="categories" title="监督线索辅助分类" eyebrow="CLUE SCREENING">
         <section class="clue-category-grid">
           <button v-for="category in supervisionCategories" :key="category" type="button" :class="{ active: selectedSupervision === category }" @click="selectedSupervision = category">
             <span>{{ category }}</span><strong>{{ supervisionCount(category) }}</strong><small>辅助命中 · 待人工复核</small>
           </button>
         </section>
+        </DashboardFocusPanel>
 
         <section v-if="selectedSupervision === '政治安全'" class="typical-panel tech-panel">
           <div class="panel-title"><span>政治安全典型事项</span><small>从全量命中事项中配置，不另建重复数据</small></div>
@@ -83,18 +89,20 @@
           </div>
         </section>
 
-        <ItemTable :items="clueItems" @open="openItem" />
+        <DashboardFocusPanel v-model="focusedPanel" panel-key="clue-items" title="监督线索事项" eyebrow="HUMAN REVIEW REQUIRED"><ItemTable :items="clueItems" @open="openItem" /></DashboardFocusPanel>
       </template>
 
       <template v-else>
+        <DashboardFocusPanel v-model="focusedPanel" panel-key="departments" title="反向审视部门概览" eyebrow="REVERSE REVIEW">
         <section class="department-grid">
           <button v-for="department in departments" :key="department.id" type="button" :class="{ active: selectedDepartment === department.id }" @click="selectedDepartment = department.id">
             <span>{{ department.name }}</span><strong>{{ department.total }}</strong>
             <small>待核查 {{ department.pending }} · 已处理 {{ department.done }}</small>
           </button>
         </section>
+        </DashboardFocusPanel>
         <div class="reverse-note">反向审视用于发现“群众反映—检察案件—内部业务部门”间的问题，不等同于一般外部监督线索。</div>
-        <ItemTable :items="reverseItems" reverse @open="openItem" />
+        <DashboardFocusPanel v-model="focusedPanel" panel-key="reverse-items" title="反向审视事项" eyebrow="INTERNAL REVIEW"><ItemTable :items="reverseItems" reverse @open="openItem" /></DashboardFocusPanel>
       </template>
     </a-spin>
 
@@ -148,6 +156,7 @@
 import { computed, defineComponent, h, onMounted, reactive, ref, resolveComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import RiskMapPanel from '../components/risk-map-panel.vue'
+import DashboardFocusPanel from '../components/dashboard-focus-panel.vue'
 import { fetchPetitionLitigationItems } from '../api/platform'
 import { countPetitionValues, filterPetitionItems } from '../features/petition-litigation/model'
 import type { PetitionLitigationItem, PetitionRiskLevel, SupervisionCategory } from '../types/platform'
@@ -177,6 +186,7 @@ const selectedDepartment = ref('all')
 const drawerVisible = ref(false)
 const selectedItem = ref<PetitionLitigationItem | null>(null)
 const showSensitive = ref(false)
+const focusedPanel = ref('')
 
 const filteredItems = computed(() => filterPetitionItems(items.value, { ...filters, dateRange: dateRange.value }))
 const streetOptions = computed(() => [...new Set(items.value.map((item) => item.street).filter(Boolean))] as string[])
@@ -243,7 +253,7 @@ const ItemTable = defineComponent({
       { title: '发生时间', dataIndex: 'occurredAt', width: 160 }, { title: '事件来源', dataIndex: 'source', width: 120 }, { title: '风险等级', dataIndex: 'riskLevel', slotName: 'riskLevel', width: 105 },
       { title: '所属街道', dataIndex: 'street', width: 145 }, { title: '事件类别', dataIndex: 'eventCategory', width: 135 }, { title: '事件简述', dataIndex: 'summary', ellipsis: true, tooltip: true }, { title: '操作', slotName: 'action', width: 90 }
     ])
-    return () => h('section', { class: 'tech-panel table-panel' }, [h('div', { class: 'panel-title' }, [h('span', props.reverse ? '反向审视事项' : '全量事项列表'), h('small', `共 ${props.items.length} 条`)]), h(resolveComponent('a-table') as any, { columns: columns.value, data: props.items, pagination: { pageSize: 8 }, rowKey: 'id', scroll: { x: 1000 } }, { riskLevel: ({ record }: any) => h(resolveComponent('a-tag') as any, { color: record.riskLevel === '红色' ? 'red' : record.riskLevel === '橙色' ? 'orangered' : record.riskLevel === '黄色' ? 'gold' : 'arcoblue' }, () => record.riskLevel), action: ({ record }: any) => h(resolveComponent('a-button') as any, { type: 'text', size: 'small', onClick: () => emit('open', record) }, () => '查看详情') })])
+    return () => h('section', { class: 'tech-panel table-panel' }, [h('div', { class: 'panel-title' }, [h('span', props.reverse ? '反向审视事项' : '全量事项列表'), h('small', `共 ${props.items.length} 条`)]), h(resolveComponent('a-table') as any, { columns: columns.value, data: props.items, pagination: { pageSize: 8 }, rowKey: 'id', scroll: { x: 1000, y: focusedPanel.value.includes('items') ? 420 : 165 } }, { riskLevel: ({ record }: any) => h(resolveComponent('a-tag') as any, { color: record.riskLevel === '红色' ? 'red' : record.riskLevel === '橙色' ? 'orangered' : record.riskLevel === '黄色' ? 'gold' : 'arcoblue' }, () => record.riskLevel), action: ({ record }: any) => h(resolveComponent('a-button') as any, { type: 'text', size: 'small', onClick: () => emit('open', record) }, () => '查看详情') })])
   }
 })
 
@@ -257,4 +267,86 @@ onMounted(async () => {
 .petition-workspace{min-height:100%;padding:22px 26px 40px;color:#eaf8ff;background:radial-gradient(circle at 50% 0,rgba(17,91,142,.18),transparent 38%),#031124}.workspace-heading{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px;padding:18px 22px;border:1px solid rgba(65,202,255,.22);background:linear-gradient(135deg,rgba(10,57,96,.74),rgba(3,23,48,.84))}.workspace-heading p,.workspace-heading h1{margin:0}.workspace-heading p{color:#56dbff;font-size:13px;letter-spacing:2px}.workspace-heading h1{margin:5px 0;font-size:28px}.workspace-heading span{color:#8fb4c9}.filter-panel{position:sticky;top:86px;z-index:20;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;padding:13px;border:1px solid rgba(60,180,231,.2);background:rgba(4,23,45,.96);box-shadow:0 8px 22px rgba(0,0,0,.18)}.metric-grid,.clue-category-grid,.department-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:16px}.metric-card,.clue-category-grid button,.department-grid button{display:flex;min-height:104px;flex-direction:column;align-items:flex-start;justify-content:center;padding:16px;border:1px solid rgba(74,185,226,.23);color:#dff7ff;text-align:left;background:linear-gradient(145deg,rgba(10,48,82,.84),rgba(3,24,49,.88));cursor:pointer}.metric-card:hover,.clue-category-grid button:hover,.clue-category-grid button.active,.department-grid button:hover,.department-grid button.active{border-color:#36d8ff;box-shadow:0 0 18px rgba(32,215,255,.13);transform:translateY(-1px)}.metric-card strong,.clue-category-grid strong,.department-grid strong{margin:4px 0;color:#54e3ff;font-size:30px}.metric-card small,.clue-category-grid small,.department-grid small{color:#769eb6}.metric-card.red strong{color:#ff6969}.metric-card.orange strong{color:#ff9e44}.metric-card.yellow strong{color:#f1d36b}.metric-card.purple strong{color:#b78bff}.overview-grid{display:grid;grid-template-columns:minmax(0,1.85fr) minmax(300px,.75fr);gap:14px;margin-bottom:16px}.tech-panel{border:1px solid rgba(65,190,236,.2);background:linear-gradient(145deg,rgba(5,31,59,.9),rgba(3,20,41,.94));box-shadow:inset 0 0 24px rgba(15,122,177,.05)}.map-panel{min-width:0}.structure-column{display:flex;flex-direction:column;gap:14px}.compact-panel{padding:14px}.panel-title{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid rgba(74,176,218,.15)}.panel-title span{font-size:17px;font-weight:700}.panel-title small{color:#7ba6bc}.distribution-row,.bar-row{display:flex;width:100%;align-items:center;gap:9px;padding:8px 3px;border:0;color:#ccecff;background:transparent;cursor:pointer}.distribution-row i{width:9px;height:9px;border-radius:50%}.distribution-row span{flex:1;text-align:left}.distribution-row em,.bar-row em{color:#7eacc2;font-style:normal}.bar-row span{width:88px;text-align:left}.bar-row i{height:6px;flex:1;overflow:hidden;border-radius:8px;background:rgba(66,132,164,.17)}.bar-row i b{display:block;height:100%;border-radius:8px;background:linear-gradient(90deg,#127fc5,#42e6ff)}.category-tags{display:flex;gap:8px;flex-wrap:wrap;padding-top:10px}.category-tags button{padding:7px 10px;border:1px solid rgba(70,171,216,.2);border-radius:3px;color:#afd7e8;background:rgba(9,57,91,.44);cursor:pointer}.category-tags b{color:#52e5ff}.table-panel{margin-top:16px;overflow:hidden}.typical-panel{margin-bottom:16px}.typical-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:14px}.typical-grid button{display:flex;gap:8px;flex-direction:column;align-items:flex-start;padding:16px;border:1px solid rgba(255,137,66,.3);color:#dff7ff;text-align:left;background:rgba(76,39,20,.2);cursor:pointer}.typical-grid button span:last-child{color:#9fc0cf}.reverse-note{margin-bottom:12px;padding:12px 15px;border-left:3px solid #4bdcff;color:#9cc5d8;background:rgba(20,93,131,.14)}.detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.detail-grid label{display:flex;gap:5px;flex-direction:column;padding:10px;color:#7aa4ba;background:rgba(7,43,71,.36)}.detail-grid strong{color:#e8f8ff}.drawer-section{margin-bottom:16px;padding:14px;border:1px solid rgba(70,171,216,.2);background:rgba(5,28,52,.48)}.drawer-section h3{margin:0 0 12px;color:#4edfff}.detail-summary{padding:12px;color:#c8e7f4;line-height:1.7;background:rgba(6,36,61,.55)}.privacy-switch{display:flex;justify-content:space-between;margin-bottom:10px;color:#8cb1c4}.tag-row{display:flex;gap:8px;flex-wrap:wrap}.drawer-section li{margin:7px 0;color:#badbe8}.risk-reason{display:flex;gap:5px;flex-direction:column;margin:9px 0;padding:10px;border-left:2px solid #36dcff;background:rgba(10,65,99,.28)}.risk-reason span{color:#91b8ca}.reserved-fields{padding:10px;color:#70bedc;border:1px dashed rgba(74,203,245,.28)}.drawer-actions{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:10px;padding:14px;border-top:1px solid rgba(75,190,232,.2);background:rgba(3,18,35,.96)}
 @media(max-width:1440px){.petition-workspace{padding:18px}.metric-grid,.clue-category-grid,.department-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.overview-grid{grid-template-columns:minmax(0,1.55fr) minmax(280px,.75fr)}}
 @media(max-width:900px){.overview-grid{grid-template-columns:1fr}.metric-grid,.clue-category-grid,.department-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.workspace-heading{align-items:flex-start;gap:12px;flex-direction:column}.detail-grid,.typical-grid{grid-template-columns:1fr}}
+
+.petition-workspace {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.petition-workspace .workspace-heading {
+  min-height: 58px;
+  flex: 0 0 58px;
+  align-items: center;
+  margin: 0;
+  padding: 8px 14px;
+}
+.petition-workspace .workspace-heading p { font-size: 10px; }
+.petition-workspace .workspace-heading h1 { display: inline; margin: 0 10px 0 0; font-size: 21px; }
+.petition-workspace .workspace-heading span { font-size: 12px; }
+
+.petition-workspace .filter-panel {
+  position: static;
+  min-height: 42px;
+  flex: 0 0 42px;
+  flex-wrap: nowrap;
+  margin: 0;
+  padding: 4px 7px;
+}
+
+.petition-workspace :deep(.arco-spin) {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.petition-workspace .metric-grid {
+  min-height: 78px;
+  flex: 0 0 78px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 8px;
+}
+.petition-workspace .metric-card { min-height: 0; padding: 7px 10px; }
+.petition-workspace .metric-card strong { margin: 1px 0; font-size: 23px; }
+
+.petition-dashboard-grid {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1.8fr) minmax(310px, .8fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, .9fr);
+  gap: 8px;
+  overflow: hidden;
+}
+.petition-dashboard-grid > :first-child { grid-row: 1 / 3; }
+.petition-dashboard-grid .structure-column { height: 100%; gap: 5px; padding: 6px; overflow: auto; }
+.petition-dashboard-grid .compact-panel { padding: 7px; }
+.petition-dashboard-grid .compact-panel .panel-title { padding: 4px 6px; }
+.petition-dashboard-grid .distribution-row,
+.petition-dashboard-grid .bar-row { padding: 4px 2px; }
+.petition-dashboard-grid .category-tags { gap: 4px; padding-top: 4px; }
+.petition-dashboard-grid .category-tags button { padding: 4px 6px; }
+.petition-dashboard-grid .table-panel { height: 100%; margin: 0; border: 0; }
+.petition-dashboard-grid .table-panel > .panel-title { display: none; }
+
+.petition-workspace > :deep(.arco-spin) > .focus-panel,
+.petition-workspace > :deep(.arco-spin) > .typical-panel,
+.petition-workspace > :deep(.arco-spin) > .reverse-note {
+  margin-bottom: 8px;
+}
+
+.petition-workspace > :deep(.arco-spin) > .focus-panel:last-of-type { flex: 1; }
+.petition-workspace .clue-category-grid,
+.petition-workspace .department-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 8px; }
+.petition-workspace .clue-category-grid button,
+.petition-workspace .department-grid button { min-height: 72px; padding: 8px; }
+.petition-workspace .clue-category-grid strong,
+.petition-workspace .department-grid strong { font-size: 22px; }
 </style>

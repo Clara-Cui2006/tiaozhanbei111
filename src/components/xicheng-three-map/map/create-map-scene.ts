@@ -80,7 +80,9 @@ export function createMapScene(container: HTMLElement, options: MapSceneOptions)
     projection,
     topHeight: 12.7,
   })
-  const platformTexture = new THREE.TextureLoader().load('/textures/xicheng-tech-platform-v1.png')
+  const platformTexture = new THREE.TextureLoader().load(
+    `${import.meta.env.BASE_URL}textures/xicheng-tech-platform-v1.png`,
+  )
   platformTexture.colorSpace = THREE.SRGBColorSpace
   platformTexture.minFilter = THREE.LinearMipmapLinearFilter
   platformTexture.magFilter = THREE.LinearFilter

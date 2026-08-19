@@ -1,21 +1,6 @@
 name: Docker image tar
 
 on:
-  push:
-    branches:
-      - main
-      - "codex/**"
-    paths:
-      - ".github/workflows/docker-image-tar.yml"
-      - "Dockerfile"
-      - ".dockerignore"
-      - "docker/**"
-      - "server/**"
-      - "src/**"
-      - "public/**"
-      - "package.json"
-      - "package-lock.json"
-      - "requirements-server.txt"
   workflow_dispatch:
     inputs:
       source_ref:

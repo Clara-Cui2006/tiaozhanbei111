@@ -48,7 +48,7 @@ const syncSelection = (streetName: string, focus = false) => {
 onMounted(async () => {
   if (!container.value) return
   try {
-    collection = await loadStreetCollection('/maps/xicheng_15_streets_clean.geojson')
+    collection = await loadStreetCollection(`${import.meta.env.BASE_URL}maps/xicheng_15_streets_clean.geojson`)
     scene = createMapScene(container.value, {
       collection,
       metrics: buildMetrics(props.streets),

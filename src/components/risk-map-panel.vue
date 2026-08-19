@@ -633,14 +633,14 @@ const EMBEDDED_XICHENG_GEOJSON = {"type":"FeatureCollection","features":[{"type"
 
 const buildMapSourceCandidates = () => {
   const baseUrl = String(import.meta.env.BASE_URL || '/').replace(/\/?$/, '/')
-  const origin = typeof window === 'undefined' ? 'http://localhost/' : `${window.location.origin}/`
+  const pageUrl = typeof document === 'undefined' ? 'http://localhost/' : document.baseURI
   const candidates: Array<{ fileName: string; url: string }> = []
   const seen = new Set<string>()
 
   MAP_FILE_NAMES.forEach((fileName) => {
     const sourcePaths = [`${baseUrl}maps/${fileName}`, `/maps/${fileName}`]
     sourcePaths.forEach((sourcePath) => {
-      const url = new URL(sourcePath, origin).toString()
+      const url = new URL(sourcePath, pageUrl).toString()
       if (seen.has(url)) return
       seen.add(url)
       candidates.push({ fileName, url })

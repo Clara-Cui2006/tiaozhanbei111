@@ -436,7 +436,7 @@ onUnmounted(() => {
 
 <style scoped>
 .home-page {
-  height: calc(100vh - 86px);
+  height: calc(100vh - 104px);
   min-height: 0;
   overflow: hidden;
   color: #f4fbff;

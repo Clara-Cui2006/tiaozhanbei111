@@ -5,26 +5,42 @@
     <a-layout class="layout-shell">
       <a-layout-header class="header">
         <button class="brand" type="button" aria-label="返回首页" @click="goTo('/')">
-          {{ activeWorkspace?.label || '红墙智检' }}
+          红墙智检
         </button>
 
-        <nav class="top-nav" aria-label="主导航">
+        <nav
+          class="top-nav"
+          :class="{ 'top-nav--home': isHomeRoute, 'top-nav--workspace': activeWorkspace }"
+          aria-label="主导航"
+        >
+          <button
+            v-if="activeWorkspace"
+            type="button"
+            class="workspace-title"
+            @click="goTo(activeWorkspace.key)"
+          >
+            {{ activeWorkspace.label }}
+          </button>
+
           <button
             v-for="item in primaryMenuItems"
             :key="item.key"
             type="button"
             class="nav-link"
-            :class="{ 'nav-link--active': isNavActive(item.key) }"
+            :class="{
+              'nav-link--primary': isHomeRoute || !activeWorkspace,
+              'nav-link--secondary': activeWorkspace,
+              'nav-link--active': isNavActive(item.key)
+            }"
             @click="goTo(item.key)"
           >
             {{ item.label }}
           </button>
 
-          <div v-if="!isHomeRoute && moreMenuItems.length" class="more-nav" @click.stop>
+          <div v-if="isHomeRoute && moreMenuItems.length" class="more-nav" @click.stop>
             <button
               type="button"
               class="nav-link more-trigger"
-              :class="{ 'nav-link--active': secondaryActive }"
               :aria-expanded="moreOpen"
               @click="moreOpen = !moreOpen"
             >
@@ -203,8 +219,6 @@ const isNavActive = (key: string) => {
   if (key === '/archive') return path === '/archive' || path.startsWith('/archive-item/')
   return path === key || path.startsWith(`${key}/`)
 }
-
-const secondaryActive = computed(() => moreMenuItems.value.some((item) => isNavActive(item.key)))
 
 function closeFloatingMenus() {
   moreOpen.value = false
@@ -1152,13 +1166,13 @@ onBeforeUnmount(() => {
 
 /* ===== 首页视觉稿顶部导航（第二轮） ===== */
 .header {
-  height: 86px !important;
-  min-height: 86px;
+  height: 104px !important;
+  min-height: 104px;
   display: grid !important;
   grid-template-columns: 230px minmax(0, 1fr) 280px !important;
   align-items: center;
-  gap: 18px !important;
-  padding: 0 34px !important;
+  gap: 20px !important;
+  padding: 0 28px !important;
   overflow: visible;
   background: rgba(2, 9, 22, 0.97) !important;
   border-bottom: 1px solid rgba(86, 148, 191, 0.22) !important;
@@ -1177,7 +1191,7 @@ onBeforeUnmount(() => {
   border: 0;
   color: transparent !important;
   font-family: "Microsoft YaHei UI", "PingFang SC", "Source Han Sans SC", sans-serif;
-  font-size: clamp(31px, 1.78vw, 36px) !important;
+  font-size: clamp(34px, 2vw, 40px) !important;
   font-weight: 900 !important;
   font-style: normal;
   line-height: 1;
@@ -1197,29 +1211,65 @@ onBeforeUnmount(() => {
   min-width: 0;
   height: 100%;
   align-items: center;
-  justify-content: space-evenly;
-  gap: clamp(22px, 2.6vw, 52px);
+  justify-content: stretch;
+  gap: clamp(10px, 0.9vw, 18px);
   white-space: nowrap;
 }
 
-.nav-link {
+.nav-link,
+.workspace-title {
   position: relative;
   appearance: none;
-  height: 48px;
-  min-width: 126px;
-  padding: 0 24px;
+  height: 64px;
+  min-width: 0;
+  padding: 0 18px;
   border: 1px solid rgba(66, 213, 255, 0.24);
   border-radius: 4px;
   color: rgba(255, 255, 255, 0.88);
   font-family: "Microsoft YaHei UI", "PingFang SC", sans-serif;
-  font-size: clamp(17px, 1.08vw, 20px);
+  font-size: clamp(20px, 1.25vw, 25px);
   font-weight: 700;
-  line-height: 46px;
+  line-height: 1;
   letter-spacing: 0;
   cursor: pointer;
   background: linear-gradient(180deg, rgba(18, 74, 119, 0.22), rgba(4, 24, 48, 0.42));
   box-shadow: inset 0 0 18px rgba(30, 167, 225, 0.06);
   transition: color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.nav-link {
+  flex: 1 1 0;
+}
+
+.workspace-title {
+  flex: 0 0 clamp(190px, 14vw, 248px);
+  height: 72px;
+  border-width: 2px;
+  border-color: rgba(43, 226, 255, 0.78);
+  color: #f5fbff;
+  font-size: clamp(24px, 1.55vw, 31px);
+  font-weight: 800;
+  background:
+    linear-gradient(180deg, rgba(22, 104, 158, 0.46), rgba(4, 28, 59, 0.74));
+  box-shadow:
+    inset 0 0 24px rgba(42, 213, 255, 0.14),
+    0 0 18px rgba(30, 210, 255, 0.18);
+  text-shadow: 0 0 12px rgba(104, 229, 255, 0.32);
+}
+
+.workspace-title::after {
+  position: absolute;
+  right: 22%;
+  bottom: -2px;
+  left: 22%;
+  height: 3px;
+  content: '';
+  background: #1ee8ff;
+  box-shadow: 0 0 10px rgba(30, 232, 255, 0.72);
+}
+
+.top-nav--workspace .nav-link--secondary {
+  font-size: clamp(18px, 1.08vw, 22px);
 }
 
 .nav-link::after {
@@ -1257,14 +1307,19 @@ onBeforeUnmount(() => {
 
 .more-nav {
   position: relative;
-  display: block;
-  height: 100%;
+  display: flex;
+  height: 64px;
+  flex: 0 0 94px;
+  align-items: stretch;
   z-index: 260;
 }
 
 .more-trigger {
-  display: inline-flex;
+  display: flex;
+  width: 100%;
+  padding: 0 14px;
   align-items: center;
+  justify-content: center;
   gap: 8px;
 }
 
@@ -1604,13 +1659,13 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1500px) {
   .header {
-    grid-template-columns: 190px minmax(0, 1fr) 238px !important;
+    grid-template-columns: 194px minmax(0, 1fr) 238px !important;
     gap: 12px !important;
-    padding: 0 24px !important;
+    padding: 0 18px !important;
   }
 
   .brand {
-    font-size: 30px !important;
+    font-size: 32px !important;
   }
 
   .top-nav {
@@ -1618,7 +1673,13 @@ onBeforeUnmount(() => {
   }
 
   .nav-link {
-    font-size: 17px;
+    font-size: 19px;
+    padding: 0 13px;
+  }
+
+  .workspace-title {
+    flex-basis: 190px;
+    font-size: 24px;
   }
 
   .account-org {
@@ -1631,7 +1692,9 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1180px) {
   .header {
-    grid-template-columns: 162px minmax(0, 1fr) auto !important;
+    height: 92px !important;
+    min-height: 92px;
+    grid-template-columns: 160px minmax(0, 1fr) auto !important;
     padding: 0 18px !important;
   }
 
@@ -1652,7 +1715,18 @@ onBeforeUnmount(() => {
 
   .nav-link {
     flex: 0 0 auto;
+    min-width: 138px;
     font-size: 16px;
+  }
+
+  .workspace-title {
+    flex: 0 0 180px;
+    height: 64px;
+    font-size: 22px;
+  }
+
+  .more-nav {
+    flex-basis: 88px;
   }
 
   .account-slot .account-org {
@@ -1670,8 +1744,8 @@ onBeforeUnmount(() => {
   }
 
   .header {
-    height: 68px !important;
-    min-height: 68px;
+    height: 76px !important;
+    min-height: 76px;
     display: grid !important;
     grid-template-columns: 126px minmax(0, 1fr) auto !important;
     gap: 8px !important;
@@ -1691,8 +1765,20 @@ onBeforeUnmount(() => {
   }
 
   .nav-link {
+    height: 52px;
+    min-width: 124px;
     font-size: 15px;
-    line-height: 68px;
+  }
+
+  .workspace-title {
+    height: 56px;
+    flex-basis: 158px;
+    font-size: 20px;
+  }
+
+  .more-nav {
+    height: 52px;
+    flex-basis: 82px;
   }
 
   .more-menu {

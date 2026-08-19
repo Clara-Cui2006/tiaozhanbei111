@@ -958,6 +958,8 @@ export async function fetchCaseDetailById(id: number): Promise<CaseDetail> {
 
 // --- Procuratorate: Suggestions ---
 export async function fetchProcuratorateSuggestions(): Promise<ProcuratorateSuggestion[]> {
+  // 静态演示只展示已有汇总口径；没有可公开的建议明细时保持空表，禁止伪造条目。
+  if (useMock) return Promise.resolve([])
   const { data } = await http.get<ProcuratorateSuggestion[]>('/procuratorate/suggestions')
   return data
 }

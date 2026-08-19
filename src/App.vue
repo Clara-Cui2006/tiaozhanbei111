@@ -218,7 +218,11 @@ const roleLabel = computed(() => roleNames[authState.user?.role || ''] || '')
 
 const isNavActive = (key: string) => {
   const path = route.path
+  if (key.includes('?')) return route.fullPath === key
   if (key === '/') return path === '/'
+  if (key === '/dashboard') return path === '/dashboard' && !route.query.panel
+  if (key === '/political-security') return path === '/political-security' && !route.query.panel
+  if (key === '/procuratorate-suggestion') return path === '/procuratorate-suggestion' && !route.query.panel
   if (key === '/risk-analysis') return path.startsWith('/risk-analysis') || path.startsWith('/case-detail/')
   if (key === '/procuratorate-suggestion') return path.startsWith('/procuratorate-suggestion')
   if (key === '/legal-recommend') return path.startsWith('/legal-recommend') || path.startsWith('/legal-plan/')
@@ -233,7 +237,7 @@ function closeFloatingMenus() {
 
 function goTo(path: string) {
   closeFloatingMenus()
-  if (route.path !== path) router.push(path)
+  if (route.fullPath !== path) router.push(path)
 }
 
 function clearPasswordForm() {
@@ -871,6 +875,47 @@ onBeforeUnmount(() => {
 
 .content :deep(.arco-table-tbody .arco-table-tr:hover .arco-table-td) {
   background: color-mix(in srgb, var(--brand-dot) 12%, transparent);
+}
+
+.app-container.theme-dark .content :deep(.arco-table),
+.app-container.theme-dark .content :deep(.arco-table-container),
+.app-container.theme-dark .content :deep(.arco-table-element),
+.app-container.theme-dark .content :deep(.arco-table-tbody),
+.app-container.theme-dark .content :deep(.arco-table-tr),
+.app-container.theme-dark .content :deep(.arco-table-td),
+.app-container.theme-dark .content :deep(.arco-empty) {
+  color: #dff6ff !important;
+  background: rgba(4, 22, 44, 0.96) !important;
+}
+
+.app-container.theme-dark .content :deep(.arco-table-tr .arco-table-th) {
+  color: #dff6ff !important;
+  background: rgba(13, 54, 88, 0.96) !important;
+}
+
+.app-container.theme-dark .content :deep(.arco-picker),
+.app-container.theme-dark .content :deep(.arco-alert),
+.app-container.theme-dark .content :deep(.arco-pagination-item),
+.app-container.theme-dark .content :deep(.arco-pagination-jumper-input) {
+  color: #dff6ff !important;
+  border-color: rgba(82, 203, 247, 0.28) !important;
+  background: rgba(6, 29, 55, 0.96) !important;
+}
+
+.app-container.theme-dark .content :deep(.arco-picker input),
+.app-container.theme-dark .content :deep(.arco-alert-content),
+.app-container.theme-dark .content :deep(.arco-alert-title),
+.app-container.theme-dark .content :deep(.arco-empty-description) {
+  color: #b8dfef !important;
+}
+
+:global(body.theme-dark .arco-drawer),
+:global(body.theme-dark .arco-drawer-header),
+:global(body.theme-dark .arco-drawer-body),
+:global(body.theme-dark .arco-drawer-footer) {
+  color: #dff6ff !important;
+  border-color: rgba(82, 203, 247, 0.24) !important;
+  background: #061a33 !important;
 }
 
 .content :deep(.arco-input-wrapper),

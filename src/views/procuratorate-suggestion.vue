@@ -1,13 +1,15 @@
 <template>
   <div class="page-contrast" :class="{ 'theme-light': themeMode === 'light' }">
-    <button class="monthly-report-entry" @click="router.push('/procuratorate-suggestion/monthly-report')">
-      <span class="entry-kicker">AI MONTHLY BRIEFING</span>
-      <span class="entry-title">检察业务月报智能生成</span>
-      <span class="entry-flow"><b>数据归集</b><i>→</i><b>风险识别</b><i>→</i><b>自动生成初稿</b><i>→</i><b>人工审核发布</b></span>
-      <span class="entry-action">进入月报工作台 →</span>
-    </button>
+    <nav v-if="!focusedPanel" class="duty-entry-strip" aria-label="检察履职重点入口">
+      <button v-for="entry in dutyEntries" :key="entry.path" type="button" @click="router.push(entry.path)">
+        <span>{{ entry.kicker }}</span>
+        <strong>{{ entry.title }}</strong>
+        <small>{{ entry.description }}</small>
+        <i>进入 →</i>
+      </button>
+    </nav>
 
-    <a-card class="content-card compact-filter-card">
+    <a-card v-if="focusedPanel === 'list'" class="content-card compact-filter-card">
       <template #title>
         <div class="card-title">
           <span>检察建议管理</span>
@@ -86,8 +88,9 @@
         </a-card>
       </DashboardFocusPanel>
 
-      <DashboardFocusPanel v-model="focusedPanel" panel-key="list" title="检察建议列表" eyebrow="PROCURATORIAL WORKFLOW" class="suggestion-list-panel">
-        <a-card title="检察建议列表" :bordered="false" class="content-card">
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="list" title="线索复核与履职办理" eyebrow="PROCURATORIAL WORKFLOW" class="suggestion-list-panel">
+        <template #default="{ focused }">
+        <a-card v-if="focused" title="检察建议列表" :bordered="false" class="content-card">
           <template #extra>
             <a-input-search v-model="filterForm.keyword" class="table-quick-search" placeholder="快速检索标题或正文" allow-clear @search="handleSearch" />
           </template>
@@ -112,6 +115,20 @@
             </template>
           </a-table>
         </a-card>
+        <div v-else class="workflow-overview">
+          <div class="workflow-rail">
+            <article v-for="(step, index) in workflowSteps" :key="step.title">
+              <b>{{ index + 1 }}</b><div><strong>{{ step.title }}</strong><span>{{ step.description }}</span></div>
+            </article>
+          </div>
+          <div class="duty-action-grid">
+            <article v-for="action in dutyActions" :key="action.title">
+              <span>{{ action.kicker }}</span><strong>{{ action.title }}</strong><small>{{ action.description }}</small>
+            </article>
+          </div>
+          <p class="workflow-boundary">AI 仅辅助生成标签、依据与草稿；监督价值确认和履职决定均须人工复核。</p>
+        </div>
+        </template>
       </DashboardFocusPanel>
 
       <DashboardFocusPanel v-model="focusedPanel" panel-key="feed" title="办理反馈动态" eyebrow="LIVE FEEDBACK">
@@ -131,7 +148,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, onActivated, nextTick, watch } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import DashboardFocusPanel from '../components/dashboard-focus-panel.vue'
 import {
@@ -155,9 +172,31 @@ import {
 } from '../utils/chart-visual'
 
 const router = useRouter()
+const route = useRoute()
 const isLightTheme = () => localStorage.getItem('platform:theme-mode') === 'light'
 const themeMode = ref<'light' | 'dark'>(isLightTheme() ? 'light' : 'dark')
 const focusedPanel = ref('')
+const focusKeys = new Set(['analytics', 'list', 'feed'])
+const dutyEntries = [
+  { kicker: 'MONTHLY BRIEFING', title: '检察业务月报', description: '归集业务数据，生成待审核月报草稿', path: '/procuratorate-suggestion/monthly-report' },
+  { kicker: 'RISK ALERT', title: '预警推送', description: '查看预警强度与人工复核状态', path: '/alert-push' },
+  { kicker: 'TARGETED LEGALITY', title: '靶向普法', description: '查看普法方案、投放对象与执行进度', path: '/legal-recommend' },
+  { kicker: 'FEEDBACK', title: '办理反馈', description: '查看履职办理结果与效果观察', path: '/effect-stats' }
+]
+const workflowSteps = [
+  { title: '线索筛查', description: '汇聚各板块转入的待研判事项' },
+  { title: '人工复核', description: '核验原始材料、关联记录与研判依据' },
+  { title: '履职办理', description: '按事项性质选择相应检察履职方式' },
+  { title: '跟踪评估', description: '回写办理反馈并观察同类风险变化' }
+]
+const dutyActions = [
+  { kicker: 'REVIEW', title: '人工复核', description: '确认、排除或继续核查' },
+  { kicker: 'ALERT', title: '预警推送', description: '按权限推送待关注事项' },
+  { kicker: 'SUGGESTION', title: '检察建议', description: '形成待审核建议材料' },
+  { kicker: 'LEGALITY', title: '靶向普法', description: '匹配对象、主题与方案' },
+  { kicker: 'TRANSFER', title: '业务移送', description: '保留来源与事项上下文' },
+  { kicker: 'FEEDBACK', title: '办理反馈', description: '记录进度、结果与效果' }
+]
 const updateTheme = () => { themeMode.value = isLightTheme() ? 'light' : 'dark' }
 const handleStorageChange = (e: StorageEvent) => { if (e.key === 'platform:theme-mode') updateTheme() }
 
@@ -263,7 +302,23 @@ const initLineChart = () => {
 }
 
 const handleChartResize = () => { pieChart?.resize(); lineChart?.resize() }
-watch(focusedPanel, async () => { await nextTick(); requestAnimationFrame(handleChartResize) })
+watch(focusedPanel, async () => {
+  const panel = focusedPanel.value || undefined
+  if (route.query.panel !== panel) {
+    await router.replace({ path: '/procuratorate-suggestion', query: panel ? { panel } : {} })
+  }
+  await nextTick()
+  requestAnimationFrame(handleChartResize)
+})
+
+watch(
+  () => route.query.panel,
+  (panel) => {
+    const nextPanel = typeof panel === 'string' && focusKeys.has(panel) ? panel : ''
+    if (focusedPanel.value !== nextPanel) focusedPanel.value = nextPanel
+  },
+  { immediate: true }
+)
 
 const handleSearch = () => { loading.value = true; setTimeout(() => { loading.value = false }, 500) }
 const handleReset = () => { filterForm.type = 'all'; filterForm.status = 'all' }
@@ -300,17 +355,33 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.page-contrast .monthly-report-entry {
-  min-height: 54px;
-  flex: 0 0 54px;
-  margin: 0;
-  padding: 7px 190px 7px 18px;
+.duty-entry-strip {
+  display: grid;
+  min-height: 84px;
+  flex: 0 0 84px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
 }
-
-.page-contrast .entry-title { display: inline; margin: 0 18px 0 0; font-size: 21px; }
-.page-contrast .entry-kicker { display: inline; margin-right: 12px; }
-.page-contrast .entry-flow { display: inline-flex; }
-.page-contrast .entry-action { right: 16px; bottom: 10px; padding: 6px 10px; }
+.duty-entry-strip button {
+  position: relative;
+  min-width: 0;
+  padding: 10px 72px 10px 13px;
+  overflow: hidden;
+  border: 1px solid rgba(86, 203, 247, .3);
+  border-radius: 9px;
+  color: #dff7ff;
+  text-align: left;
+  background: radial-gradient(circle at 95% 15%, rgba(65, 196, 255, .16), transparent 35%), linear-gradient(145deg, rgba(10, 54, 92, .9), rgba(3, 22, 45, .94));
+  cursor: pointer;
+}
+.duty-entry-strip button:hover { border-color: #5edfff; box-shadow: 0 0 18px rgba(54, 211, 255, .16); transform: translateY(-1px); }
+.duty-entry-strip span,
+.duty-entry-strip strong,
+.duty-entry-strip small { display: block; }
+.duty-entry-strip span { color: #5cddff; font-size: 9px; font-weight: 800; letter-spacing: 1px; }
+.duty-entry-strip strong { margin: 3px 0; color: #eefbff; font-size: 16px; }
+.duty-entry-strip small { overflow: hidden; color: #84afc4; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.duty-entry-strip i { position: absolute; right: 12px; bottom: 12px; color: #f1cf73; font-size: 11px; font-style: normal; }
 
 .compact-filter-card {
   flex: 0 0 130px;
@@ -347,6 +418,25 @@ onUnmounted(() => {
 .procuratorial-cockpit-grid :deep(.arco-card-body) { padding: 8px; }
 .procuratorial-cockpit-grid .chart-container { height: calc(100% - 4px); min-height: 110px; }
 .procuratorial-cockpit-grid .feed-list { height: 100%; overflow: auto; }
+
+.workflow-overview { display: flex; height: 100%; min-height: 0; flex-direction: column; gap: 12px; padding: 14px; }
+.workflow-rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.workflow-rail article { position: relative; display: flex; min-width: 0; align-items: center; gap: 9px; padding: 11px; border: 1px solid rgba(83, 203, 247, .2); border-radius: 9px; background: rgba(8, 43, 74, .62); }
+.workflow-rail article:not(:last-child)::after { position: absolute; z-index: 2; right: -9px; color: #48d8ff; content: '›'; }
+.workflow-rail b { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border-radius: 50%; color: #56e0ff; background: rgba(26, 126, 177, .28); box-shadow: 0 0 14px rgba(68, 210, 255, .16); }
+.workflow-rail strong,
+.workflow-rail span { display: block; }
+.workflow-rail strong { color: #e9faff; font-size: 13px; }
+.workflow-rail span { margin-top: 3px; color: #7fa9bd; font-size: 9px; line-height: 1.35; }
+.duty-action-grid { display: grid; min-height: 0; flex: 1; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.duty-action-grid article { min-width: 0; padding: 13px; border: 1px solid rgba(83, 203, 247, .18); border-radius: 9px; background: radial-gradient(circle at 90% 15%, rgba(60, 195, 245, .12), transparent 34%), linear-gradient(145deg, rgba(8, 46, 79, .72), rgba(3, 23, 47, .82)); }
+.duty-action-grid span,
+.duty-action-grid strong,
+.duty-action-grid small { display: block; }
+.duty-action-grid span { color: #56dfff; font-size: 8px; font-weight: 800; letter-spacing: 1px; }
+.duty-action-grid strong { margin: 7px 0 5px; color: #e8faff; font-size: 16px; }
+.duty-action-grid small { color: #83afc3; font-size: 10px; }
+.workflow-boundary { margin: 0; padding: 8px 10px; border-left: 3px solid #55dcff; color: #8ebbd0; font-size: 10px; background: rgba(16, 82, 117, .16); }
 
 /* ===== 基础深色样式（默认） ===== */
 .page-contrast :deep(.arco-page-header-title) {

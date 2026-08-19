@@ -1,33 +1,47 @@
 <template>
   <div class="dashboard cockpit-page">
-    <div class="kpi-strip">
-      <div class="kpi-item kpi-red">
-        <div class="kpi-accent"></div>
-        <div class="kpi-label">本年度案件总数</div>
-        <div class="kpi-value">{{ overview.totalCasesThisYear }}</div>
-      </div>
-      <div class="kpi-item kpi-cyan">
-        <div class="kpi-accent"></div>
-        <div class="kpi-label">高发案件类型</div>
-        <div class="kpi-value kpi-value-text">{{ overview.highIncidenceTypes }}</div>
-      </div>
-      <div class="kpi-item kpi-orange">
-        <div class="kpi-accent"></div>
-        <div class="kpi-label">风险预警推送次数</div>
-        <div class="kpi-value">{{ overview.riskAlertPushCount }}</div>
-      </div>
-      <div class="kpi-item kpi-yellow">
-        <div class="kpi-accent"></div>
-        <div class="kpi-label">检察建议发送次数</div>
-        <div class="kpi-value">{{ overview.procuratorateSuggestions }}</div>
-      </div>
-      <div class="kpi-item kpi-blue">
-        <div class="kpi-accent"></div>
-        <div class="kpi-label">普法方案投递次数</div>
-        <div class="kpi-value">{{ overview.legalPushCount }}</div>
-      </div>
-    </div>
     <div class="cockpit-grid" :class="{ 'cockpit-grid--focused': focusedPanel }">
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="indices" title="风险综合指标" eyebrow="RISK INDEX" class="indices-focus-panel">
+        <template #default="{ focused }">
+          <div class="index-stack" :class="{ 'index-stack--focused': focused }">
+            <article v-for="item in indexCards" :key="item.label" class="index-card" :class="`index-card--${item.tone}`">
+              <div><span>{{ item.label }}</span><small>{{ item.hint }}</small></div>
+              <strong :class="{ 'index-card__text': item.text }">{{ item.value }}</strong>
+            </article>
+            <div class="assessment-content">
+              <div class="assessment-heading">
+                <span>研判辅助</span>
+                <a-button type="primary" size="mini" :loading="aiAssessing" @click="generateAssessment">
+                  {{ aiAssessment ? '重新生成草稿' : '生成草稿' }}
+                </a-button>
+              </div>
+              <div v-if="aiAssessing" class="ai-loading-text">正在生成辅助草稿...</div>
+              <div v-else-if="aiAssessment" class="ai-assessment" v-html="formatAssessment(aiAssessment)"></div>
+              <div v-else class="ai-empty-text">AI 仅辅助生成草稿，最终结论须由人工复核。</div>
+              <div v-if="focused" class="index-detail-grid">
+                <section>
+                  <h3>指标使用边界</h3>
+                  <p>风险指数用于总体观察、排序和变化提示，不直接等同于法律监督结论。</p>
+                  <p>单条事项是否转入检察履职，仍须结合原始材料和人工复核结果。</p>
+                </section>
+                <section>
+                  <h3>重点街道对照</h3>
+                  <div v-for="point in topStreetPoints" :key="`index-${point.community}`" class="detail-rank-row">
+                    <span>{{ point.community }}</span><i><b :style="{ width: `${point.percent}%` }"></b></i><strong>{{ point.annualCases }}</strong>
+                  </div>
+                </section>
+                <section>
+                  <h3>履职联动结构</h3>
+                  <div v-for="item in workflowMetrics" :key="`index-${item.label}`" class="detail-rank-row">
+                    <span>{{ item.label }}</span><i><b :style="{ width: `${item.percent}%` }"></b></i><strong>{{ item.value }}</strong>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </template>
+      </DashboardFocusPanel>
+
       <DashboardFocusPanel v-model="focusedPanel" panel-key="map" title="西城区风险空间态势" eyebrow="SPATIAL DISTRIBUTION" class="map-focus-panel">
         <template #default="{ focused }">
           <RiskMapPanel
@@ -40,28 +54,36 @@
 
       <DashboardFocusPanel v-model="focusedPanel" panel-key="trend" title="社区风险趋势" eyebrow="RISK TREND" class="trend-focus-panel">
         <template #default="{ focused }">
-          <div class="trend-toolbar">
-            <a-radio-group v-model="activeTab" type="button" size="small" @change="renderChart">
-              <a-radio value="totalCases">案件总数</a-radio>
-              <a-radio value="highIncidence">高发案件类型</a-radio>
-              <a-radio value="riskAlert">风险预警推送次数</a-radio>
-              <a-radio value="procuratorate">检察建议发送次数</a-radio>
-              <a-radio value="legalPlan">普法方案投递次数</a-radio>
-            </a-radio-group>
+          <div class="analysis-stack" :class="{ 'analysis-stack--focused': focused }">
+            <div class="trend-chart-block">
+              <div class="trend-toolbar">
+                <a-radio-group v-model="activeTab" type="button" size="small" @change="renderChart">
+                  <a-radio value="totalCases">案件总数</a-radio>
+                  <a-radio value="highIncidence">高发类型</a-radio>
+                  <a-radio value="riskAlert">预警推送</a-radio>
+                  <a-radio value="procuratorate">检察建议</a-radio>
+                  <a-radio value="legalPlan">普法投递</a-radio>
+                </a-radio-group>
+              </div>
+              <div ref="chartRef" class="dashboard-chart-stage"></div>
+            </div>
+            <div class="mini-analysis-grid">
+              <section class="mini-chart-card">
+                <h3>重点街道</h3>
+                <div v-for="point in topStreetPoints" :key="point.community" class="mini-bar-row">
+                  <span>{{ point.community }}</span><i><b :style="{ width: `${point.percent}%` }"></b></i><em>{{ point.annualCases }}</em>
+                </div>
+              </section>
+              <section class="mini-chart-card">
+                <h3>履职联动</h3>
+                <div v-for="item in workflowMetrics" :key="item.label" class="workflow-meter">
+                  <div><span>{{ item.label }}</span><strong>{{ item.value }}</strong></div>
+                  <i><b :style="{ width: `${item.percent}%` }"></b></i>
+                </div>
+              </section>
+            </div>
           </div>
-          <div ref="chartRef" class="dashboard-chart-stage" :class="{ 'dashboard-chart-stage--focused': focused }"></div>
         </template>
-      </DashboardFocusPanel>
-
-      <DashboardFocusPanel v-model="focusedPanel" panel-key="assessment" title="AI 风险研判摘要" eyebrow="HUMAN REVIEW REQUIRED" class="assessment-focus-panel">
-        <div class="assessment-content">
-          <a-button type="primary" size="small" :loading="aiAssessing" @click="generateAssessment">
-            {{ aiAssessment ? '重新生成草稿' : '生成研判草稿' }}
-          </a-button>
-          <div v-if="aiAssessing" class="ai-loading-text">AI 正在综合分析社区风险态势...</div>
-          <div v-else-if="aiAssessment" class="ai-assessment" v-html="formatAssessment(aiAssessment)"></div>
-          <div v-else class="ai-empty-text">AI 仅辅助生成研判草稿，最终结论须由人工复核。</div>
-        </div>
       </DashboardFocusPanel>
     </div>
   </div>
@@ -69,6 +91,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import 'echarts-gl'
 import DashboardFocusPanel from '../components/dashboard-focus-panel.vue'
@@ -87,6 +110,8 @@ import {
 } from '../utils/chart-visual'
 
 const chartRef = ref<HTMLDivElement | null>(null)
+const route = useRoute()
+const router = useRouter()
 let myChart: echarts.ECharts | null = null
 let themeObserver: MutationObserver | null = null
 
@@ -102,6 +127,29 @@ const mapPoints = ref<CommunityRiskPoint[]>([])
 const multiTrend = ref<MultiTrendData[]>([])
 const activeTab = ref('totalCases')
 const focusedPanel = ref('')
+const focusKeys = new Set(['indices', 'map', 'trend'])
+
+const indexCards = computed(() => [
+  { label: '本年度案件总数', value: overview.value.totalCasesThisYear, hint: '当前统计口径', tone: 'red' },
+  { label: '高发案件类型', value: overview.value.highIncidenceTypes || '暂无数据', hint: '当前最高频类型', tone: 'cyan', text: true },
+  { label: '风险预警推送', value: overview.value.riskAlertPushCount, hint: '履职联动次数', tone: 'orange' },
+  { label: '检察建议', value: overview.value.procuratorateSuggestions, hint: '已发送次数', tone: 'yellow' },
+  { label: '普法方案投递', value: overview.value.legalPushCount, hint: '已投递次数', tone: 'blue' }
+])
+const topStreetPoints = computed(() => {
+  const sorted = [...mapPoints.value].sort((a, b) => (b.annualCases || 0) - (a.annualCases || 0)).slice(0, 4)
+  const max = Math.max(1, ...sorted.map((item) => item.annualCases || 0))
+  return sorted.map((item) => ({ ...item, percent: Math.round(((item.annualCases || 0) / max) * 100) }))
+})
+const workflowMetrics = computed(() => {
+  const values = [
+    { label: '预警推送', value: overview.value.riskAlertPushCount },
+    { label: '检察建议', value: overview.value.procuratorateSuggestions },
+    { label: '普法投递', value: overview.value.legalPushCount }
+  ]
+  const max = Math.max(1, ...values.map((item) => item.value))
+  return values.map((item) => ({ ...item, percent: Math.round((item.value / max) * 100) }))
+})
 
 // Reactive theme for dashboard
 const themeMode = ref<'light' | 'dark'>('dark')
@@ -480,7 +528,7 @@ const renderChart = () => {
     myChart = echarts.init(chartRef.value)
   }
   myChart.clear()
-  myChart.setOption(getDashboard3DChartOption())
+  myChart.setOption(focusedPanel.value === 'trend' ? getDashboard3DChartOption() : getChartOption())
 }
 
 watch(activeTab, () => {
@@ -488,9 +536,25 @@ watch(activeTab, () => {
 })
 
 watch(focusedPanel, async () => {
+  const panel = focusedPanel.value || undefined
+  if (route.query.panel !== panel) {
+    await router.replace({ path: '/dashboard', query: panel ? { panel } : {} })
+  }
   await nextTick()
-  requestAnimationFrame(() => myChart?.resize())
+  requestAnimationFrame(() => {
+    renderChart()
+    myChart?.resize()
+  })
 })
+
+watch(
+  () => route.query.panel,
+  (panel) => {
+    const nextPanel = typeof panel === 'string' && focusKeys.has(panel) ? panel : ''
+    if (focusedPanel.value !== nextPanel) focusedPanel.value = nextPanel
+  },
+  { immediate: true }
+)
 
 onMounted(async () => {
   const [overviewData, trendData, mapData, multiTrendData] = await Promise.all([
@@ -528,41 +592,118 @@ onUnmounted(() => {
   height: 100%;
   min-height: 0;
   flex-direction: column;
-  gap: 10px;
   overflow: hidden;
 }
-
-.cockpit-page .kpi-strip {
-  height: 92px;
-  flex: 0 0 92px;
-  gap: 10px;
-}
-
-.cockpit-page .kpi-item {
-  padding: 12px 10px 10px;
-}
-
-.cockpit-page .kpi-label {
-  margin-bottom: 8px;
-  font-size: 15px;
-}
-
-.cockpit-page .kpi-value { font-size: 28px; }
-.cockpit-page .kpi-value-text { font-size: 19px !important; }
 
 .cockpit-grid {
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(260px, .78fr) minmax(520px, 1.35fr) minmax(260px, .78fr);
+  grid-template-columns: minmax(260px, .72fr) minmax(520px, 1.42fr) minmax(330px, .92fr);
   grid-template-rows: minmax(0, 1fr);
   gap: 10px;
   overflow: hidden;
 }
 
+.indices-focus-panel { grid-column: 1; grid-row: 1; }
 .map-focus-panel { grid-column: 2; grid-row: 1; }
-.trend-focus-panel { grid-column: 1; grid-row: 1; }
-.assessment-focus-panel { grid-column: 3; grid-row: 1; }
+.trend-focus-panel { grid-column: 3; grid-row: 1; }
+
+.index-stack {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: repeat(5, minmax(54px, 1fr)) minmax(94px, 1.35fr);
+  gap: 7px;
+  padding: 8px;
+}
+
+.index-stack--focused {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: minmax(130px, .55fr) minmax(260px, 1fr);
+  gap: 12px;
+  padding: 16px;
+}
+
+.index-card {
+  --index-color: #5edcff;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 11px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--index-color) 36%, transparent);
+  border-radius: 9px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--index-color) 11%, transparent), rgba(4, 23, 48, .9));
+}
+.index-card--red { --index-color: #ff6969; }
+.index-card--cyan { --index-color: #53ddff; }
+.index-card--orange { --index-color: #ff9e44; }
+.index-card--yellow { --index-color: #f1d36b; }
+.index-card--blue { --index-color: #699cff; }
+.index-card span,
+.index-card small { display: block; }
+.index-card span { color: #dff7ff; font-size: 13px; font-weight: 700; }
+.index-card small { margin-top: 3px; color: #739eb7; font-size: 10px; }
+.index-card strong { color: var(--index-color); font-size: 24px; font-variant-numeric: tabular-nums; text-align: right; }
+.index-card__text { max-width: 112px; font-size: 15px !important; line-height: 1.2; }
+.index-stack--focused .index-card { align-items: flex-start; flex-direction: column; padding: 18px; }
+.index-stack--focused .index-card span { font-size: 16px; }
+.index-stack--focused .index-card strong { max-width: none; font-size: 34px; text-align: left; }
+.index-stack--focused .index-card__text { font-size: 22px !important; }
+
+.assessment-content {
+  min-height: 0;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid rgba(83, 207, 255, .2);
+  border-radius: 9px;
+  background: rgba(3, 20, 43, .72);
+}
+.index-stack--focused .assessment-content { grid-column: 1 / -1; padding: 18px; }
+.assessment-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.assessment-heading > span { color: #dff7ff; font-size: 13px; font-weight: 700; }
+.index-detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.index-detail-grid section { padding: 15px; border: 1px solid rgba(83, 207, 255, .18); border-radius: 9px; background: rgba(8, 42, 72, .56); }
+.index-detail-grid h3 { margin: 0 0 10px; color: #dff7ff; font-size: 15px; }
+.index-detail-grid p { margin: 8px 0; color: #90bfd2; font-size: 12px; line-height: 1.65; }
+.detail-rank-row { display: flex; align-items: center; gap: 8px; margin: 10px 0; color: #9bc9dc; font-size: 12px; }
+.detail-rank-row span { width: 84px; }
+.detail-rank-row i { height: 6px; flex: 1; overflow: hidden; border-radius: 8px; background: rgba(78, 145, 177, .18); }
+.detail-rank-row b { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #147ec4, #47e5ff); }
+.detail-rank-row strong { width: 34px; color: #f1cf73; text-align: right; }
+
+.analysis-stack {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(180px, 1.05fr) minmax(190px, .95fr);
+  gap: 7px;
+  padding: 7px;
+}
+.analysis-stack--focused { grid-template-rows: minmax(290px, 1.25fr) minmax(220px, .75fr); gap: 12px; padding: 14px; }
+.trend-chart-block { position: relative; min-height: 0; overflow: hidden; border: 1px solid rgba(83, 197, 243, .16); border-radius: 8px; background: rgba(2, 16, 35, .36); }
+.mini-analysis-grid { display: grid; min-height: 0; grid-template-columns: 1fr; gap: 7px; }
+.analysis-stack--focused .mini-analysis-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.mini-chart-card { min-height: 0; padding: 8px 10px; overflow: hidden; border: 1px solid rgba(83, 197, 243, .18); border-radius: 8px; background: linear-gradient(145deg, rgba(8, 44, 76, .64), rgba(3, 21, 43, .78)); }
+.mini-chart-card h3 { margin: 0 0 6px; color: #dff7ff; font-size: 12px; }
+.mini-bar-row { display: flex; align-items: center; gap: 6px; margin: 5px 0; color: #9ccce0; font-size: 10px; }
+.mini-bar-row span { width: 68px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-bar-row i,
+.workflow-meter i { height: 5px; flex: 1; overflow: hidden; border-radius: 8px; background: rgba(78, 145, 177, .18); }
+.mini-bar-row b,
+.workflow-meter b { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #147ec4, #47e5ff); }
+.mini-bar-row em { width: 24px; color: #58dcff; font-style: normal; text-align: right; }
+.workflow-meter { margin: 6px 0; }
+.workflow-meter > div { display: flex; justify-content: space-between; margin-bottom: 3px; color: #9ccce0; font-size: 10px; }
+.workflow-meter strong { color: #f0cf72; }
+.workflow-meter i { display: block; width: 100%; }
+.analysis-stack--focused .mini-chart-card { padding: 14px; }
+.analysis-stack--focused .mini-chart-card h3 { font-size: 16px; }
+.analysis-stack--focused .mini-bar-row,
+.analysis-stack--focused .workflow-meter > div { font-size: 13px; }
 
 .trend-toolbar {
   position: absolute;

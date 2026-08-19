@@ -117,20 +117,29 @@ export const BUSINESS_WORKSPACES: readonly BusinessWorkspace[] = [
     ...HOME_BUSINESS_ITEMS[0]!,
     secondary: [
       { key: '/dashboard', label: '总体态势', ...PERMISSION_RULES.dashboardRead },
-      { key: '/risk-analysis', label: '分析下钻', ...PERMISSION_RULES.caseReadAny }
+      { key: '/dashboard?panel=indices', label: '风险指数', ...PERMISSION_RULES.dashboardRead },
+      { key: '/dashboard?panel=map', label: '空间分布', ...PERMISSION_RULES.dashboardRead },
+      { key: '/dashboard?panel=trend', label: '趋势分析', ...PERMISSION_RULES.dashboardRead }
     ]
   },
   {
     ...HOME_BUSINESS_ITEMS[1]!,
     secondary: [
-      { key: '/political-security', label: '专题研判', ...PERMISSION_RULES.politicalRead }
+      { key: '/political-security', label: '总体态势', ...PERMISSION_RULES.politicalRead },
+      { key: '/political-security?panel=dimensions', label: '四维研判', ...PERMISSION_RULES.politicalRead },
+      { key: '/political-security?panel=topics&lens=traditional', label: '传统安全', ...PERMISSION_RULES.politicalRead },
+      { key: '/political-security?panel=topics&lens=nontraditional', label: '非传统安全', ...PERMISSION_RULES.politicalRead },
+      { key: '/political-security?panel=topics', label: '重点事项', ...PERMISSION_RULES.politicalRead },
+      { key: '/political-security?panel=map', label: '空间分布', ...PERMISSION_RULES.politicalRead }
     ]
   },
   {
     ...HOME_BUSINESS_ITEMS[2]!,
     secondary: [
-      { key: '/procuratorate-suggestion', label: '线索复核', ...PERMISSION_RULES.procuratorateReadAny },
+      { key: '/procuratorate-suggestion', label: '履职总览', ...PERMISSION_RULES.procuratorateReadAny },
+      { key: '/procuratorate-suggestion?panel=list', label: '线索复核', ...PERMISSION_RULES.procuratorateReadAny },
       { key: '/alert-push', label: '预警推送', ...PERMISSION_RULES.dashboardRead },
+      { key: '/procuratorate-suggestion?panel=analytics', label: '检察建议', ...PERMISSION_RULES.procuratorateReadAny },
       { key: '/legal-recommend', label: '靶向普法', ...PERMISSION_RULES.legalRecommendRead },
       { key: '/effect-stats', label: '办理反馈', ...PERMISSION_RULES.dashboardRead }
     ]

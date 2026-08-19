@@ -36,7 +36,8 @@
         </template>
       </DashboardFocusPanel>
 
-      <DashboardFocusPanel v-model="focusedPanel" panel-key="topics" title="重点专题与人工复核" eyebrow="PRIORITY TOPICS" class="political-topic-panel">
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="topics" title="重点事项与人工复核" eyebrow="PRIORITY ITEMS" class="political-topic-panel">
+        <template #default="{ focused }">
         <a-card :bordered="false" class="chart-card topic-card">
           <div class="topic-card-layout">
             <div class="topic-list">
@@ -90,10 +91,32 @@
             <div v-else-if="aiAssessment" class="ai-assessment" v-html="formatAssessment(aiAssessment)"></div>
             <div v-else class="ai-empty-text">AI 仅辅助生成草稿，最终结论须由人工复核。</div>
           </div>
+          <div v-if="focused" class="topic-focus-detail">
+            <section class="security-lens-panel">
+              <h3>政治安全分析视角</h3>
+              <div class="security-lens-grid">
+                <article :class="{ active: activeSecurityLens === 'traditional' }"><strong>传统政治安全</strong><span>作为重点事项的专题标签和人工研判视角，不自动定性。</span></article>
+                <article :class="{ active: activeSecurityLens === 'nontraditional' }"><strong>非传统政治安全</strong><span>围绕金融、网络、公共安全等交叉风险设置关联分析位置。</span></article>
+                <article><strong>涉访涉诉关联</strong><span>承接外部治理数据中经人工确认需继续专题研判的事项。</span></article>
+              </div>
+            </section>
+            <section class="priority-item-panel">
+              <h3>{{ selectedPriorityTag }} · 当前事项</h3>
+              <div class="priority-item-list">
+                <article v-for="item in selectedTopicAlerts" :key="item.id">
+                  <div><strong>{{ item.caseName }}</strong><span>{{ item.caseNumber }} · {{ item.street }}</span></div>
+                  <p>{{ item.summary }}</p>
+                  <div class="priority-item-tags"><i>{{ item.riskLevel }}风险</i><i>{{ item.alertStatus }}</i><i>{{ item.caseType }}</i></div>
+                </article>
+                <div v-if="!selectedTopicAlerts.length" class="ai-empty-text">当前专题暂无匹配事项。</div>
+              </div>
+            </section>
+          </div>
         </a-card>
+        </template>
       </DashboardFocusPanel>
 
-      <DashboardFocusPanel v-model="focusedPanel" panel-key="dimensions" title="四维研判数据驾驶舱" eyebrow="LOCATION · CONTENT · SUBJECT · TIME" class="political-dimension-panel">
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="dimensions" title="四维研判数据驾驶舱" eyebrow="LOCATION · CONTENT · SUBJECT · IMPACT" class="political-dimension-panel">
         <a-card class="chart-card" :bordered="false">
           <div v-if="activeCockpitPanel" class="cockpit-return-bar">
             <a-button size="small" type="outline" @click="closeCockpitPanel">返回数据驾驶舱</a-button>
@@ -129,7 +152,7 @@
               :class="{ 'is-active': activeCockpitPanel === 'time', 'is-hidden': activeCockpitPanel && activeCockpitPanel !== 'time' }"
               @click="openCockpitPanel('time')"
             >
-              <h4>时间因素</h4>
+              <h4>传播影响</h4>
               <div ref="timeChartRef" class="chart-box"></div>
             </div>
           </div>
@@ -141,6 +164,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import DashboardFocusPanel from '../components/dashboard-focus-panel.vue'
 import RiskMapPanel from '../components/risk-map-panel.vue'
@@ -164,17 +188,21 @@ import { chatWithLLM } from '../services/llm'
 import { USER_PROMPT_TEMPLATES } from '../services/prompts'
 
 const locationChartRef = ref<HTMLElement | null>(null)
+const route = useRoute()
+const router = useRouter()
 const behaviorChartRef = ref<HTMLElement | null>(null)
 const subjectChartRef = ref<HTMLElement | null>(null)
 const timeChartRef = ref<HTMLElement | null>(null)
 type CockpitPanelKey = 'location' | 'behavior' | 'subject' | 'time'
 const activeCockpitPanel = ref<CockpitPanelKey | null>(null)
 const focusedPanel = ref('')
+const focusKeys = new Set(['map', 'topics', 'dimensions'])
+const activeSecurityLens = computed(() => route.query.lens === 'traditional' || route.query.lens === 'nontraditional' ? route.query.lens : '')
 const cockpitPanelTitles: Record<CockpitPanelKey, string> = {
   location: '地点因素',
   behavior: '行为内容',
   subject: '涉及主体',
-  time: '时间因素'
+  time: '传播影响'
 }
 const activeCockpitPanelTitle = computed(() => activeCockpitPanel.value ? cockpitPanelTitles[activeCockpitPanel.value] : '')
 
@@ -413,7 +441,22 @@ const closeCockpitPanel = async () => {
   await resizeCockpitCharts()
 }
 
-watch(focusedPanel, resizeCockpitCharts)
+watch(focusedPanel, async () => {
+  const panel = focusedPanel.value || undefined
+  if (route.query.panel !== panel) {
+    await router.replace({ path: '/political-security', query: panel ? { panel } : {} })
+  }
+  await resizeCockpitCharts()
+})
+
+watch(
+  () => route.query.panel,
+  (panel) => {
+    const nextPanel = typeof panel === 'string' && focusKeys.has(panel) ? panel : ''
+    if (focusedPanel.value !== nextPanel) focusedPanel.value = nextPanel
+  },
+  { immediate: true }
+)
 
 onMounted(() => {
   initDataAndRender()
@@ -483,6 +526,37 @@ onUnmounted(() => {
   box-shadow: none !important;
 }
 .political-topic-panel.focus-panel--active .chart-card { overflow: auto; }
+
+.topic-focus-detail {
+  display: grid;
+  grid-template-columns: minmax(320px, .72fr) minmax(0, 1.28fr);
+  gap: 14px;
+  margin-top: 14px;
+}
+.security-lens-panel,
+.priority-item-panel {
+  padding: 14px;
+  border: 1px solid rgba(82, 203, 255, .22);
+  border-radius: 10px;
+  background: rgba(4, 25, 50, .72);
+}
+.security-lens-panel h3,
+.priority-item-panel h3 { margin: 0 0 12px; color: #dff7ff; font-size: 16px; }
+.security-lens-grid { display: grid; gap: 9px; }
+.security-lens-grid article { padding: 12px; border-left: 3px solid #55dcff; background: linear-gradient(90deg, rgba(28, 112, 158, .22), transparent); }
+.security-lens-grid article.active { border-color: #f2c86f; background: linear-gradient(90deg, rgba(220, 156, 54, .22), rgba(28, 112, 158, .08)); box-shadow: inset 0 0 18px rgba(242, 200, 111, .08); }
+.security-lens-grid strong,
+.security-lens-grid span { display: block; }
+.security-lens-grid strong { color: #64e2ff; }
+.security-lens-grid span { margin-top: 5px; color: #91bdd0; font-size: 12px; line-height: 1.55; }
+.priority-item-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.priority-item-list article { min-width: 0; padding: 12px; border: 1px solid rgba(82, 203, 255, .16); border-radius: 8px; background: rgba(8, 41, 70, .58); }
+.priority-item-list article > div:first-child { display: flex; justify-content: space-between; gap: 8px; }
+.priority-item-list strong { color: #e9faff; }
+.priority-item-list span { color: #7da8bd; font-size: 11px; }
+.priority-item-list p { margin: 9px 0; color: #a9d3e3; font-size: 12px; line-height: 1.55; }
+.priority-item-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.priority-item-tags i { padding: 3px 7px; border: 1px solid rgba(255, 185, 82, .28); border-radius: 999px; color: #ffd17a; font-size: 10px; font-style: normal; background: rgba(112, 65, 15, .18); }
 
 .political-topic-panel :deep(.arco-card-body),
 .political-dimension-panel :deep(.arco-card-body) { padding: 8px; }

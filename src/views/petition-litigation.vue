@@ -288,6 +288,11 @@ onMounted(async () => {
 .petition-workspace .workspace-heading p { font-size: 10px; }
 .petition-workspace .workspace-heading h1 { display: inline; margin: 0 10px 0 0; font-size: 21px; }
 .petition-workspace .workspace-heading span { font-size: 12px; }
+.petition-workspace .workspace-heading :deep(.arco-tag) {
+  color: #9feaff !important;
+  border-color: rgba(78, 215, 255, .36) !important;
+  background: rgba(10, 69, 106, .72) !important;
+}
 
 .petition-workspace .filter-panel {
   position: static;

@@ -2405,6 +2405,7 @@ onUnmounted(() => {
   padding: 0;
 }
 
+.xrm-card--cockpit :deep(.arco-card-body),
 .xrm-card--focus :deep(.arco-card-body) {
   height: 100%;
 }
@@ -2449,22 +2450,27 @@ onUnmounted(() => {
   flex: 1;
 }
 
+.xrm-card--cockpit .xrm-map-panel,
 .xrm-card--focus .xrm-map-panel {
   display: flex;
   height: 100%;
   flex-direction: column;
 }
 
+.xrm-card--cockpit .xrm-panel-heading,
+.xrm-card--cockpit .xrm-map-caption,
 .xrm-card--focus .xrm-panel-heading,
 .xrm-card--focus .xrm-map-caption {
   flex: 0 0 auto;
 }
 
+.xrm-card--cockpit .xrm-map-stage,
 .xrm-card--focus .xrm-map-stage {
   height: auto !important;
   flex: 1 1 auto;
 }
 
+.xrm-card--cockpit .xrm-map-box,
 .xrm-card--focus .xrm-map-box {
   height: 100% !important;
 }

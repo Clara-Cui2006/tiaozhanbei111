@@ -492,7 +492,7 @@ onUnmounted(() => {
 .political-topic-panel .review-pod { min-height: 94px; padding: 8px; }
 .political-topic-panel .review-pod p,
 .political-topic-panel .method-alert { display: none; }
-.political-topic-panel .review-ring { width: 58px; height: 58px; }
+.political-topic-panel .review-ring { width: 58px; height: 58px; flex-basis: 58px; }
 .political-topic-panel .topic-list { margin-bottom: 6px; }
 .political-ai-strip { display: flex; align-items: center; gap: 10px; margin-top: 7px; }
 .political-ai-strip .ai-empty-text,

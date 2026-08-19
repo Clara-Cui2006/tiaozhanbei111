@@ -26,8 +26,8 @@ tar_path="${output_dir}/${image_name}-${image_tag}-linux-amd64.tar"
 docker build --platform linux/amd64 -t "$full_image" .
 docker image inspect "$full_image" >/dev/null
 docker save "$full_image" -o "$tar_path"
-sha256sum "$tar_path" > "${tar_path}.sha256"
+(cd "$output_dir" && sha256sum "$(basename "$tar_path")" > "$(basename "$tar_path").sha256")
 gzip -c "$tar_path" > "${tar_path}.gz"
-sha256sum "${tar_path}.gz" > "${tar_path}.gz.sha256"
+(cd "$output_dir" && sha256sum "$(basename "${tar_path}.gz")" > "$(basename "${tar_path}.gz").sha256")
 
 printf '%s\n' "$tar_path"

@@ -43,7 +43,8 @@ import type {
   SystemSettings,
   PoliticalMonthlyTrend,  // <--- 加上这一行
   PoliticalStreetStat,     // <--- 加上这一行
-  PoliticalOverview
+  PoliticalOverview,
+  PetitionLitigationItem
 } from '../types/platform'
 import { PRIORITY_ALERT_FIXTURES, type PriorityAlert } from '../features/priority-alerts'
 
@@ -1837,5 +1838,55 @@ export async function transitionProcuratorateMonthlyReport(id: number, status: M
     return Promise.resolve(structuredClone(mockMonthlyReport))
   }
   const { data } = await http.post<ProcuratorateMonthlyReport>(`/procuratorate/monthly-reports/${id}/transition`, { status })
+  return data
+}
+
+/* ---------- 涉访涉诉：统一数据源（静态演示/真实 API 严格分离） ---------- */
+const mockPetitionLitigationItems: PetitionLitigationItem[] = [
+  {
+    id: 'petition-001', conflictNo: 'XF-2026-001', occurredAt: '2026-08-12 09:20', occurredAddress: '西城区金融街街道', source: '12345热线',
+    riskLevel: '红色', street: '金融街街道', eventCategory: '重点信访事项', summary: '多名劳动者反映同类欠薪问题，存在重复反映和聚集倾向。',
+    party: { name: '某群体代表', phone: '138****1024', idCard: '110***********0021', age: 42, gender: '男', ethnicity: '汉族', currentRegion: '西城区', address: '金融街街道（已脱敏）', householdRegion: '北京市', householdAddress: '已脱敏', employer: '某服务企业' },
+    supervisionCategories: ['民事检察', '行政检察', '政治安全'], supervisionScore: 92, aiTags: ['涉众/群体性', '重复反映/可能聚集', '弱势群体'],
+    aiReasons: ['事件简述显示多人反映同一欠薪问题', '来源为12345热线且已多次登记'],
+    riskAnalysis: [{ label: '群体聚集风险', basis: '多名劳动者反映且存在聚集倾向' }, { label: '矛盾升级风险', basis: '问题长期未完全化解' }],
+    suggestedActions: ['建议进一步核实', '建议转政治安全专题研判', '建议与民事、行政检察条线碰撞'], reviewStatus: '待复核', typical: true
+  },
+  {
+    id: 'petition-002', conflictNo: 'ZZ-2026-014', occurredAt: '2026-08-10 14:10', occurredAddress: '西城区广安门内街道', source: '综治中心', riskLevel: '橙色', street: '广安门内街道', eventCategory: '涉法涉诉',
+    summary: '群众反映既有案件办理环节沟通不充分，请求核查办理反馈情况。', party: { name: '张某', phone: '136****8712', idCard: '110***********3318', currentRegion: '西城区', address: '已脱敏' },
+    supervisionCategories: ['民事检察'], supervisionScore: 78, aiTags: ['办案反馈', '长期未化解'], aiReasons: ['反映内容指向已办案件的告知与反馈环节'],
+    riskAnalysis: [{ label: '矛盾升级风险', basis: '多次反映办理反馈不充分' }], suggestedActions: ['建议核对原案件办理节点与告知记录'], reviewStatus: '继续核查', relatedCaseIds: ['关联案件（脱敏）'],
+    reverseReview: { matched: true, departmentId: 'dept-2', departmentName: '第二检察部', relatedCaseId: '关联案件（脱敏）', issueSummary: '办理结果告知与群众沟通环节待核查', issueTags: ['告知反馈', '办理时效'], status: '待核查', possibleStage: '结果告知', suggestedCheck: ['核对告知送达记录', '核对群众回访记录'] }
+  },
+  {
+    id: 'petition-003', conflictNo: 'LW-2026-021', occurredAt: '2026-08-08 11:30', source: '群众来访', riskLevel: '黄色', street: '西长安街街道', eventCategory: '劳动就业',
+    eventName: '全国总工会相关事项', summary: '劳动权益类群众反映事项，需结合涉众性和传播影响继续人工研判。',
+    supervisionCategories: ['民事检察', '政治安全'], supervisionScore: 82, aiTags: ['涉众/群体性', '重点区域/重点部位', '传播影响/扩散范围'], aiReasons: ['事项同时涉及劳动权益与群体性传播特征'],
+    riskAnalysis: [{ label: '舆论传播风险', basis: '事项涉及群体性议题且具有扩散可能' }, { label: '政治安全关联风险', basis: '需结合重点区域和传播影响人工复核' }],
+    suggestedActions: ['建议转政治安全专题研判', '建议持续关注舆情与群体变化'], reviewStatus: '待复核', typical: true
+  },
+  {
+    id: 'petition-004', conflictNo: '12345-2026-032', occurredAt: '2026-08-06 16:45', source: '12345热线', riskLevel: '蓝色', street: '德胜街道', eventCategory: '物业纠纷', summary: '居民反映小区公共区域维修协商不畅。',
+    supervisionCategories: ['民事检察'], supervisionScore: 55, aiTags: ['物业治理'], aiReasons: ['反映内容为物业服务合同与公共维修争议'], suggestedActions: ['建议持续观察同类问题数量变化'], reviewStatus: '已排除'
+  },
+  {
+    id: 'petition-005', conflictNo: 'ZZ-2026-041', occurredAt: '2026-08-04 10:05', source: '部门流转', riskLevel: '橙色', street: '月坛街道', eventCategory: '行政争议', summary: '多次反映行政办理标准不一致，疑似具有行政检察监督价值。',
+    supervisionCategories: ['行政检察'], supervisionScore: 86, aiTags: ['重复反映', '行政履职'], aiReasons: ['同类办理标准疑似不一致'], suggestedActions: ['建议进一步核实行政履职依据'], reviewStatus: '已确认'
+  },
+  {
+    id: 'petition-006', conflictNo: 'XF-2026-053', occurredAt: '2026-08-02 13:50', source: '市级交办', riskLevel: '红色', street: '新街口街道', eventCategory: '重点信访事项', summary: '来访事项指向既有案件证据审查环节，需内部核查。',
+    supervisionCategories: ['刑事检察'], supervisionScore: 89, aiTags: ['重复信访', '案件关联'], aiReasons: ['反映内容直接指向既有案件证据审查环节'], suggestedActions: ['建议核对证据审查与复核记录'], reviewStatus: '继续核查', relatedCaseIds: ['关联案件（脱敏）'],
+    reverseReview: { matched: true, departmentId: 'dept-1', departmentName: '第一检察部', relatedCaseId: '关联案件（脱敏）', issueSummary: '证据审查与复核说明是否充分待核查', issueTags: ['证据审查', '复核记录'], status: '核查中', possibleStage: '审查起诉', suggestedCheck: ['调阅原案证据审查记录'] }
+  },
+  {
+    id: 'petition-007', conflictNo: 'WG-2026-061', occurredAt: '2026-07-29 15:10', source: '网格员上报', riskLevel: '黄色', street: '广安门外街道', eventCategory: '婚恋家庭', summary: '家庭矛盾经多次调解仍反复，需持续跟踪。', supervisionCategories: ['民事检察', '未成年人检察'], supervisionScore: 70,
+    aiTags: ['家庭矛盾', '未成年人保护'], aiReasons: ['事项反映家庭关系且涉及未成年人权益'], suggestedActions: ['建议与未检条线碰撞'], reviewStatus: '待复核'
+  }
+]
+
+export async function fetchPetitionLitigationItems(): Promise<PetitionLitigationItem[]> {
+  if (useMock) return Promise.resolve(structuredClone(mockPetitionLitigationItems))
+  const { data } = await http.get<PetitionLitigationItem[]>('/petition-litigation/items')
   return data
 }

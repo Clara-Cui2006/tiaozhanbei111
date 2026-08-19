@@ -20,6 +20,7 @@ import LegalPlanForm from '../views/legal-plan-form.vue'
 import Login from '../views/login.vue'
 import DataManagement from '../views/data-management.vue'
 import AccessManagement from '../views/access-management.vue'
+import PetitionLitigation from '../views/petition-litigation.vue'
 import { authState, hasPermissions, restoreSession } from '../services/auth'
 import { HOME_BUSINESS_ITEMS, PERMISSION_RULES, type PermissionMode } from '../config/navigation'
 
@@ -153,6 +154,16 @@ const routes = [
     name: 'PoliticalSecurity',
     component: PoliticalSecurity,
     meta: permissionMeta(PERMISSION_RULES.politicalRead)
+  },
+  {
+    path: '/petition-litigation',
+    redirect: '/petition-litigation/overview'
+  },
+  {
+    path: '/petition-litigation/:section(overview|clues|reverse-review)',
+    name: 'PetitionLitigation',
+    component: PetitionLitigation,
+    meta: permissionMeta(PERMISSION_RULES.caseReadAny)
   },
   {
     path: '/legal-plan-form',

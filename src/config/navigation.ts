@@ -12,6 +12,7 @@ export type HomeCardIcon =
   | 'alert'
   | 'suggestion'
   | 'legal'
+  | 'petition'
 
 export interface NavigationItem extends PermissionRule {
   key: string
@@ -20,6 +21,10 @@ export interface NavigationItem extends PermissionRule {
     icon: HomeCardIcon
     descriptions: readonly [string, string]
   }
+}
+
+export interface BusinessWorkspace extends NavigationItem {
+  secondary: readonly NavigationItem[]
 }
 
 /**
@@ -75,53 +80,69 @@ export const PERMISSION_RULES = {
   }
 } satisfies Record<string, PermissionRule>
 
-/**
- * 首页六个主要业务入口。
- * 顺序同时作为“进入平台”的默认跳转优先级。
- */
+/** 四个一级业务入口，顺序不得调整。 */
 export const HOME_BUSINESS_ITEMS: readonly NavigationItem[] = [
   {
     key: '/dashboard',
-    label: '风险预警态势盘',
+    label: '风险态势',
     ...PERMISSION_RULES.dashboardRead,
-    homeCard: { icon: 'dashboard', descriptions: ['风险态势全景感知', '预警趋势动态掌握'] }
-  },
-  {
-    key: '/risk-analysis',
-    label: '风险分析管理',
-    ...PERMISSION_RULES.caseReadAny,
-    homeCard: { icon: 'risk', descriptions: ['风险深度分析研判', '管理闭环提质增效'] }
+    homeCard: { icon: 'dashboard', descriptions: ['风险全景感知', '指标地图联动'] }
   },
   {
     key: '/political-security',
     label: '政治安全',
     ...PERMISSION_RULES.politicalRead,
-    homeCard: { icon: 'political', descriptions: ['政治风险精准识别', '风险隐患有效防控'] }
-  },
-  {
-    key: '/alert-push',
-    label: '预警推送',
-    ...PERMISSION_RULES.dashboardRead,
-    homeCard: { icon: 'alert', descriptions: ['预警信息及时送达', '联动处置高效响应'] }
+    homeCard: { icon: 'political', descriptions: ['四维风险研判', '核心区重点防控'] }
   },
   {
     key: '/procuratorate-suggestion',
-    label: '检察建议',
+    label: '检察履职',
     ...PERMISSION_RULES.procuratorateReadAny,
-    homeCard: { icon: 'suggestion', descriptions: ['问题线索精准反馈', '建议跟踪闭环管理'] }
+    homeCard: { icon: 'suggestion', descriptions: ['线索筛查复核', '履职办理反馈'] }
   },
   {
-    key: '/legal-recommend',
-    label: '普法方案',
-    ...PERMISSION_RULES.legalRecommendRead,
-    homeCard: { icon: 'legal', descriptions: ['普法资源智能匹配', '普法方案科学制定'] }
+    key: '/petition-litigation/overview',
+    label: '涉访涉诉',
+    ...PERMISSION_RULES.caseReadAny,
+    homeCard: { icon: 'petition', descriptions: ['12345·综治数据', '诉求识别研判'] }
   }
 ]
 
-/** 顶部一级导航：效果图中固定展示“首页 + 六个主要业务”。 */
-export const PRIMARY_NAVIGATION_ITEMS: readonly NavigationItem[] = [
-  { key: '/', label: '首页' },
-  ...HOME_BUSINESS_ITEMS
+/** 首页顶部仅展示四个一级入口。 */
+export const PRIMARY_NAVIGATION_ITEMS: readonly NavigationItem[] = HOME_BUSINESS_ITEMS
+
+/** 进入一级板块后展开的二级导航。 */
+export const BUSINESS_WORKSPACES: readonly BusinessWorkspace[] = [
+  {
+    ...HOME_BUSINESS_ITEMS[0]!,
+    secondary: [
+      { key: '/dashboard', label: '总体态势', ...PERMISSION_RULES.dashboardRead },
+      { key: '/risk-analysis', label: '分析下钻', ...PERMISSION_RULES.caseReadAny }
+    ]
+  },
+  {
+    ...HOME_BUSINESS_ITEMS[1]!,
+    secondary: [
+      { key: '/political-security', label: '专题研判', ...PERMISSION_RULES.politicalRead }
+    ]
+  },
+  {
+    ...HOME_BUSINESS_ITEMS[2]!,
+    secondary: [
+      { key: '/procuratorate-suggestion', label: '线索复核', ...PERMISSION_RULES.procuratorateReadAny },
+      { key: '/alert-push', label: '预警推送', ...PERMISSION_RULES.dashboardRead },
+      { key: '/legal-recommend', label: '靶向普法', ...PERMISSION_RULES.legalRecommendRead },
+      { key: '/effect-stats', label: '办理反馈', ...PERMISSION_RULES.dashboardRead }
+    ]
+  },
+  {
+    ...HOME_BUSINESS_ITEMS[3]!,
+    secondary: [
+      { key: '/petition-litigation/overview', label: '整体情况', ...PERMISSION_RULES.caseReadAny },
+      { key: '/petition-litigation/clues', label: '监督线索', ...PERMISSION_RULES.caseReadAny },
+      { key: '/petition-litigation/reverse-review', label: '反向审视', ...PERMISSION_RULES.caseReadAny }
+    ]
+  }
 ]
 
 /** “更多”下拉中的非一级核心功能。 */

@@ -425,6 +425,90 @@ def case_detail(case_id: int, request: Request, user: dict[str, Any] = Depends(g
             "governanceThemes": [] if metadata_only else _json_list(case["governance_themes"])}
 
 
+def _petition_supervision_categories(case: dict[str, Any]) -> list[str]:
+    text = " ".join(str(case.get(key) or "") for key in ("category", "legal_cause", "prosecutorial_track"))
+    categories: list[str] = []
+    for keyword, label in (
+        ("刑事", "刑事检察"), ("民事", "民事检察"), ("行政", "行政检察"),
+        ("公益诉讼", "公益诉讼检察"), ("未成年", "未成年人检察"),
+    ):
+        if keyword in text and label not in categories:
+            categories.append(label)
+    if case.get("political_review_status") != "不属于政治安全":
+        categories.append("政治安全")
+    return categories
+
+
+def _petition_risk_level(case: dict[str, Any]) -> str:
+    score = _risk_score_for_case(case)
+    if score >= 80:
+        return "红色"
+    if score >= 65:
+        return "橙色"
+    if score >= 50:
+        return "黄色"
+    return "蓝色"
+
+
+@app.get("/petition-litigation/items")
+def petition_litigation_items(user: dict[str, Any] = Depends(get_current_user)) -> list[dict[str, Any]]:
+    """以现有案件数据底座提供涉访涉诉前置研判视图。
+
+    未接入的 36 字段返回空值，不伪造群众、案件或联系方式。
+    """
+    where, params = _case_scope(user)
+    with connect() as db:
+        rows = db.execute(
+            f"SELECT * FROM cases WHERE {where} ORDER BY accepted_date DESC, id DESC LIMIT 500", params
+        ).fetchall()
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        case = dict(row)
+        themes = _json_list(case.get("governance_themes"))
+        categories = _petition_supervision_categories(case)
+        score = _risk_score_for_case(case)
+        is_reverse = "反向审视" in themes
+        ai_tags = themes[:6]
+        if case.get("political_review_status") != "不属于政治安全" and "政治安全关联" not in ai_tags:
+            ai_tags.append("政治安全关联")
+        items.append({
+            "id": str(case["id"]),
+            "registrationTime": case.get("created_at") or "",
+            "conflictNo": case.get("case_number") or "",
+            "occurredAt": case.get("accepted_date") or case.get("created_at") or "",
+            "occurredAddress": case.get("address") or "",
+            "source": "部门流转",
+            "riskLevel": _petition_risk_level(case),
+            "street": case.get("street_name") or "",
+            "eventName": case.get("case_name") or "",
+            "eventCategory": case.get("legal_cause") or case.get("category") or "",
+            "summary": case.get("summary") or "",
+            "party": {
+                "name": case.get("subject_name") or "",
+                "age": case.get("subject_age"),
+                "gender": case.get("subject_gender") or "",
+                "employer": case.get("subject_occupation") or "",
+            },
+            "supervisionCategories": categories,
+            "supervisionScore": score,
+            "aiTags": ai_tags,
+            "aiReasons": ["依据已入库案件类别、治理主题与人工复核状态生成辅助标签"] if categories else [],
+            "riskAnalysis": [{"label": "事项关注度", "basis": "综合已有线索流转、政治安全复核和街道归属状态"}],
+            "suggestedActions": ["建议由检察官进一步人工核实"] if categories else ["建议持续观察"],
+            "reviewStatus": "已确认" if case.get("internal_transfer_status") != "未形成线索" else "待复核",
+            "relatedCaseIds": [case.get("case_number")] if case.get("case_number") else [],
+            "reverseReview": {
+                "matched": is_reverse,
+                "departmentId": case.get("department") if is_reverse else None,
+                "departmentName": case.get("department") if is_reverse else None,
+                "relatedCaseId": case.get("case_number") if is_reverse else None,
+                "issueSummary": case.get("summary") if is_reverse else None,
+                "status": "待核查" if is_reverse else None,
+            },
+        })
+    return items
+
+
 @app.get("/dashboard/overview")
 def dashboard_overview(user: dict[str, Any] = Depends(require_permission("dashboard:read"))) -> dict[str, Any]:
     where, params = _case_scope(user)

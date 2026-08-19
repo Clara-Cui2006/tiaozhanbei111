@@ -5,7 +5,7 @@
     <a-layout class="layout-shell">
       <a-layout-header class="header">
         <button class="brand" type="button" aria-label="返回首页" @click="goTo('/')">
-          红墙智检
+          {{ activeWorkspace?.label || '红墙智检' }}
         </button>
 
         <nav class="top-nav" aria-label="主导航">
@@ -20,7 +20,7 @@
             {{ item.label }}
           </button>
 
-          <div v-if="moreMenuItems.length" class="more-nav" @click.stop>
+          <div v-if="!isHomeRoute && moreMenuItems.length" class="more-nav" @click.stop>
             <button
               type="button"
               class="nav-link more-trigger"
@@ -99,7 +99,7 @@
         <router-view />
       </a-layout-content>
 
-      <a-layout-footer class="footer">
+      <a-layout-footer v-if="!isHomeRoute" class="footer">
         <div class="footer-inner">
           <div class="record">
             <span>{{ footerInfo.recordNo }}</span>
@@ -140,6 +140,7 @@ import { Message } from '@arco-design/web-vue'
 import { fetchSiteFooterInfo } from './api/platform'
 import { http } from './api/http'
 import {
+  BUSINESS_WORKSPACES,
   PRIMARY_NAVIGATION_ITEMS,
   SECONDARY_NAVIGATION_ITEMS
 } from './config/navigation'
@@ -169,9 +170,16 @@ const newPassword = ref('')
 const footerInfo = ref<SiteFooterInfo>({ recordNo: '备案信息加载中', links: [] })
 
 const isHomeRoute = computed(() => route.path === '/')
+const activeWorkspace = computed(() => BUSINESS_WORKSPACES.find((workspace) => {
+  if (workspace.key === '/dashboard') return route.path === '/dashboard' || route.path.startsWith('/risk-analysis') || route.path.startsWith('/case-detail/')
+  if (workspace.key === '/political-security') return route.path.startsWith('/political-security')
+  if (workspace.key === '/procuratorate-suggestion') return ['/procuratorate-suggestion', '/alert-push', '/legal-recommend', '/legal-plan', '/effect-stats'].some((path) => route.path.startsWith(path))
+  return route.path.startsWith('/petition-litigation')
+}))
 const accountTeleportTarget = computed(() => '#header-account-layer')
 const primaryMenuItems = computed(() =>
-  PRIMARY_NAVIGATION_ITEMS.filter((item) => hasPermissions(item.permissions, item.permissionMode))
+  (isHomeRoute.value ? PRIMARY_NAVIGATION_ITEMS : activeWorkspace.value?.secondary ?? PRIMARY_NAVIGATION_ITEMS)
+    .filter((item) => hasPermissions(item.permissions, item.permissionMode))
 )
 const moreMenuItems = computed(() =>
   SECONDARY_NAVIGATION_ITEMS.filter((item) => hasPermissions(item.permissions, item.permissionMode))
@@ -1189,27 +1197,29 @@ onBeforeUnmount(() => {
   min-width: 0;
   height: 100%;
   align-items: center;
-  justify-content: space-between;
-  gap: clamp(16px, 1.35vw, 28px);
+  justify-content: space-evenly;
+  gap: clamp(22px, 2.6vw, 52px);
   white-space: nowrap;
 }
 
 .nav-link {
   position: relative;
   appearance: none;
-  height: 100%;
-  padding: 2px 0 0;
-  border: 0;
-  border-radius: 0;
+  height: 48px;
+  min-width: 126px;
+  padding: 0 24px;
+  border: 1px solid rgba(66, 213, 255, 0.24);
+  border-radius: 4px;
   color: rgba(255, 255, 255, 0.88);
   font-family: "Microsoft YaHei UI", "PingFang SC", sans-serif;
   font-size: clamp(17px, 1.08vw, 20px);
   font-weight: 700;
-  line-height: 86px;
+  line-height: 46px;
   letter-spacing: 0;
   cursor: pointer;
-  background: transparent;
-  transition: color 0.18s ease, text-shadow 0.18s ease;
+  background: linear-gradient(180deg, rgba(18, 74, 119, 0.22), rgba(4, 24, 48, 0.42));
+  box-shadow: inset 0 0 18px rgba(30, 167, 225, 0.06);
+  transition: color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
 .nav-link::after {
@@ -1231,7 +1241,10 @@ onBeforeUnmount(() => {
   outline: none;
   color: #26e9ff;
   text-shadow: 0 0 9px rgba(38, 233, 255, 0.2);
-  background: transparent;
+  border-color: rgba(49, 231, 255, 0.72);
+  background: linear-gradient(180deg, rgba(23, 108, 158, 0.34), rgba(5, 35, 66, 0.62));
+  box-shadow: inset 0 0 20px rgba(32, 230, 255, 0.12), 0 0 14px rgba(32, 230, 255, 0.12);
+  transform: translateY(-1px);
 }
 
 .nav-link--active::after {

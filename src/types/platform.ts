@@ -382,3 +382,94 @@ export interface PoliticalOverview {
   fourDimensionMethod?: Array<{ name: string; description: string }>;
   priorityTopics?: string[];
 }
+
+// ===== 涉访涉诉前置研判 =====
+export type PetitionRiskLevel = '蓝色' | '黄色' | '橙色' | '红色'
+export type SupervisionCategory = '刑事检察' | '民事检察' | '行政检察' | '公益诉讼检察' | '未成年人检察' | '政治安全'
+export type PetitionReviewStatus = '待复核' | '已确认' | '已排除' | '继续核查'
+
+export interface PetitionPartyProfile {
+  name?: string
+  phone?: string
+  idCard?: string
+  age?: number | string
+  gender?: string
+  ethnicity?: string
+  currentRegion?: string
+  address?: string
+  householdRegion?: string
+  householdAddress?: string
+  employer?: string
+}
+
+export interface PetitionRiskReason {
+  label: string
+  basis: string
+}
+
+export interface ReverseReviewInfo {
+  matched: boolean
+  departmentId?: string
+  departmentName?: string
+  relatedCaseId?: string
+  issueSummary?: string
+  issueTags?: string[]
+  status?: '待核查' | '核查中' | '已处理'
+  possibleStage?: string
+  suggestedCheck?: string[]
+  dispositionOpinion?: string
+  dispositionResult?: string
+  feedbackAt?: string
+  responsibleDepartment?: string
+}
+
+export interface PetitionLitigationItem {
+  id: string
+  registrationTime?: string
+  registrar?: string
+  conflictNo?: string
+  occurredAt?: string
+  occurredAddress?: string
+  source?: string
+  riskLevel?: PetitionRiskLevel
+  street?: string
+  community?: string
+  eventName?: string
+  eventCategory?: string
+  summary?: string
+  previousMeasures?: string
+  industryDepartment?: string
+  industryCategory?: string
+  resolvedAt?: string
+  mediationResult?: string
+  legalResolutionPath?: string
+  receiver?: string
+  receiverPhone?: string
+  branchName?: string
+  policeStation?: string
+  responsibleOfficer?: string
+  contactPhone?: string
+  mediationInfo?: string
+  party?: PetitionPartyProfile
+  supervisionCategories?: SupervisionCategory[]
+  supervisionScore?: number
+  aiTags?: string[]
+  aiReasons?: string[]
+  riskAnalysis?: PetitionRiskReason[]
+  suggestedActions?: string[]
+  reviewStatus?: PetitionReviewStatus
+  relatedCaseIds?: string[]
+  typical?: boolean
+  reverseReview?: ReverseReviewInfo
+}
+
+/** 保留 Excel 36 个原始表头与前后端字段的单一映射源。 */
+export const PETITION_EXCEL_FIELD_MAP = {
+  '登记时间': 'registrationTime', '登记人': 'registrar', '矛盾编号': 'conflictNo', '发生时间': 'occurredAt', '发生地址': 'occurredAddress',
+  '事件来源': 'source', '风险等级': 'riskLevel', '所属街道': 'street', '所属社区': 'community', '事件名称': 'eventName', '事件类别': 'eventCategory',
+  '事件简述': 'summary', '前期工作措施': 'previousMeasures', '行业主管部门': 'industryDepartment', '行业类别': 'industryCategory', '化解时间': 'resolvedAt',
+  '调解结果': 'mediationResult', '法治化解决路径': 'legalResolutionPath', '受理人': 'receiver', '受理人联系电话': 'receiverPhone', '当事人姓名': 'party.name',
+  '当事人电话': 'party.phone', '当事人身份证': 'party.idCard', '当事人年龄': 'party.age', '当事人性别': 'party.gender', '当事人民族': 'party.ethnicity',
+  '当事人现住地区划': 'party.currentRegion', '当事人住址': 'party.address', '当事人户籍地': 'party.householdRegion', '当事人户籍地详细地址': 'party.householdAddress',
+  '当事人工作单位': 'party.employer', '分局名称': 'branchName', '派出所名称': 'policeStation', '责任民警': 'responsibleOfficer', '联系电话': 'contactPhone', '调处信息': 'mediationInfo'
+} as const

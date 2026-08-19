@@ -1,7 +1,7 @@
 <template>
   <div class="dashboard">
     <BackHome />
-    <a-page-header title="风险预警态势盘" subtitle="Risk Early Warning Dashboard" />
+    <a-page-header title="风险态势" subtitle="Risk Situation Dashboard" />
 
     <div class="kpi-strip">
       <div class="kpi-item kpi-red">

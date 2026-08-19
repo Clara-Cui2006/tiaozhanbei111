@@ -208,6 +208,13 @@
                   <path d="M21.5 16.5 14.5 29M26.5 16.5 33.5 29M17 34h14" />
                 </template>
 
+                <template v-else-if="item.homeCard?.icon === 'petition'">
+                  <path d="M9 12h30v23H18l-7 6v-6H9V12Z" />
+                  <path d="M16 20h16M16 26h11" />
+                  <circle cx="34" cy="31" r="6" />
+                  <path d="m31.5 31 1.7 1.8 3.4-4" />
+                </template>
+
                 <template v-else>
                   <path d="M12 7h18l7 7v27H12V7Z" />
                   <path d="M30 7v8h7M18 23h13M18 29h13M18 35h8" />
@@ -231,7 +238,7 @@
       </div>
     </section>
 
-    <section v-if="canViewRiskMap || canViewLegalRecommendations" class="home-data-section">
+    <section v-if="false" class="home-data-section">
       <a-row :gutter="24" class="map-recommend-row">
         <a-col v-if="canViewRiskMap" :span="24">
           <div ref="mapPanelRef" class="dark-panel">
@@ -287,7 +294,7 @@
       </a-row>
     </section>
 
-    <section v-if="canViewPriorityAlerts" class="home-data-section news-section">
+    <section v-if="false" class="home-data-section news-section">
       <a-card :bordered="false" class="news-card dark-card home-alert-card">
         <template #title><div class="home-alert-title"><span><i></i>重点预警条目</span><a-button size="small" type="outline" @click="router.push('/alert-push')">查看全部</a-button></div></template>
         <PriorityTagStrip v-model="selectedPriorityTag" :alerts="priorityAlerts" title="首页重点预警" />
@@ -417,10 +424,7 @@ const enterPlatform = () => {
 const goLegalRecommend = () => router.push('/legal-recommend')
 const goPlan = (planId: number) => router.push(`/legal-plan/${planId}`)
 
-onMounted(async () => {
-  await loadHomeData()
-  setupMapObserver()
-})
+onMounted(() => {})
 
 onUnmounted(() => {
   mapObserver?.disconnect()
@@ -432,7 +436,8 @@ onUnmounted(() => {
 
 <style scoped>
 .home-page {
-  min-height: 100vh;
+  height: calc(100vh - 86px);
+  min-height: 0;
   overflow: hidden;
   color: #f4fbff;
   -webkit-font-smoothing: antialiased;
@@ -444,8 +449,8 @@ onUnmounted(() => {
 .hero-section {
   position: relative;
   width: 100%;
-  height: calc(100vh - 86px);
-  min-height: 760px;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   isolation: isolate;
   background-image: url('/images/home-bg-approved.png');

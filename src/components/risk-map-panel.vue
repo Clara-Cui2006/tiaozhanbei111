@@ -627,6 +627,10 @@ const props = withDefaults(
   }
 )
 
+const emit = defineEmits<{
+  streetChange: [streetName: string]
+}>()
+
 const STREET_MAP_NAME = 'xicheng-street-map'
 const MAP_FILE_NAMES = ['xicheng_streets.geojson', 'xicheng_full.json', 'beijing_full.json'] as const
 const EMBEDDED_XICHENG_GEOJSON = {"type":"FeatureCollection","features":[{"type":"Feature","properties":{"adcode":110102,"name":"西城区","center":[116.366794,39.915309],"centroid":[116.36567,39.912028],"childrenNum":0,"level":"district","parent":{"adcode":110000},"subFeatureIndex":1,"acroutes":[100000,110000]},"geometry":{"type":"MultiPolygon","coordinates":[[[[116.325799,39.896789],[116.32582,39.891111],[116.320759,39.881512],[116.321324,39.875199],[116.326636,39.876859],[116.335273,39.875183],[116.341567,39.876159],[116.344286,39.873653],[116.349472,39.873588],[116.35058,39.86869],[116.38059,39.871148],[116.399097,39.872205],[116.397612,39.898675],[116.396086,39.89944],[116.395563,39.907995],[116.392259,39.907881],[116.392175,39.92242],[116.399474,39.923574],[116.396692,39.928306],[116.396169,39.94006],[116.394266,39.940629],[116.393346,39.957355],[116.38678,39.957014],[116.387658,39.96093],[116.390084,39.968406],[116.394162,39.969397],[116.394099,39.972858],[116.380903,39.972712],[116.380401,39.968178],[116.370384,39.967902],[116.371974,39.948594],[116.356206,39.944092],[116.352023,39.950854],[116.352421,39.943832],[116.341442,39.941979],[116.332889,39.944092],[116.327953,39.942369],[116.333056,39.938565],[116.334645,39.922664],[116.335356,39.898448],[116.337301,39.89739],[116.325799,39.896789]]]]}}]}
@@ -1104,7 +1108,26 @@ const loadOverview = async () => {
   overviewLoading.value = true
   overviewError.value = false
   try {
-    overview.value = await fetchXichengStreetMapOverview({ ...filters })
+    if (props.points.length) {
+      const streets = props.points.map((raw) => {
+        const point = raw as { community?: string; streetName?: string; annualCases?: number; caseCount?: number }
+        return {
+          streetCode: point.streetName || point.community || '',
+          streetName: point.streetName || point.community || '',
+          caseCount: Number(point.caseCount ?? point.annualCases ?? 0)
+        }
+      }).filter((item) => item.streetName)
+      const totalCases = streets.reduce((sum, item) => sum + item.caseCount, 0)
+      overview.value = {
+        summary: { totalCases, confirmedCases: totalCases, pendingCases: 0, crossStreetCases: 0, notInStreetCases: 0 },
+        streets,
+        dataPeriod: '当前筛选结果',
+        updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }),
+        statisticalNote: '地图数量根据当前筛选条件派生，仅作辅助研判。'
+      }
+    } else {
+      overview.value = await fetchXichengStreetMapOverview({ ...filters })
+    }
     if (activeStreetName.value && !selectedStreetStat.value) clearSelection()
   } catch (error) {
     console.error('加载街道地图汇总失败', error)
@@ -2068,6 +2091,7 @@ const renderMap = async () => {
 const selectStreet = (streetName: string) => {
   activeStreetName.value = streetName
   summaryExplanation.value = ''
+  emit('streetChange', streetName)
 }
 
 const selectStreetFromThree = (streetName: string) => selectStreet(streetName)
@@ -2078,6 +2102,7 @@ const handleThreeMapError = (message: string) => {
 
 const clearSelection = (resetView = false) => {
   activeStreetName.value = ''
+  emit('streetChange', '')
   detail.value = null
   detailError.value = false
   // 清除选中默认只改变街道状态，不动相机；只有显式 resetView 才恢复全区视角。
@@ -2241,6 +2266,12 @@ watch(filters, async () => {
   await loadOverview()
   await renderMap()
   if (activeStreetName.value) await loadStreetDetail()
+}, { deep: true })
+
+watch(() => props.points, async () => {
+  if (!props.points.length) return
+  await loadOverview()
+  await renderMap()
 }, { deep: true })
 
 watch(activeStreetName, async () => {

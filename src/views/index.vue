@@ -32,7 +32,7 @@
         <template #default="{ focused }">
           <RiskMapPanel
             :points="mapPoints"
-            :height="focused ? 370 : 395"
+            :height="focused ? 350 : 345"
             :display-mode="focused ? 'focus' : 'cockpit'"
           />
         </template>
@@ -554,15 +554,15 @@ onUnmounted(() => {
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(0, 2fr) minmax(330px, 1fr);
-  grid-template-rows: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-columns: minmax(260px, .78fr) minmax(520px, 1.35fr) minmax(260px, .78fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 10px;
   overflow: hidden;
 }
 
-.map-focus-panel { grid-row: 1 / 3; }
-.trend-focus-panel { grid-column: 2; grid-row: 1; }
-.assessment-focus-panel { grid-column: 2; grid-row: 2; }
+.map-focus-panel { grid-column: 2; grid-row: 1; }
+.trend-focus-panel { grid-column: 1; grid-row: 1; }
+.assessment-focus-panel { grid-column: 3; grid-row: 1; }
 
 .trend-toolbar {
   position: absolute;
@@ -580,6 +580,15 @@ onUnmounted(() => {
   overflow-x: auto;
   white-space: nowrap;
   scrollbar-width: none;
+}
+
+.trend-focus-panel:not(.focus-panel--active) .trend-toolbar {
+  right: auto;
+  left: 8px;
+}
+
+.trend-focus-panel:not(.focus-panel--active) .trend-toolbar :deep(.arco-radio-button:not(.arco-radio-button-checked)) {
+  display: none;
 }
 
 .dashboard-chart-stage {

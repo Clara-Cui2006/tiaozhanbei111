@@ -40,7 +40,7 @@
         <div class="petition-dashboard-grid" :class="{ 'petition-dashboard-grid--focused': focusedPanel }">
           <DashboardFocusPanel v-model="focusedPanel" panel-key="map" title="西城区街道事项分布" eyebrow="12345 · 综治中心">
             <template #default="{ focused }">
-              <RiskMapPanel :points="mapPoints" :height="focused ? 370 : 275" :display-mode="focused ? 'focus' : 'cockpit'" @street-change="selectStreet" />
+              <RiskMapPanel :points="mapPoints" :height="focused ? 350 : 225" :display-mode="focused ? 'focus' : 'cockpit'" @street-change="selectStreet" />
             </template>
           </DashboardFocusPanel>
           <DashboardFocusPanel v-model="focusedPanel" panel-key="structure" title="事项结构" eyebrow="RISK · SOURCE · CATEGORY">
@@ -320,12 +320,14 @@ onMounted(async () => {
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(0, 1.8fr) minmax(310px, .8fr);
-  grid-template-rows: minmax(0, 1fr) minmax(0, .9fr);
+  grid-template-columns: minmax(260px, .78fr) minmax(520px, 1.35fr) minmax(260px, .78fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 8px;
   overflow: hidden;
 }
-.petition-dashboard-grid > :first-child { grid-row: 1 / 3; }
+.petition-dashboard-grid > :first-child { grid-column: 2; grid-row: 1; }
+.petition-dashboard-grid > :nth-child(2) { grid-column: 1; grid-row: 1; }
+.petition-dashboard-grid > :nth-child(3) { grid-column: 3; grid-row: 1; }
 .petition-dashboard-grid .structure-column { height: 100%; gap: 5px; padding: 6px; overflow: auto; }
 .petition-dashboard-grid .compact-panel { padding: 7px; }
 .petition-dashboard-grid .compact-panel .panel-title { padding: 4px 6px; }

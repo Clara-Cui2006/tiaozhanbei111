@@ -32,7 +32,7 @@
     <div class="political-cockpit-grid" :class="{ 'political-cockpit-grid--focused': focusedPanel }">
       <DashboardFocusPanel v-model="focusedPanel" panel-key="map" title="政治安全风险空间分布" eyebrow="FOUR-DIMENSIONAL ANALYSIS" class="political-map-panel">
         <template #default="{ focused }">
-          <RiskMapPanel :height="focused ? 370 : 395" :default-overlay-political="true" :display-mode="focused ? 'focus' : 'cockpit'" />
+          <RiskMapPanel :height="focused ? 350 : 345" :default-overlay-political="true" :display-mode="focused ? 'focus' : 'cockpit'" />
         </template>
       </DashboardFocusPanel>
 
@@ -463,15 +463,15 @@ onUnmounted(() => {
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(0, 1.7fr) minmax(430px, 1fr);
-  grid-template-rows: minmax(0, 1.05fr) minmax(0, 1fr);
+  grid-template-columns: minmax(260px, .78fr) minmax(520px, 1.35fr) minmax(260px, .78fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 10px;
   overflow: hidden;
 }
 
-.political-map-panel { grid-row: 1 / 3; }
-.political-topic-panel { grid-column: 2; grid-row: 1; }
-.political-dimension-panel { grid-column: 2; grid-row: 2; }
+.political-map-panel { grid-column: 2; grid-row: 1; }
+.political-topic-panel { grid-column: 1; grid-row: 1; }
+.political-dimension-panel { grid-column: 3; grid-row: 1; }
 
 .political-topic-panel .chart-card,
 .political-dimension-panel .chart-card {
@@ -488,7 +488,7 @@ onUnmounted(() => {
 .political-dimension-panel :deep(.arco-card-body) { padding: 8px; }
 
 .political-topic-panel .topic-card-layout { display: block; }
-.political-topic-panel .review-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.political-topic-panel .review-metrics { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .political-topic-panel .review-pod { min-height: 94px; padding: 8px; }
 .political-topic-panel .review-pod p,
 .political-topic-panel .method-alert { display: none; }

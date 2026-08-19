@@ -65,7 +65,7 @@ export function createMapScene(container: HTMLElement, options: MapSceneOptions)
   controls.autoRotateSpeed = 0.42
 
   const initialPose: CameraPose = {
-    position: new THREE.Vector3(-158, 176, 210),
+    position: new THREE.Vector3(-134, 150, 178),
     target: new THREE.Vector3(0, -2, 0),
   }
   const cameraController = new CameraController(camera, controls, initialPose)

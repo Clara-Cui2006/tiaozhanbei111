@@ -14,6 +14,8 @@ artifacts/
 offline-bundle
 wheelhouse
 var/
+/.tmp-*/
+/release-packages/
 dist-ssr
 coverage
 __pycache__/

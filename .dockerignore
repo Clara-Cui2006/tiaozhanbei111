@@ -8,6 +8,8 @@ release
 artifacts
 offline-bundle
 var
+.tmp-*
+release-packages
 logs
 *.log
 *.local

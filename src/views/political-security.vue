@@ -526,6 +526,42 @@ onUnmounted(() => {
   box-shadow: none !important;
 }
 .political-topic-panel.focus-panel--active .chart-card { overflow: auto; }
+.political-topic-panel.focus-panel--active .review-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.political-topic-panel.focus-panel--active .review-pod {
+  min-height: 180px;
+  padding: 22px 26px;
+}
+.political-topic-panel.focus-panel--active .review-ring {
+  width: 118px;
+  height: 118px;
+  flex-basis: 118px;
+}
+.political-topic-panel.focus-panel--active .review-ring i { font-size: 24px; }
+.political-topic-panel.focus-panel--active .review-pod-portrait {
+  grid-column: 1 / -1;
+  min-height: 190px;
+  border-color: rgba(99, 246, 213, .7);
+  background:
+    radial-gradient(circle at 84% 20%, rgba(78, 233, 185, .24), transparent 34%),
+    linear-gradient(135deg, rgba(12, 74, 82, .92), rgba(5, 30, 55, .96));
+  box-shadow:
+    inset 0 1px 0 rgba(208, 255, 242, .16),
+    inset 0 0 36px rgba(78, 233, 185, .09),
+    0 0 26px rgba(60, 224, 197, .2);
+}
+.political-topic-panel.focus-panel--active .review-pod-portrait::before {
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #54efd0, #d8fff6, #54efd0, transparent);
+  box-shadow: 0 0 18px rgba(84, 239, 208, .86);
+}
+.political-topic-panel.focus-panel--active .portrait-topic {
+  color: #f0fffb;
+  font-size: 26px;
+  text-shadow: 0 0 16px rgba(84, 239, 208, .28);
+}
 
 .topic-focus-detail {
   display: grid;

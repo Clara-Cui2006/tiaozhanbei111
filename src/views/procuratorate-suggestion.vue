@@ -231,7 +231,7 @@ const initPieChart = () => {
   const light = isLightTheme()
   const palette = CHART_PALETTES.violetCyan.map((color) => light ? shadeHex(color, -24) : color)
   const center: [string, string] = ['50%', '42%']
-  const radius: [string, string] = ['38%', '64%']
+  const radius: [string, string] = ['42%', '74%']
   const prepared: ChartDatum[] = categoryDistribution.value.map((item, index) => ({
     ...item,
     baseColor: palette[index % palette.length],
@@ -359,7 +359,7 @@ onUnmounted(() => {
   display: grid;
   min-height: 84px;
   flex: 0 0 84px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1.25fr repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 .duty-entry-strip button {
@@ -382,6 +382,19 @@ onUnmounted(() => {
 .duty-entry-strip strong { margin: 3px 0; color: #eefbff; font-size: 16px; }
 .duty-entry-strip small { overflow: hidden; color: #84afc4; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .duty-entry-strip i { position: absolute; right: 12px; bottom: 12px; color: #f1cf73; font-size: 11px; font-style: normal; }
+.duty-entry-strip button:first-child {
+  border-color: rgba(104, 220, 255, .66);
+  background:
+    radial-gradient(circle at 90% 12%, rgba(134, 231, 255, .35), transparent 38%),
+    linear-gradient(135deg, rgba(23, 118, 174, .96), rgba(7, 55, 103, .98));
+  box-shadow: inset 0 1px 0 rgba(216, 250, 255, .16), 0 0 20px rgba(67, 202, 255, .16);
+}
+.duty-entry-strip button:first-child strong {
+  color: #f3fdff;
+  font-size: 22px;
+  text-shadow: 0 0 14px rgba(117, 229, 255, .46);
+}
+.duty-entry-strip button:first-child small { color: #c0ebfa; }
 
 .compact-filter-card {
   flex: 0 0 130px;
@@ -399,7 +412,7 @@ onUnmounted(() => {
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(250px, 1fr) minmax(0, 2fr) minmax(250px, 1fr);
+  grid-template-columns: minmax(330px, 1.18fr) minmax(430px, 1.55fr) minmax(250px, .92fr);
   gap: 8px;
   overflow: hidden;
 }
@@ -415,8 +428,8 @@ onUnmounted(() => {
 .suggestion-list-panel .content-card,
 .procuratorial-cockpit-grid > :last-child .content-card { height: 100%; }
 .procuratorial-cockpit-grid :deep(.arco-card-header) { min-height: 36px; padding: 0 10px; }
-.procuratorial-cockpit-grid :deep(.arco-card-body) { padding: 8px; }
-.procuratorial-cockpit-grid .chart-container { height: calc(100% - 4px); min-height: 110px; }
+.procuratorial-cockpit-grid :deep(.arco-card-body) { box-sizing: border-box; height: calc(100% - 46px); padding: 8px; }
+.procuratorial-cockpit-grid .chart-container { height: 100%; min-height: 150px; }
 .procuratorial-cockpit-grid .feed-list { height: 100%; overflow: auto; }
 
 .workflow-overview { display: flex; height: 100%; min-height: 0; flex-direction: column; gap: 12px; padding: 14px; }

@@ -253,7 +253,7 @@ const ItemTable = defineComponent({
       { title: '发生时间', dataIndex: 'occurredAt', width: 160 }, { title: '事件来源', dataIndex: 'source', width: 120 }, { title: '风险等级', dataIndex: 'riskLevel', slotName: 'riskLevel', width: 105 },
       { title: '所属街道', dataIndex: 'street', width: 145 }, { title: '事件类别', dataIndex: 'eventCategory', width: 135 }, { title: '事件简述', dataIndex: 'summary', ellipsis: true, tooltip: true }, { title: '操作', slotName: 'action', width: 90 }
     ])
-    return () => h('section', { class: 'tech-panel table-panel' }, [h('div', { class: 'panel-title' }, [h('span', props.reverse ? '反向审视事项' : '全量事项列表'), h('small', `共 ${props.items.length} 条`)]), h(resolveComponent('a-table') as any, { columns: columns.value, data: props.items, pagination: { pageSize: 8 }, rowKey: 'id', scroll: { x: 1000, y: focusedPanel.value.includes('items') ? 420 : 165 } }, { riskLevel: ({ record }: any) => h(resolveComponent('a-tag') as any, { color: record.riskLevel === '红色' ? 'red' : record.riskLevel === '橙色' ? 'orangered' : record.riskLevel === '黄色' ? 'gold' : 'arcoblue' }, () => record.riskLevel), action: ({ record }: any) => h(resolveComponent('a-button') as any, { type: 'text', size: 'small', onClick: () => emit('open', record) }, () => '查看详情') })])
+    return () => h('section', { class: 'tech-panel table-panel' }, [h('div', { class: 'panel-title' }, [h('span', props.reverse ? '反向审视事项' : '全量事项列表'), h('small', `共 ${props.items.length} 条`)]), h(resolveComponent('a-table') as any, { columns: columns.value, data: props.items, pagination: { pageSize: 8 }, rowKey: 'id', scroll: { x: 1000, y: focusedPanel.value.includes('items') ? 420 : 395 } }, { riskLevel: ({ record }: any) => h(resolveComponent('a-tag') as any, { color: record.riskLevel === '红色' ? 'red' : record.riskLevel === '橙色' ? 'orangered' : record.riskLevel === '黄色' ? 'gold' : 'arcoblue' }, () => record.riskLevel), action: ({ record }: any) => h(resolveComponent('a-button') as any, { type: 'text', size: 'small', onClick: () => emit('open', record) }, () => '查看详情') })])
   }
 })
 
@@ -333,8 +333,16 @@ onMounted(async () => {
 .petition-dashboard-grid > :first-child { grid-column: 2; grid-row: 1; }
 .petition-dashboard-grid > :nth-child(2) { grid-column: 1; grid-row: 1; }
 .petition-dashboard-grid > :nth-child(3) { grid-column: 3; grid-row: 1; }
-.petition-dashboard-grid .structure-column { height: 100%; gap: 5px; padding: 6px; overflow: auto; }
-.petition-dashboard-grid .compact-panel { padding: 7px; }
+.petition-dashboard-grid .structure-column {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1.05fr) minmax(0, 1.5fr) minmax(0, .9fr);
+  gap: 5px;
+  padding: 6px;
+  overflow: hidden;
+}
+.petition-dashboard-grid .compact-panel { min-height: 0; padding: 7px; overflow: auto; }
 .petition-dashboard-grid .compact-panel .panel-title { padding: 4px 6px; }
 .petition-dashboard-grid .distribution-row,
 .petition-dashboard-grid .bar-row { padding: 4px 2px; }
@@ -342,6 +350,7 @@ onMounted(async () => {
 .petition-dashboard-grid .category-tags button { padding: 4px 6px; }
 .petition-dashboard-grid .table-panel { height: 100%; margin: 0; border: 0; }
 .petition-dashboard-grid .table-panel > .panel-title { display: none; }
+.petition-dashboard-grid > :nth-child(3) :deep(.arco-table-td) { padding-top: 14px; padding-bottom: 14px; }
 
 .petition-workspace > :deep(.arco-spin) > .focus-panel,
 .petition-workspace > :deep(.arco-spin) > .typical-panel,

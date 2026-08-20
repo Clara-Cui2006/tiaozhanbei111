@@ -65,8 +65,8 @@ const render = async () => {
     itemStyle: raisedPieStyle(palette[(index + 2) % palette.length]!, index + 1)
   }))
   const center: [string, string] = props.compact ? ['50%', '49%'] : ['54%', '50%']
-  const innerRadius: [string, string] = props.compact ? ['13%', '35%'] : ['14%', '36%']
-  const outerRadius: [string, string] = props.compact ? ['44%', '63%'] : ['49%', '69%']
+  const innerRadius: [string, string] = props.compact ? ['11%', '31%'] : ['14%', '36%']
+  const outerRadius: [string, string] = props.compact ? ['39%', '55%'] : ['49%', '69%']
 
   chart.setOption({
     backgroundColor: 'transparent',
@@ -89,8 +89,8 @@ const render = async () => {
       {
         name: '刑法分则一级章名', type: 'pie', radius: outerRadius, center, startAngle: 96, z: 24,
         selectedMode: 'single', selectedOffset: 0, padAngle: 2.5,
-        label: { show: !props.compact, color: light ? '#315f83' : '#d9f5ff', fontSize: 11, lineHeight: 14, formatter: (p: { name: string; percent: number }) => `${labelWrap(p.name, 5)}\n${p.percent}%`, textBorderWidth: 2, textBorderColor: light ? '#fff' : '#06152c' },
-        labelLine: { show: !props.compact, length: 9, length2: 7, smooth: 0.2 },
+        label: { show: true, color: light ? '#315f83' : '#d9f5ff', fontSize: props.compact ? 8 : 11, lineHeight: props.compact ? 10 : 14, formatter: (p: { name: string; percent: number }) => props.compact ? labelWrap(p.name, 4) : `${labelWrap(p.name, 5)}\n${p.percent}%`, textBorderWidth: 2, textBorderColor: light ? '#fff' : '#06152c' },
+        labelLine: { show: true, length: props.compact ? 6 : 9, length2: props.compact ? 4 : 7, smooth: 0.2 },
         emphasis: { scale: true, scaleSize: 7 }, data: chapterData
       }
     ]

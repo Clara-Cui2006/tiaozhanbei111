@@ -212,7 +212,7 @@ const behaviorChartRef = ref<HTMLElement | null>(null)
 const subjectChartRef = ref<HTMLElement | null>(null)
 const timeChartRef = ref<HTMLElement | null>(null)
 type CockpitPanelKey = 'location' | 'behavior' | 'subject' | 'time'
-const activeCockpitPanel = ref<CockpitPanelKey | null>(null)
+const activeCockpitPanel = ref<CockpitPanelKey | null>('location')
 const focusedPanel = ref('')
 const focusKeys = new Set(['map', 'topics', 'dimensions'])
 const activeSecurityLens = computed(() => route.query.lens === 'traditional' || route.query.lens === 'nontraditional' ? route.query.lens : '')
@@ -491,7 +491,6 @@ const closeCockpitPanel = async () => {
 
 watch(focusedPanel, async () => {
   if (focusedPanel.value === 'dimensions' && !activeCockpitPanel.value) activeCockpitPanel.value = 'location'
-  if (focusedPanel.value !== 'dimensions') activeCockpitPanel.value = null
   const panel = focusedPanel.value || undefined
   if (route.query.panel !== panel) {
     await router.replace({ path: '/political-security', query: panel ? { panel } : {} })

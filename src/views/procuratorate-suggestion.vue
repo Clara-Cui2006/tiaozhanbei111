@@ -80,12 +80,16 @@
 
     <div class="procuratorial-cockpit-grid" :class="{ 'procuratorial-cockpit-grid--focused': focusedPanel }">
       <DashboardFocusPanel v-model="focusedPanel" panel-key="analytics" title="检察建议分析" eyebrow="DISTRIBUTION · TREND">
-        <a-card title="检察建议类别分布" :bordered="false" class="content-card">
+        <a-card title="检察建议类别分布" :bordered="false" class="content-card analytics-chart-card">
           <div ref="pieChartRef" class="chart-container"></div>
         </a-card>
-        <a-card title="近六个月建议数量趋势" :bordered="false" class="content-card">
+        <a-card title="近六个月建议数量趋势" :bordered="false" class="content-card analytics-chart-card">
           <div ref="lineChartRef" class="chart-container"></div>
         </a-card>
+        <section class="overview-mini-card alert-summary">
+          <h3>当前履职概况 <small>数据实时更新</small></h3>
+          <div><span><small>建议总数</small><b>{{ suggestions.length }}</b></span><span><small>办理中</small><b>{{ suggestionStatusCount('处理中') }}</b></span><span><small>已反馈</small><b>{{ suggestionStatusCount('已反馈') }}</b></span><span class="is-warn"><small>待处理</small><b>{{ suggestionStatusCount('待处理') }}</b></span></div>
+        </section>
       </DashboardFocusPanel>
 
       <DashboardFocusPanel v-model="focusedPanel" panel-key="list" title="线索复核与履职办理" eyebrow="PROCURATORIAL WORKFLOW" class="suggestion-list-panel">
@@ -116,30 +120,46 @@
           </a-table>
         </a-card>
         <div v-else class="workflow-overview">
-          <div class="workflow-rail">
-            <article v-for="(step, index) in workflowSteps" :key="step.title">
-              <b>{{ index + 1 }}</b><div><strong>{{ step.title }}</strong><span>{{ step.description }}</span></div>
+          <div class="workflow-stage">
+            <div class="workflow-grid-lines"></div>
+            <div class="workflow-orbit workflow-orbit--outer"></div>
+            <div class="workflow-orbit workflow-orbit--middle"></div>
+            <div class="workflow-orbit workflow-orbit--inner"></div>
+            <div class="workflow-core">
+              <i></i><strong>履职闭环</strong><small>全流程监督</small>
+            </div>
+            <article v-for="(action, index) in dutyActions" :key="action.title" class="duty-node" :class="`duty-node--${index + 1}`">
+              <div class="duty-node__icon">{{ action.title.slice(0, 1) }}</div>
+              <strong>{{ action.title }}</strong><small>{{ action.description }}</small>
             </article>
+            <div v-for="(step, index) in workflowSteps.slice(0, 3)" :key="step.title" class="workflow-step" :class="`workflow-step--${index + 1}`">
+              <b>{{ index + 1 }}</b><span>{{ step.title }}</span>
+            </div>
           </div>
-          <div class="duty-action-grid">
-            <article v-for="action in dutyActions" :key="action.title">
-              <span>{{ action.kicker }}</span><strong>{{ action.title }}</strong><small>{{ action.description }}</small>
-            </article>
-          </div>
+          <section class="workflow-stat-strip">
+            <article v-for="stat in workflowStats" :key="stat.label"><span>{{ stat.icon }}</span><div><small>{{ stat.label }}</small><strong>{{ stat.value }}</strong><em>{{ stat.unit }}</em><p>较上月 <b>+{{ stat.delta }}</b></p></div></article>
+          </section>
           <p class="workflow-boundary">AI 仅辅助生成标签、依据与草稿；监督价值确认和履职决定均须人工复核。</p>
         </div>
         </template>
       </DashboardFocusPanel>
 
       <DashboardFocusPanel v-model="focusedPanel" panel-key="feed" title="办理反馈动态" eyebrow="LIVE FEEDBACK">
-        <a-card title="实时动态流" :bordered="false" class="content-card">
+        <section class="response-gauges">
+          <article v-for="metric in responseMetrics" :key="metric.label"><div class="response-ring" :style="{ '--value': metric.value, '--tone': metric.tone }"><strong>{{ metric.text }}</strong></div><b>{{ metric.label }}</b><small>较上月 <em>{{ metric.delta }}</em></small></article>
+        </section>
+        <a-card title="实时动态流" :bordered="false" class="content-card feedback-feed-card">
           <div class="feed-list">
-            <div v-for="item in feedItems" :key="item.time" class="feed-item">
+            <div v-for="item in displayFeedItems" :key="`${item.time}-${item.content}`" class="feed-item">
               <span class="feed-time">{{ item.time }}</span>
               <span class="feed-content">{{ item.content }}</span>
             </div>
           </div>
         </a-card>
+        <section class="overview-mini-card handling-table-card">
+          <h3>重点业务办理与闭环情况（本月）</h3>
+          <table><thead><tr><th>业务条线</th><th>本月办理</th><th>已闭环</th></tr></thead><tbody><tr v-for="row in handlingRows" :key="row.name"><td>{{ row.name }}</td><td>{{ row.total }}</td><td>{{ row.closed }}</td></tr></tbody></table>
+        </section>
       </DashboardFocusPanel>
     </div>
   </div>
@@ -197,6 +217,31 @@ const dutyActions = [
   { kicker: 'TRANSFER', title: '业务移送', description: '保留来源与事项上下文' },
   { kicker: 'FEEDBACK', title: '办理反馈', description: '记录进度、结果与效果' }
 ]
+const workflowStats = [
+  { icon: '册', label: '普法方案', value: '11', unit: '个', delta: '2' },
+  { icon: '送', label: '线上推送', value: '136', unit: '次', delta: '18' },
+  { icon: '众', label: '线下活动', value: '42', unit: '场', delta: '6' },
+  { icon: '人', label: '受众覆盖', value: '51,500', unit: '人次', delta: '6,200' }
+]
+const responseMetrics = [
+  { label: '预警响应率', text: '81.4%', value: '81.4%', delta: '+6.2%', tone: '#2dd7ff' },
+  { label: '纠纷化解率', text: '66.2%', value: '66.2%', delta: '+4.5%', tone: '#3f89ff' },
+  { label: '建议反馈率', text: '88.2%', value: '88.2%', delta: '+3.7%', tone: '#24c8ff' },
+  { label: '平均响应', text: '4.2h', value: '72%', delta: '-0.6h', tone: '#e8b65c' }
+]
+const handlingRows = [
+  { name: '刑事检察', total: 18, closed: 15 },
+  { name: '民事检察', total: 16, closed: 13 },
+  { name: '行政检察', total: 18, closed: 15 }
+]
+const fallbackFeedItems = [
+  { time: '14:02', content: '嫌疑单位已接收《规范经营检察建议》' },
+  { time: '13:45', content: '金融街街道办事处提交问题检察建议，待处理确认' },
+  { time: '11:30', content: '市场监督管理部门回复检察建议处理进展' },
+  { time: '11:15', content: '区民政局提交养老服务合同整改方案' },
+  { time: '10:50', content: '区教育委员会反馈培训机构预付费监管计划' },
+  { time: '09:45', content: '新街口街道办事处反馈整改完成' }
+]
 const updateTheme = () => { themeMode.value = isLightTheme() ? 'light' : 'dark' }
 const handleStorageChange = (e: StorageEvent) => { if (e.key === 'platform:theme-mode') updateTheme() }
 
@@ -213,6 +258,7 @@ const filteredSuggestions = computed(() => {
     return true
   })
 })
+const displayFeedItems = computed(() => feedItems.value.length ? feedItems.value : fallbackFeedItems)
 
 const columns = [
   { title: '建议标题', dataIndex: 'title', key: 'title', slotName: 'title', width: 250 },
@@ -224,11 +270,12 @@ const columns = [
 ]
 
 const getStatusClass = (status: string) => { const map: Record<string, string> = { '已反馈': 'status-feedback', '处理中': 'status-processing', '待处理': 'status-pending', '已驳回': 'status-rejected' }; return map[status] || 'status-pending' }
+const suggestionStatusCount = (status: string) => suggestions.value.filter(item => item.status === status).length
 
 const initPieChart = () => {
   if (!pieChartRef.value) return
   if (!pieChart) pieChart = echarts.init(pieChartRef.value)
-  const light = isLightTheme()
+  const light = false
   const palette = CHART_PALETTES.violetCyan.map((color) => light ? shadeHex(color, -24) : color)
   const center: [string, string] = ['50%', '42%']
   const radius: [string, string] = ['42%', '74%']
@@ -265,7 +312,7 @@ const initPieChart = () => {
 const initLineChart = () => {
   if (!lineChartRef.value) return
   if (!lineChart) lineChart = echarts.init(lineChartRef.value)
-  const light = isLightTheme()
+  const light = false
   const axis = chartAxis(light)
   const color = light ? shadeHex(CHART_PALETTES.amberTeal[0], -24) : CHART_PALETTES.amberTeal[0]
   lineChart.setOption({
@@ -378,10 +425,10 @@ onUnmounted(() => {
 .duty-entry-strip span,
 .duty-entry-strip strong,
 .duty-entry-strip small { display: block; }
-.duty-entry-strip span { color: #5cddff; font-size: 9px; font-weight: 800; letter-spacing: 1px; }
-.duty-entry-strip strong { margin: 3px 0; color: #eefbff; font-size: 16px; }
-.duty-entry-strip small { overflow: hidden; color: #84afc4; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.duty-entry-strip i { position: absolute; right: 12px; bottom: 12px; color: #f1cf73; font-size: 11px; font-style: normal; }
+.duty-entry-strip span { color: #5cddff; font-size: 11px; font-weight: 800; letter-spacing: 1px; }
+.duty-entry-strip strong { margin: 3px 0; color: #eefbff; font-size: 19px; }
+.duty-entry-strip small { overflow: hidden; color: #84afc4; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.duty-entry-strip i { position: absolute; right: 12px; bottom: 12px; color: #f1cf73; font-size: 13px; font-style: normal; }
 .duty-entry-strip button:first-child {
   border-color: rgba(104, 220, 255, .66);
   background:
@@ -412,9 +459,11 @@ onUnmounted(() => {
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(330px, 1.18fr) minmax(430px, 1.55fr) minmax(250px, .92fr);
-  gap: 8px;
+  grid-template-columns: minmax(320px, 1.2fr) minmax(430px, 1.55fr) minmax(320px, 1.2fr);
+  gap: 6px;
   overflow: hidden;
+  color: #dff5ff;
+  background: #03152e;
 }
 
 .procuratorial-cockpit-grid :deep(.focus-panel__body) { min-height: 0; }
@@ -432,24 +481,102 @@ onUnmounted(() => {
 .procuratorial-cockpit-grid .chart-container { height: 100%; min-height: 150px; }
 .procuratorial-cockpit-grid .feed-list { height: 100%; overflow: auto; }
 
-.workflow-overview { display: flex; height: 100%; min-height: 0; flex-direction: column; gap: 12px; padding: 14px; }
-.workflow-rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.workflow-rail article { position: relative; display: flex; min-width: 0; align-items: center; gap: 9px; padding: 11px; border: 1px solid rgba(83, 203, 247, .2); border-radius: 9px; background: rgba(8, 43, 74, .62); }
-.workflow-rail article:not(:last-child)::after { position: absolute; z-index: 2; right: -9px; color: #48d8ff; content: '›'; }
-.workflow-rail b { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border-radius: 50%; color: #56e0ff; background: rgba(26, 126, 177, .28); box-shadow: 0 0 14px rgba(68, 210, 255, .16); }
-.workflow-rail strong,
-.workflow-rail span { display: block; }
-.workflow-rail strong { color: #e9faff; font-size: 13px; }
-.workflow-rail span { margin-top: 3px; color: #7fa9bd; font-size: 9px; line-height: 1.35; }
-.duty-action-grid { display: grid; min-height: 0; flex: 1; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.duty-action-grid article { min-width: 0; padding: 13px; border: 1px solid rgba(83, 203, 247, .18); border-radius: 9px; background: radial-gradient(circle at 90% 15%, rgba(60, 195, 245, .12), transparent 34%), linear-gradient(145deg, rgba(8, 46, 79, .72), rgba(3, 23, 47, .82)); }
-.duty-action-grid span,
-.duty-action-grid strong,
-.duty-action-grid small { display: block; }
-.duty-action-grid span { color: #56dfff; font-size: 8px; font-weight: 800; letter-spacing: 1px; }
-.duty-action-grid strong { margin: 7px 0 5px; color: #e8faff; font-size: 16px; }
-.duty-action-grid small { color: #83afc3; font-size: 10px; }
-.workflow-boundary { margin: 0; padding: 8px 10px; border-left: 3px solid #55dcff; color: #8ebbd0; font-size: 10px; background: rgba(16, 82, 117, .16); }
+.workflow-overview { display: flex; height: 100%; min-height: 0; flex-direction: column; padding: 5px 8px 8px; }
+.workflow-stage { position: relative; min-height: 0; flex: 1; overflow: hidden; background: linear-gradient(rgba(51, 135, 222, .035) 1px, transparent 1px), linear-gradient(90deg, rgba(51, 135, 222, .035) 1px, transparent 1px), radial-gradient(ellipse at 50% 53%, rgba(16, 112, 239, .34), rgba(3, 27, 61, .08) 48%, transparent 72%); background-size: 24px 24px, 24px 24px, auto; }
+.workflow-grid-lines { position: absolute; inset: 28% 2% -21%; transform: perspective(380px) rotateX(62deg); border: 1px solid rgba(53, 150, 255, .24); border-radius: 50%; background: repeating-radial-gradient(circle, transparent 0 23px, rgba(54, 145, 255, .12) 24px 25px), repeating-linear-gradient(90deg, transparent 0 29px, rgba(54, 145, 255, .07) 30px 31px); box-shadow: inset 0 0 45px rgba(25, 117, 240, .18); }
+.workflow-orbit { position: absolute; left: 50%; top: 53%; border: 1px solid rgba(57, 158, 255, .68); border-radius: 50%; transform: translate(-50%, -50%) rotateX(61deg); box-shadow: 0 0 9px rgba(51, 159, 255, .45), inset 0 0 12px rgba(51, 159, 255, .15); }
+.workflow-orbit--outer { width: 82%; height: 48%; }
+.workflow-orbit--middle { width: 63%; height: 37%; border-style: dashed; }
+.workflow-orbit--inner { width: 43%; height: 26%; border-width: 2px; }
+.workflow-core { position: absolute; z-index: 3; left: 50%; top: 53%; width: 126px; height: 126px; display: flex; align-items: center; justify-content: center; flex-direction: column; transform: translate(-50%, -50%); border: 2px solid #3bbaff; border-radius: 50%; color: #effcff; background: radial-gradient(circle, rgba(24, 119, 239, .82), rgba(2, 23, 57, .97) 66%); box-shadow: 0 0 11px #248fff, 0 0 34px rgba(22, 105, 240, .48), inset 0 0 26px rgba(63, 181, 255, .48); }
+.workflow-core::before, .workflow-core::after { position: absolute; border: 1px solid rgba(73, 182, 255, .58); border-radius: 50%; content: ''; }
+.workflow-core::before { inset: 10px; }
+.workflow-core::after { inset: -9px; }
+.workflow-core i { position: absolute; top: 24px; width: 35px; height: 12px; border-radius: 50%; background: #4ec7ff; filter: blur(7px); }
+.workflow-core strong { font-size: 21px; letter-spacing: 3px; text-shadow: 0 0 10px #50ceff; }
+.workflow-core small { margin-top: 5px; color: #68cfff; font-size: 11px; }
+.duty-node { position: absolute; z-index: 4; width: 104px; padding: 7px 4px 5px; box-sizing: border-box; border: 1px solid rgba(50, 144, 238, .2); color: #ecfbff !important; text-align: center; background: linear-gradient(180deg, rgba(8, 50, 97, .42), rgba(3, 22, 48, .12)); box-shadow: inset 0 0 14px rgba(35, 126, 225, .08); }
+.duty-node::before { position: absolute; left: 50%; bottom: -15px; width: 1px; height: 15px; background: linear-gradient(#279bff, transparent); box-shadow: 0 0 5px #279bff; content: ''; }
+.duty-node__icon { width: 52px; height: 38px; margin: 0 auto 5px; display: grid; place-items: center; border: 1px solid #389dfa; border-radius: 50%; color: #c7efff; font-size: 17px; background: radial-gradient(ellipse, #1a75d8, #061c40 70%); box-shadow: 0 7px 0 -3px #0c438b, 0 11px 0 -5px #1a6ab5, 0 0 16px rgba(38, 150, 255, .68); text-shadow: 0 0 7px #4dccff; }
+.duty-node strong, .duty-node small { display: block; }
+.duty-node strong { color: #ecfbff !important; font-size: 15px; letter-spacing: 1px; text-shadow: 0 0 7px rgba(62, 190, 255, .7); }
+.duty-node small { margin-top: 3px; overflow: hidden; color: #91bad1 !important; font-size: 10px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.duty-node--1 { left: 5%; top: 31%; }
+.duty-node--2 { left: 50%; top: 4%; transform: translateX(-50%); }
+.duty-node--3 { right: 5%; top: 31%; }
+.duty-node--4 { right: 5%; bottom: 7%; }
+.duty-node--5 { left: 50%; bottom: 1%; transform: translateX(-50%); }
+.duty-node--6 { left: 5%; bottom: 7%; }
+.workflow-step { position: absolute; z-index: 5; color: #f1fbff; text-align: center; text-shadow: 0 0 7px #42bfff; }
+.workflow-step b, .workflow-step span { display: block; }
+.workflow-step b { font-size: 21px; }
+.workflow-step span { font-size: 11px; }
+.workflow-step--1 { left: 28%; top: 47%; }
+.workflow-step--2 { right: 27%; top: 47%; }
+.workflow-step--3 { left: 48%; top: 69%; }
+.workflow-boundary { margin: 0; padding: 8px 10px; border-left: 3px solid #55dcff; color: #9fc7da; font-size: 12px; background: rgba(16, 82, 117, .16); }
+
+/* 参考大屏补充卡片 */
+.procuratorial-cockpit-grid :deep(.focus-panel) { border-radius: 5px; border-color: rgba(61, 168, 255, .46); box-shadow: inset 0 0 28px rgba(17, 96, 186, .08), 0 0 10px rgba(21, 105, 209, .12); }
+.procuratorial-cockpit-grid :deep(.focus-panel__header) { min-height: 36px; flex-basis: 36px; padding: 0 10px; background: linear-gradient(90deg, rgba(13, 78, 134, .46), rgba(4, 29, 60, .12)); }
+.procuratorial-cockpit-grid :deep(.focus-panel__header h2) { font-size: 17px; letter-spacing: 1px; }
+.procuratorial-cockpit-grid :deep(.focus-panel__eyebrow) { font-size: 9px; }
+.procuratorial-cockpit-grid :deep(.focus-panel__action) { min-height: 25px; padding: 0 9px; font-size: 12px; }
+.analytics-chart-card { height: 37% !important; }
+.overview-mini-card { position: relative; border-top: 1px solid rgba(67, 160, 244, .34); background: linear-gradient(145deg, rgba(7, 37, 73, .88), rgba(3, 21, 44, .9)); }
+.overview-mini-card::before { position: absolute; left: 8px; top: 0; width: 48px; height: 2px; background: #33c8ff; box-shadow: 0 0 8px #33c8ff; content: ''; }
+.overview-mini-card h3 { height: 31px; margin: 0; padding: 0 9px; display: flex; align-items: center; color: #dff5ff; font-size: 14px; letter-spacing: .5px; }
+.overview-mini-card h3 small { margin-left: auto; color: #759ab5; font-size: 9px; font-weight: 400; }
+.alert-summary { height: 26%; min-height: 126px; }
+.alert-summary > div { height: calc(100% - 29px); display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
+.alert-summary span { display: flex; align-items: center; justify-content: center; flex-direction: column; border-right: 1px solid rgba(56, 130, 202, .25); }
+.alert-summary span:nth-child(-n+2) { border-bottom: 1px solid rgba(56, 130, 202, .25); }
+.alert-summary small { color: #93b5ca; font-size: 12px; }
+.alert-summary b { margin-top: 2px; color: #eefaff; font-size: 29px; text-shadow: 0 0 9px #2798ff; }
+.alert-summary .is-warn b { color: #ffd36e; text-shadow: 0 0 9px rgba(218, 151, 31, .72); }
+.workflow-stat-strip { height: 126px; flex: 0 0 126px; display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); gap: 4px; margin-top: 4px; }
+.workflow-stat-strip article { min-width: 0; padding: 8px 12px; display: flex; align-items: center; gap: 11px; border: 1px solid rgba(52, 147, 239, .4); background: linear-gradient(145deg, rgba(10, 52, 101, .66), rgba(3, 25, 52, .76)); }
+.workflow-stat-strip > article > span { width: 40px; height: 40px; flex: 0 0 40px; display: grid; place-items: center; border-radius: 50%; color: #bceaff; font-size: 15px; background: radial-gradient(circle, #1c7bdd, #08244a 70%); box-shadow: 0 0 12px rgba(43, 149, 255, .5); }
+.workflow-stat-strip small { display: block; color: #a4c3d5; font-size: 12px; }
+.workflow-stat-strip strong { color: #f0faff; font-size: 26px; }
+.workflow-stat-strip em { margin-left: 3px; color: #82c5e5; font-size: 11px; font-style: normal; }
+.workflow-stat-strip p { margin: 1px 0 0; color: #789bb4; font-size: 10px; }
+.workflow-stat-strip p b { color: #53d8a4; }
+.response-gauges { height: 150px; flex: 0 0 150px; display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); padding: 6px 8px; box-sizing: border-box; border-bottom: 1px solid rgba(56, 145, 226, .3); background: rgba(4, 27, 56, .7); }
+.response-gauges article { min-width: 0; text-align: center; }
+.response-ring { width: 56px; height: 56px; margin: auto; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle, #061b38 55%, transparent 57%), conic-gradient(var(--tone) var(--value), rgba(45, 98, 151, .25) 0); box-shadow: 0 0 10px color-mix(in srgb, var(--tone) 30%, transparent); }
+.response-ring strong { color: #effbff; font-size: 14px; }
+.response-gauges article > b { display: block; margin-top: 2px; color: #cce3ef; font-size: 11px; white-space: nowrap; }
+.response-gauges article > small { color: #7897ad; font-size: 10px; }
+.response-gauges em { color: #4bd4a0; font-style: normal; }
+.procuratorial-cockpit-grid > :last-child .feedback-feed-card { height: calc(100% - 295px) !important; min-height: 120px; }
+.feedback-feed-card :deep(.arco-card-header) { min-height: 29px; }
+.feedback-feed-card :deep(.arco-card-header-title) { font-size: 14px; }
+.feedback-feed-card :deep(.arco-card-body) { height: calc(100% - 30px); padding: 4px 8px; }
+.feedback-feed-card .feed-item { padding: 6px 0; font-size: 11px; line-height: 1.45; }
+.feedback-feed-card .feed-time { font-size: 11px; }
+.handling-table-card { height: 145px; flex: 0 0 145px; }
+.handling-table-card table { width: calc(100% - 12px); margin: 0 6px 5px; border-collapse: collapse; color: #c9dfec; text-align: center; font-size: 11px; }
+.handling-table-card th, .handling-table-card td { padding: 5px 3px; border: 1px solid rgba(57, 126, 193, .28); }
+.handling-table-card th { color: #cfe8f7; background: rgba(17, 58, 104, .8); }
+.handling-table-card td:first-child { text-align: left; padding-left: 10px; }
+.suggestion-list-panel :deep(.focus-panel__body), .procuratorial-cockpit-grid > :last-child :deep(.focus-panel__body) { display: flex; min-height: 0; flex-direction: column; }
+.procuratorial-cockpit-grid :deep(.arco-card),
+.page-contrast.theme-light .procuratorial-cockpit-grid :deep(.arco-card) { color: #dff5ff !important; background: linear-gradient(180deg, rgba(8, 35, 67, .96), rgba(3, 18, 39, .98)) !important; }
+.page-contrast.theme-light .procuratorial-cockpit-grid :deep(.focus-panel),
+:global(body.theme-light) .procuratorial-cockpit-grid :deep(.focus-panel) { background: linear-gradient(180deg, rgba(8, 35, 67, .98), rgba(3, 18, 39, .99)) !important; }
+.page-contrast.theme-light .procuratorial-cockpit-grid :deep(.arco-card-header-title),
+:global(body.theme-light) .procuratorial-cockpit-grid :deep(.arco-card-header-title) { color: #e8f8ff !important; }
+.page-contrast.theme-light .procuratorial-cockpit-grid .feed-content,
+.page-contrast.theme-light .procuratorial-cockpit-grid .feed-time,
+:global(body.theme-light) .procuratorial-cockpit-grid .feed-content,
+:global(body.theme-light) .procuratorial-cockpit-grid .feed-time { color: #a9cae0 !important; }
+.page-contrast.theme-light .procuratorial-cockpit-grid .feed-time,
+:global(body.theme-light) .procuratorial-cockpit-grid .feed-time { color: #3bc7ff !important; }
+.page-contrast.theme-light .procuratorial-cockpit-grid .workflow-step,
+.page-contrast.theme-light .procuratorial-cockpit-grid .workflow-core,
+:global(body.theme-light) .procuratorial-cockpit-grid .workflow-step,
+:global(body.theme-light) .procuratorial-cockpit-grid .workflow-core { color: #effcff !important; }
 
 /* ===== 基础深色样式（默认） ===== */
 .page-contrast :deep(.arco-page-header-title) {
@@ -691,4 +818,36 @@ onUnmounted(() => {
   background-color: #ffffff !important;
   border-color: rgba(74, 140, 198, 0.4) !important;
 }
+
+/* 履职驾驶舱在全站浅色模式下仍保持参考图的深蓝大屏观感 */
+:global(body.theme-light) .procuratorial-cockpit-grid,
+.page-contrast.theme-light .procuratorial-cockpit-grid { background: #03152e !important; }
+:global(body.theme-light) .procuratorial-cockpit-grid :deep(.focus-panel),
+.page-contrast.theme-light .procuratorial-cockpit-grid :deep(.focus-panel),
+:global(body.theme-light) .procuratorial-cockpit-grid :deep(.arco-card),
+.page-contrast.theme-light .procuratorial-cockpit-grid :deep(.arco-card) { color: #dff5ff !important; background: linear-gradient(180deg, rgba(8, 35, 67, .98), rgba(3, 18, 39, .99)) !important; border-color: rgba(61, 168, 255, .42) !important; }
+:global(body.theme-light) .procuratorial-cockpit-grid :deep(.focus-panel__header h2),
+.page-contrast.theme-light .procuratorial-cockpit-grid :deep(.focus-panel__header h2),
+:global(body.theme-light) .procuratorial-cockpit-grid :deep(.arco-card-header-title),
+.page-contrast.theme-light .procuratorial-cockpit-grid :deep(.arco-card-header-title),
+:global(body.theme-light) .procuratorial-cockpit-grid .duty-node strong,
+.page-contrast.theme-light .procuratorial-cockpit-grid .duty-node strong,
+:global(body.theme-light) .procuratorial-cockpit-grid .workflow-core strong,
+.page-contrast.theme-light .procuratorial-cockpit-grid .workflow-core strong,
+:global(body.theme-light) .procuratorial-cockpit-grid .workflow-step,
+.page-contrast.theme-light .procuratorial-cockpit-grid .workflow-step { color: #effbff !important; }
+:global(body.theme-light) .procuratorial-cockpit-grid .duty-node small,
+.page-contrast.theme-light .procuratorial-cockpit-grid .duty-node small { color: #79a8c4 !important; }
+:global(body.theme-light) .procuratorial-cockpit-grid .response-gauges b,
+.page-contrast.theme-light .procuratorial-cockpit-grid .response-gauges b,
+:global(body.theme-light) .procuratorial-cockpit-grid .response-ring strong,
+.page-contrast.theme-light .procuratorial-cockpit-grid .response-ring strong,
+:global(body.theme-light) .procuratorial-cockpit-grid .overview-mini-card h3,
+.page-contrast.theme-light .procuratorial-cockpit-grid .overview-mini-card h3,
+:global(body.theme-light) .procuratorial-cockpit-grid .workflow-stat-strip strong,
+.page-contrast.theme-light .procuratorial-cockpit-grid .workflow-stat-strip strong { color: #e8f8ff !important; }
+:global(body.theme-light) .procuratorial-cockpit-grid .chart-container,
+.page-contrast.theme-light .procuratorial-cockpit-grid .chart-container { background-color: #061a36 !important; }
+:global(body.theme-light) .procuratorial-cockpit-grid .feedback-feed-card :deep(.arco-card-body),
+.page-contrast.theme-light .procuratorial-cockpit-grid .feedback-feed-card :deep(.arco-card-body) { background: #061a36 !important; }
 </style>

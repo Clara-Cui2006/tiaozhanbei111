@@ -1,5 +1,6 @@
 <template>
   <section
+    ref="panelRef"
     v-show="!modelValue || active"
     class="focus-panel"
     :class="{ 'focus-panel--active': active }"
@@ -21,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 
 const props = withDefaults(defineProps<{
   panelKey: string
@@ -35,7 +36,62 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const active = computed(() => props.modelValue === props.panelKey)
-const toggle = () => emit('update:modelValue', active.value ? '' : props.panelKey)
+const panelRef = ref<HTMLElement>()
+const animationTiming = '460ms cubic-bezier(0.22, 1, 0.36, 1)'
+
+type ViewTransitionDocument = Document & {
+  startViewTransition?: (update: () => Promise<void>) => { finished: Promise<void> }
+}
+
+const toggle = () => {
+  const update = async () => {
+    emit('update:modelValue', active.value ? '' : props.panelKey)
+    await nextTick()
+  }
+  const startViewTransition = (document as ViewTransitionDocument).startViewTransition
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !panelRef.value) {
+    void update()
+    return
+  }
+
+  if (startViewTransition) {
+    panelRef.value.style.viewTransitionName = 'dashboard-focus-panel'
+    const transition = startViewTransition.call(document, update)
+    void transition.finished.finally(() => panelRef.value?.style.removeProperty('view-transition-name'))
+    return
+  }
+
+  const panel = panelRef.value
+  const before = panel.getBoundingClientRect()
+  void update().then(() => {
+    const after = panel.getBoundingClientRect()
+    panel.style.transition = 'none'
+    panel.style.transformOrigin = 'top left'
+    panel.style.transform = `translate(${before.left - after.left}px, ${before.top - after.top}px) scale(${before.width / after.width}, ${before.height / after.height})`
+    panel.style.opacity = '0.9'
+    panel.style.filter = 'brightness(0.92)'
+    void panel.offsetWidth
+    requestAnimationFrame(() => {
+      panel.style.transition = `transform ${animationTiming}, opacity ${animationTiming}, filter ${animationTiming}`
+      panel.style.transform = 'none'
+      panel.style.opacity = '1'
+      panel.style.filter = 'brightness(1)'
+      const cleanup = () => {
+        panel.removeEventListener('transitionend', onTransitionEnd)
+        panel.style.removeProperty('transition')
+        panel.style.removeProperty('transform-origin')
+        panel.style.removeProperty('transform')
+        panel.style.removeProperty('opacity')
+        panel.style.removeProperty('filter')
+      }
+      const onTransitionEnd = (event: TransitionEvent) => {
+        if (event.target === panel && event.propertyName === 'transform') cleanup()
+      }
+      panel.addEventListener('transitionend', onTransitionEnd)
+      window.setTimeout(cleanup, 520)
+    })
+  })
+}
 </script>
 
 <style scoped>
@@ -49,11 +105,29 @@ const toggle = () => emit('update:modelValue', active.value ? '' : props.panelKe
   border-radius: 12px;
   background: linear-gradient(180deg, rgba(8, 35, 66, 0.96), rgba(3, 18, 38, 0.98));
   box-shadow: inset 0 1px 0 rgba(196, 244, 255, 0.06), 0 12px 28px rgba(0, 7, 22, 0.2);
+  transition: border-color 240ms ease, box-shadow 240ms ease;
 }
 
 .focus-panel--active {
   grid-column: 1 / -1 !important;
   grid-row: 1 / -1 !important;
+  border-color: rgba(93, 221, 255, 0.58);
+  box-shadow: inset 0 1px 0 rgba(220, 250, 255, 0.12), 0 18px 42px rgba(0, 8, 28, 0.34);
+}
+
+:global(::view-transition-group(dashboard-focus-panel)) {
+  animation-duration: 460ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:global(::view-transition-old(dashboard-focus-panel)),
+:global(::view-transition-new(dashboard-focus-panel)) {
+  animation-duration: 460ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focus-panel { transition: none; }
 }
 
 .focus-panel__header {

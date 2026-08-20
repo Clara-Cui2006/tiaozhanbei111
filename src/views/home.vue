@@ -148,7 +148,7 @@
       <div class="hero-copy">
         <div class="hero-title-block">
           <p class="hero-kicker">红墙智检：</p>
-          <h1 class="hero-title">基层法治风险智能研判与治理平台</h1>
+          <h1 class="hero-title">基层法治风险智能研判与治理模型</h1>
         </div>
         <p class="hero-subtitle">数据驱动 · 智能研判 · 精准治理 · 协同联动</p>
 

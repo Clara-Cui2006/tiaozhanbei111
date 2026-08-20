@@ -55,32 +55,41 @@
       <DashboardFocusPanel v-model="focusedPanel" panel-key="trend" title="社区风险趋势" eyebrow="RISK TREND" class="trend-focus-panel">
         <template #default="{ focused }">
           <div class="analysis-stack" :class="{ 'analysis-stack--focused': focused }">
-            <div class="trend-chart-block">
-              <div class="trend-toolbar">
-                <a-radio-group v-model="activeTab" type="button" size="small" @change="renderChart">
-                  <a-radio value="totalCases">案件总数</a-radio>
-                  <a-radio value="highIncidence">高发类型</a-radio>
-                  <a-radio value="riskAlert">预警推送</a-radio>
-                  <a-radio value="procuratorate">检察建议</a-radio>
-                  <a-radio value="legalPlan">普法投递</a-radio>
-                </a-radio-group>
+            <section class="situation-wheel-block">
+              <div class="situation-wheel-heading">
+                <span>重点专题与刑法分则联动态势盘</span>
+                <small>内圈重点专题 · 外圈刑法分则</small>
               </div>
-              <div ref="chartRef" class="dashboard-chart-stage"></div>
-            </div>
-            <div class="mini-analysis-grid">
-              <section class="mini-chart-card">
-                <h3>重点街道</h3>
-                <div v-for="point in topStreetPoints" :key="point.community" class="mini-bar-row">
-                  <span>{{ point.community }}</span><i><b :style="{ width: `${point.percent}%` }"></b></i><em>{{ point.annualCases }}</em>
+              <RiskSituationWheel :categories="riskCategories" :compact="!focused" />
+            </section>
+            <div v-if="focused" class="trend-detail-row">
+              <div class="trend-chart-block">
+                <div class="trend-toolbar">
+                  <a-radio-group v-model="activeTab" type="button" size="small" @change="renderChart">
+                    <a-radio value="totalCases">案件总数</a-radio>
+                    <a-radio value="highIncidence">高发类型</a-radio>
+                    <a-radio value="riskAlert">预警推送</a-radio>
+                    <a-radio value="procuratorate">检察建议</a-radio>
+                    <a-radio value="legalPlan">普法投递</a-radio>
+                  </a-radio-group>
                 </div>
-              </section>
-              <section class="mini-chart-card">
-                <h3>履职联动</h3>
-                <div v-for="item in workflowMetrics" :key="item.label" class="workflow-meter">
-                  <div><span>{{ item.label }}</span><strong>{{ item.value }}</strong></div>
-                  <i><b :style="{ width: `${item.percent}%` }"></b></i>
-                </div>
-              </section>
+                <div ref="chartRef" class="dashboard-chart-stage"></div>
+              </div>
+              <div class="mini-analysis-grid">
+                <section class="mini-chart-card">
+                  <h3>重点街道</h3>
+                  <div v-for="point in topStreetPoints" :key="point.community" class="mini-bar-row">
+                    <span>{{ point.community }}</span><i><b :style="{ width: `${point.percent}%` }"></b></i><em>{{ point.annualCases }}</em>
+                  </div>
+                </section>
+                <section class="mini-chart-card">
+                  <h3>履职联动</h3>
+                  <div v-for="item in workflowMetrics" :key="item.label" class="workflow-meter">
+                    <div><span>{{ item.label }}</span><strong>{{ item.value }}</strong></div>
+                    <i><b :style="{ width: `${item.percent}%` }"></b></i>
+                  </div>
+                </section>
+              </div>
             </div>
           </div>
         </template>
@@ -96,10 +105,11 @@ import * as echarts from 'echarts'
 import 'echarts-gl'
 import DashboardFocusPanel from '../components/dashboard-focus-panel.vue'
 import RiskMapPanel from '../components/risk-map-panel.vue'
-import { fetchCommunityRiskPoints, fetchDashboardOverview, fetchRiskTrend, fetchMultiTrend } from '../api/platform'
+import RiskSituationWheel from '../components/risk-situation-wheel.vue'
+import { fetchCaseCategories, fetchCommunityRiskPoints, fetchDashboardOverview, fetchRiskTrend, fetchMultiTrend } from '../api/platform'
 import { chatWithLLM } from '../services/llm'
 import { USER_PROMPT_TEMPLATES } from '../services/prompts'
-import type { CommunityRiskPoint, DashboardOverview, RiskTrendPoint, MultiTrendData } from '../types/platform'
+import type { CaseCategory, CommunityRiskPoint, DashboardOverview, RiskTrendPoint, MultiTrendData } from '../types/platform'
 import {
   areaGradient,
   chartAxis,
@@ -125,6 +135,7 @@ const overview = ref<DashboardOverview>({
 const trend = ref<RiskTrendPoint[]>([])
 const mapPoints = ref<CommunityRiskPoint[]>([])
 const multiTrend = ref<MultiTrendData[]>([])
+const riskCategories = ref<CaseCategory[]>([])
 const activeTab = ref('totalCases')
 const focusedPanel = ref('')
 const focusKeys = new Set(['indices', 'map', 'trend'])
@@ -557,16 +568,18 @@ watch(
 )
 
 onMounted(async () => {
-  const [overviewData, trendData, mapData, multiTrendData] = await Promise.all([
+  const [overviewData, trendData, mapData, multiTrendData, categoryData] = await Promise.all([
     fetchDashboardOverview(),
     fetchRiskTrend(),
     fetchCommunityRiskPoints(),
-    fetchMultiTrend()
+    fetchMultiTrend(),
+    fetchCaseCategories()
   ])
   overview.value = overviewData
   trend.value = trendData
   mapPoints.value = mapData
   multiTrend.value = multiTrendData
+  riskCategories.value = categoryData
   syncThemeMode()
   renderChart()
 
@@ -679,14 +692,20 @@ onUnmounted(() => {
   display: grid;
   height: 100%;
   min-height: 0;
-  grid-template-rows: minmax(180px, 1.05fr) minmax(190px, .95fr);
-  gap: 7px;
+  grid-template-rows: minmax(0, 1fr);
   padding: 7px;
 }
-.analysis-stack--focused { grid-template-rows: minmax(290px, 1.25fr) minmax(220px, .75fr); gap: 12px; padding: 14px; }
+.analysis-stack--focused { grid-template-rows: minmax(300px, 1.1fr) minmax(220px, .9fr); gap: 10px; padding: 12px; }
+.situation-wheel-block { display: flex; min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid rgba(83, 197, 243, .2); border-radius: 9px; background: radial-gradient(circle at 50% 55%, rgba(37, 112, 208, .14), transparent 52%), rgba(2, 16, 35, .42); }
+.situation-wheel-heading { display: flex; min-height: 42px; flex: 0 0 42px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 11px; border-bottom: 1px solid rgba(83, 197, 243, .14); }
+.situation-wheel-heading span { color: #dff7ff; font-size: 13px; font-weight: 700; }
+.situation-wheel-heading small { color: #65dfff; font-size: 9px; }
+.analysis-stack--focused .situation-wheel-heading span { font-size: 17px; }
+.analysis-stack--focused .situation-wheel-heading small { font-size: 11px; }
+.situation-wheel-block :deep(.risk-situation-wheel) { flex: 1; }
+.trend-detail-row { display: grid; min-height: 0; grid-template-columns: minmax(0, 1.65fr) minmax(260px, .75fr); gap: 10px; }
 .trend-chart-block { position: relative; min-height: 0; overflow: hidden; border: 1px solid rgba(83, 197, 243, .16); border-radius: 8px; background: rgba(2, 16, 35, .36); }
-.mini-analysis-grid { display: grid; min-height: 0; grid-template-columns: 1fr; gap: 7px; }
-.analysis-stack--focused .mini-analysis-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.mini-analysis-grid { display: grid; min-height: 0; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 7px; }
 .mini-chart-card { min-height: 0; padding: 8px 10px; overflow: hidden; border: 1px solid rgba(83, 197, 243, .18); border-radius: 8px; background: linear-gradient(145deg, rgba(8, 44, 76, .64), rgba(3, 21, 43, .78)); }
 .mini-chart-card h3 { margin: 0 0 6px; color: #dff7ff; font-size: 12px; }
 .mini-bar-row { display: flex; align-items: center; gap: 6px; margin: 5px 0; color: #9ccce0; font-size: 10px; }

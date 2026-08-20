@@ -1,6 +1,20 @@
 <template>
   <div class="political-security-page political-cockpit-page">
-    <div class="kpi-strip">
+    <div v-if="focusedPanel === 'dimensions'" class="kpi-strip dimension-kpi-strip">
+      <button
+        v-for="item in dimensionCards"
+        :key="item.key"
+        type="button"
+        class="kpi-item dimension-kpi-card"
+        :class="[{ active: activeCockpitPanel === item.key }, `kpi-${item.tone}`]"
+        @click="openCockpitPanel(item.key)"
+      >
+        <span>{{ item.eyebrow }}</span>
+        <strong>{{ item.title }}</strong>
+        <small>{{ item.summary }}</small>
+      </button>
+    </div>
+    <div v-else class="kpi-strip">
       <div class="kpi-item kpi-red">
         <div class="kpi-accent"></div>
         <div class="kpi-label">年度政治安全案件总数</div>
@@ -118,47 +132,51 @@
 
       <DashboardFocusPanel v-model="focusedPanel" panel-key="dimensions" title="四维研判数据驾驶舱" eyebrow="LOCATION · CONTENT · SUBJECT · IMPACT" class="political-dimension-panel">
         <a-card class="chart-card" :bordered="false">
-          <div v-if="activeCockpitPanel" class="cockpit-return-bar">
-            <a-button size="small" type="outline" @click="closeCockpitPanel">返回数据驾驶舱</a-button>
-            <span>{{ activeCockpitPanelTitle }}详情</span>
+          <div v-if="activeCockpitPanel" class="dimension-analysis-layout">
+            <section class="dimension-chart-pane">
+              <div class="dimension-pane-heading">
+                <div><span>{{ activeDimensionCard?.eyebrow }}</span><h3>{{ activeCockpitPanelTitle }}分析</h3></div>
+                <small>{{ activeDimensionCard?.description }}</small>
+              </div>
+              <div v-if="activeCockpitPanel === 'location'" ref="locationChartRef" class="dimension-chart-box"></div>
+              <div v-else-if="activeCockpitPanel === 'behavior'" ref="behaviorChartRef" class="dimension-chart-box"></div>
+              <div v-else-if="activeCockpitPanel === 'subject'" ref="subjectChartRef" class="dimension-chart-box"></div>
+              <div v-else ref="timeChartRef" class="dimension-chart-box"></div>
+            </section>
+            <section class="dimension-alert-pane">
+              <div class="dimension-pane-heading">
+                <div><span>POLITICAL SECURITY ALERT</span><h3>{{ activeCockpitPanelTitle }}筛查预警</h3></div>
+                <small>仅作辅助提示 · 须人工复核</small>
+              </div>
+              <div class="dimension-alert-list">
+                <button v-for="alert in dimensionAlerts" :key="alert.id" type="button" @click="openDimensionAlert(alert)">
+                  <div class="dimension-alert-topline"><i :class="`risk-${alert.riskLevel}`">{{ alert.riskLevel }}风险</i><span>{{ alert.alertStatus }}</span></div>
+                  <strong>{{ dimensionWarningTitle(alert) }}</strong>
+                  <p>{{ alert.summary }}</p>
+                  <footer><span>{{ alert.caseNumber }}</span><em>查看案件分析 →</em></footer>
+                </button>
+                <div v-if="!dimensionAlerts.length" class="ai-empty-text">当前数据口径下暂无待展示预警。</div>
+              </div>
+            </section>
           </div>
-          <div class="cockpit-grid" :class="{ 'is-expanded': activeCockpitPanel }">
-            <div
-              class="cockpit-chart"
-              :class="{ 'is-active': activeCockpitPanel === 'location', 'is-hidden': activeCockpitPanel && activeCockpitPanel !== 'location' }"
-              @click="openCockpitPanel('location')"
-            >
-              <h4>地点因素</h4>
-              <div ref="locationChartRef" class="chart-box"></div>
-            </div>
-            <div
-              class="cockpit-chart"
-              :class="{ 'is-active': activeCockpitPanel === 'behavior', 'is-hidden': activeCockpitPanel && activeCockpitPanel !== 'behavior' }"
-              @click="openCockpitPanel('behavior')"
-            >
-              <h4>行为内容</h4>
-              <div ref="behaviorChartRef" class="chart-box"></div>
-            </div>
-            <div
-              class="cockpit-chart"
-              :class="{ 'is-active': activeCockpitPanel === 'subject', 'is-hidden': activeCockpitPanel && activeCockpitPanel !== 'subject' }"
-              @click="openCockpitPanel('subject')"
-            >
-              <h4>涉及主体</h4>
-              <div ref="subjectChartRef" class="chart-box"></div>
-            </div>
-            <div
-              class="cockpit-chart"
-              :class="{ 'is-active': activeCockpitPanel === 'time', 'is-hidden': activeCockpitPanel && activeCockpitPanel !== 'time' }"
-              @click="openCockpitPanel('time')"
-            >
-              <h4>传播影响</h4>
-              <div ref="timeChartRef" class="chart-box"></div>
-            </div>
+          <div v-else class="dimension-empty-state">
+            <strong>请选择上方四维研判卡片</strong>
+            <span>按地点因素、行为内容、涉及主体、传播影响查看对应图表和政治安全预警。</span>
           </div>
         </a-card>
       </DashboardFocusPanel>
     </div>
+
+    <a-drawer v-model:visible="dimensionDrawerVisible" :width="560" :footer="false" unmount-on-close>
+      <template #title>{{ selectedDimensionAlert?.caseName || '政治安全预警案件分析' }}</template>
+      <div v-if="selectedDimensionAlert" class="dimension-case-detail">
+        <section><h3>案件基础信息</h3><div class="dimension-case-grid"><label>案号<strong>{{ selectedDimensionAlert.caseNumber }}</strong></label><label>案由<strong>{{ selectedDimensionAlert.caseType }}</strong></label><label>所属街道<strong>{{ selectedDimensionAlert.street }}</strong></label><label>风险状态<strong>{{ selectedDimensionAlert.riskLevel }}风险 · {{ selectedDimensionAlert.alertStatus }}</strong></label></div><p>{{ selectedDimensionAlert.summary }}</p></section>
+        <section><h3>人物画像</h3><div class="dimension-case-grid"><label>姓名<strong>{{ selectedDimensionAlert.subject.name }}</strong></label><label>年龄<strong>{{ selectedDimensionAlert.subject.age }}</strong></label><label>职业<strong>{{ selectedDimensionAlert.subject.occupation }}</strong></label><label>特殊身份<strong>{{ selectedDimensionAlert.subject.specialIdentity }}</strong></label></div></section>
+        <section><h3>重点标签</h3><div class="dimension-detail-tags"><i v-for="tag in selectedDimensionAlert.tags" :key="tag">{{ tag }}</i><i>{{ activeCockpitPanelTitle }}</i></div></section>
+        <section><h3>AI辅助研判依据</h3><ul><li v-for="item in selectedDimensionAlert.ruleHits" :key="`rule-${item}`">{{ item }}</li><li v-for="item in selectedDimensionAlert.aiHints" :key="`hint-${item}`">{{ item }}</li></ul><p v-if="!selectedDimensionAlert.ruleHits.length && !selectedDimensionAlert.aiHints.length">当前数据未提供额外模型依据，需结合原始材料人工核实。</p></section>
+        <section><h3>下一步处置意见</h3><p>建议结合原始案件材料进一步核实。是否形成政治安全预警、转入检察履职或采取其他措施，须由检察官人工决定。</p></section>
+      </div>
+    </a-drawer>
   </div>
 </template>
 
@@ -205,6 +223,8 @@ const cockpitPanelTitles: Record<CockpitPanelKey, string> = {
   time: '传播影响'
 }
 const activeCockpitPanelTitle = computed(() => activeCockpitPanel.value ? cockpitPanelTitles[activeCockpitPanel.value] : '')
+const dimensionDrawerVisible = ref(false)
+const selectedDimensionAlert = ref<PriorityAlert | null>(null)
 
 let locationChart: echarts.ECharts | null = null
 let behaviorChart: echarts.ECharts | null = null
@@ -223,6 +243,32 @@ const selectedTopStreet = computed(() => {
   return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || '暂无'
 })
 const selectedPendingReview = computed(() => selectedTopicAlerts.value.filter(item => item.alertStatus === '待人工复核').length)
+const dimensionCards = computed(() => [
+  { key: 'location' as const, eyebrow: 'LOCATION', title: '地点因素', tone: 'cyan', summary: `${streetData.value.length}个街道纳入研判`, description: '分析案发或发生地点、重点区域属性与空间聚集情况' },
+  { key: 'behavior' as const, eyebrow: 'CONTENT', title: '行为内容', tone: 'orange', summary: overview.value.highIncidenceTypes || '按案件内容分类研判', description: '识别言论、行为、诉求及案件内容中的政治安全关联特征' },
+  { key: 'subject' as const, eyebrow: 'SUBJECT', title: '涉及主体', tone: 'purple', summary: `${new Set(priorityAlerts.value.map(item => item.subject.specialIdentity).filter(item => item && item !== '无')).size}类重点身份`, description: '分析主体身份、职业、组织属性和背景关系' },
+  { key: 'time' as const, eyebrow: 'IMPACT', title: '传播影响', tone: 'yellow', summary: `${trendData.value.at(-1)?.count ?? 0}条近期信号`, description: '研判传播范围、扩散趋势和社会影响' }
+])
+const activeDimensionCard = computed(() => dimensionCards.value.find(item => item.key === activeCockpitPanel.value))
+const dimensionAlerts = computed(() => {
+  const all = priorityAlerts.value
+  let matched: PriorityAlert[] = []
+  if (activeCockpitPanel.value === 'location') matched = all.filter(item => item.street && item.riskLevel !== '低')
+  if (activeCockpitPanel.value === 'behavior') matched = all.filter(item => item.ruleHits.length || item.aiHints.length)
+  if (activeCockpitPanel.value === 'subject') matched = all.filter(item => item.subject.specialIdentity && item.subject.specialIdentity !== '无')
+  if (activeCockpitPanel.value === 'time') matched = all.filter(item => /网络|跨境|群体|集中|传播|多起/.test(`${item.summary} ${item.ruleHits.join(' ')}`))
+  return (matched.length ? matched : all).slice(0, 2)
+})
+const dimensionWarningTitle = (alert: PriorityAlert) => {
+  if (activeCockpitPanel.value === 'location') return `检测到${alert.street}政治安全关联事项`
+  if (activeCockpitPanel.value === 'behavior') return `${alert.caseType}行为内容需进一步研判`
+  if (activeCockpitPanel.value === 'subject') return `${alert.subject.specialIdentity || alert.subject.occupation}主体特征需人工复核`
+  return '传播影响与扩散范围需人工复核'
+}
+const openDimensionAlert = (alert: PriorityAlert) => {
+  selectedDimensionAlert.value = alert
+  dimensionDrawerVisible.value = true
+}
 
 // ================== AI 研判逻辑 ==================
 const overview = ref<PoliticalOverview>({
@@ -351,12 +397,13 @@ const renderPie = (
 }
 
 const renderCharts = () => {
-  locationChart = renderPie(locationChartRef.value, locationChart, '地点因素', streetData.value.map((item) => ({ name: item.community, value: item.count })), CHART_PALETTES.caseBlue)
+  locationChart?.dispose(); behaviorChart?.dispose(); subjectChart?.dispose(); timeChart?.dispose()
+  locationChart = null; behaviorChart = null; subjectChart = null; timeChart = null
   const total = overview.value.totalSignalsThisYear || streetData.value.reduce((sum, item) => sum + item.count, 0)
-  behaviorChart = renderPie(behaviorChartRef.value, behaviorChart, '行为内容', buildSyntheticDistribution(behaviorNames, total, 7), CHART_PALETTES.political)
-  subjectChart = renderPie(subjectChartRef.value, subjectChart, '涉及主体', buildSyntheticDistribution(subjectNames, total, 13), CHART_PALETTES.violetCyan)
-  timeChart?.dispose()
-  if (timeChartRef.value) {
+  if (activeCockpitPanel.value === 'location') locationChart = renderPie(locationChartRef.value, null, '地点因素', streetData.value.map((item) => ({ name: item.community, value: item.count })), CHART_PALETTES.caseBlue)
+  if (activeCockpitPanel.value === 'behavior') behaviorChart = renderPie(behaviorChartRef.value, null, '行为内容', buildSyntheticDistribution(behaviorNames, total, 7), CHART_PALETTES.political)
+  if (activeCockpitPanel.value === 'subject') subjectChart = renderPie(subjectChartRef.value, null, '涉及主体', buildSyntheticDistribution(subjectNames, total, 13), CHART_PALETTES.violetCyan)
+  if (activeCockpitPanel.value === 'time' && timeChartRef.value) {
     timeChart = echarts.init(timeChartRef.value)
     const light = isLightTheme()
     const lineColor = light ? '#c82f45' : '#f0445e'
@@ -425,6 +472,7 @@ const handleResize = () => {
 const resizeCockpitCharts = async () => {
   await nextTick()
   window.requestAnimationFrame(() => {
+    renderCharts()
     handleResize()
     window.setTimeout(handleResize, 260)
   })
@@ -442,6 +490,8 @@ const closeCockpitPanel = async () => {
 }
 
 watch(focusedPanel, async () => {
+  if (focusedPanel.value === 'dimensions' && !activeCockpitPanel.value) activeCockpitPanel.value = 'location'
+  if (focusedPanel.value !== 'dimensions') activeCockpitPanel.value = null
   const panel = focusedPanel.value || undefined
   if (route.query.panel !== panel) {
     await router.replace({ path: '/political-security', query: panel ? { panel } : {} })
@@ -501,6 +551,16 @@ onUnmounted(() => {
 .political-cockpit-page .kpi-value { font-size: 27px; }
 .political-cockpit-page .kpi-value-text { font-size: 18px !important; }
 .political-cockpit-page .kpi-sub { margin-top: 4px; font-size: 11px; }
+.dimension-kpi-strip { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.dimension-kpi-card { display: flex; height: 92px; min-height: 0; align-items: flex-start; justify-content: center; flex-direction: column; text-align: left; cursor: pointer; }
+.dimension-kpi-card span,
+.dimension-kpi-card strong,
+.dimension-kpi-card small { position: relative; z-index: 1; display: block; }
+.dimension-kpi-card span { color: var(--kpi-accent); font-size: 9px; font-weight: 800; letter-spacing: 1.4px; }
+.dimension-kpi-card strong { margin: 4px 0; color: #f0fbff; font-size: 20px; }
+.dimension-kpi-card small { color: #8db9cd; font-size: 11px; }
+.dimension-kpi-card.active { border-color: var(--kpi-accent); box-shadow: inset 0 0 28px color-mix(in srgb, var(--kpi-accent) 12%, transparent), 0 0 20px color-mix(in srgb, var(--kpi-accent) 22%, transparent); transform: translateY(-1px); }
+.dimension-kpi-card.kpi-purple { --kpi-accent: #9c7cff; }
 
 .political-cockpit-grid {
   display: grid;
@@ -596,6 +656,7 @@ onUnmounted(() => {
 
 .political-topic-panel :deep(.arco-card-body),
 .political-dimension-panel :deep(.arco-card-body) { padding: 8px; }
+.political-dimension-panel :deep(.arco-card-body) { height: 100%; box-sizing: border-box; }
 
 .political-topic-panel .topic-card-layout { display: block; }
 .political-topic-panel .review-metrics { grid-template-columns: minmax(0, 1fr); gap: 6px; }
@@ -618,6 +679,40 @@ onUnmounted(() => {
 .political-dimension-panel .cockpit-chart { min-height: 0; padding: 6px; }
 .political-dimension-panel .cockpit-chart h4 { margin: 0 0 2px; }
 .political-dimension-panel .chart-box { height: calc(100% - 22px); min-height: 70px; }
+.dimension-analysis-layout { display: grid; height: 100%; min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.dimension-chart-pane,
+.dimension-alert-pane { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid rgba(79, 205, 250, .22); border-radius: 10px; background: linear-gradient(145deg, rgba(7, 47, 80, .76), rgba(3, 22, 46, .9)); }
+.dimension-pane-heading { display: flex; min-height: 62px; flex: 0 0 62px; align-items: center; justify-content: space-between; gap: 16px; padding: 9px 13px; border-bottom: 1px solid rgba(80, 202, 245, .18); }
+.dimension-pane-heading span { display: block; color: #61ddff; font-size: 9px; font-weight: 800; letter-spacing: 1.3px; }
+.dimension-pane-heading h3 { margin: 3px 0 0; color: #effbff; font-size: 18px; }
+.dimension-pane-heading small { max-width: 58%; color: #82adc1; font-size: 10px; line-height: 1.45; text-align: right; }
+.dimension-chart-box { width: 100%; min-height: 0; flex: 1; }
+.dimension-alert-list { display: grid; min-height: 0; flex: 1; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 7px; padding: 8px; overflow: auto; }
+.dimension-alert-list button { padding: 10px 12px; border: 1px solid rgba(85, 200, 243, .2); border-radius: 8px; color: inherit; text-align: left; background: radial-gradient(circle at 92% 12%, rgba(241, 91, 91, .1), transparent 36%), rgba(7, 42, 71, .72); cursor: pointer; transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease; }
+.dimension-alert-list button:hover { border-color: rgba(93, 223, 255, .65); box-shadow: 0 0 18px rgba(66, 207, 255, .14); transform: translateX(-2px); }
+.dimension-alert-topline,
+.dimension-alert-list footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dimension-alert-topline i { padding: 2px 7px; border-radius: 999px; color: #fff; font-size: 9px; font-style: normal; }
+.dimension-alert-topline .risk-高 { background: rgba(237, 74, 78, .72); }
+.dimension-alert-topline .risk-中 { background: rgba(231, 150, 45, .72); }
+.dimension-alert-topline .risk-低 { background: rgba(44, 166, 130, .72); }
+.dimension-alert-topline span { color: #7faec3; font-size: 9px; }
+.dimension-alert-list strong { display: block; margin-top: 7px; color: #eafaff; font-size: 14px; }
+.dimension-alert-list p { margin: 5px 0 7px; overflow: hidden; color: #92bdcf; font-size: 10px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.dimension-alert-list footer { color: #74a7bf; font-size: 9px; }
+.dimension-alert-list footer em { color: #61dcff; font-style: normal; }
+.dimension-empty-state { display: grid; height: 100%; place-content: center; gap: 8px; color: #7faec3; text-align: center; }
+.dimension-empty-state strong { color: #dff8ff; font-size: 20px; }
+.dimension-case-detail { display: grid; gap: 12px; color: #dff7ff; }
+.dimension-case-detail section { padding: 14px; border: 1px solid rgba(79, 200, 243, .2); border-radius: 9px; background: rgba(6, 35, 61, .62); }
+.dimension-case-detail h3 { margin: 0 0 11px; color: #5edfff; font-size: 16px; }
+.dimension-case-detail p,
+.dimension-case-detail li { color: #a9cfdf; font-size: 12px; line-height: 1.65; }
+.dimension-case-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.dimension-case-grid label { display: flex; gap: 4px; flex-direction: column; padding: 8px; color: #75a4ba; font-size: 10px; background: rgba(7, 52, 82, .5); }
+.dimension-case-grid strong { color: #effbff; font-size: 12px; }
+.dimension-detail-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.dimension-detail-tags i { padding: 4px 8px; border: 1px solid rgba(243, 185, 83, .34); border-radius: 999px; color: #f5cc76; font-size: 10px; font-style: normal; background: rgba(105, 65, 15, .18); }
 
 .political-security-page { padding-bottom: 20px; }
 .dashboard-row { margin-top: 16px; margin-bottom: 16px; }

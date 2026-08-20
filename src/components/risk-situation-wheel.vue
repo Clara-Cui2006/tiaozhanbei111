@@ -1,5 +1,11 @@
 <template>
-  <div ref="chartRef" class="risk-situation-wheel" role="img" aria-label="重点专题与刑法分则双圈联动态势盘"></div>
+  <div class="risk-situation-wheel" role="img" aria-label="重点专题与刑法分则双圈联动态势盘">
+    <div ref="chartRef" class="risk-situation-wheel__chart"></div>
+    <template v-if="compact">
+      <div class="wheel-topic-row wheel-topic-row--top"><button v-for="item in categories.slice(0, 3)" :key="item.name" :class="{ active: selectedTopic === item.name }" @click="selectTopic(item.name)">{{ item.name }}</button></div>
+      <div class="wheel-topic-row wheel-topic-row--bottom"><button v-for="item in categories.slice(3, 7)" :key="item.name" :class="{ active: selectedTopic === item.name }" @click="selectTopic(item.name)">{{ item.name }}</button></div>
+    </template>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -25,6 +31,13 @@ const labelWrap = (value: string, size: number) => Array.from(value).reduce<stri
   return out
 }, []).join('\n')
 
+const selectTopic = (name: string) => {
+  selectedTopic.value = selectedTopic.value === name ? '' : name
+  selectedChapter.value = ''
+  emit('select', name)
+  render()
+}
+
 const render = async () => {
   await nextTick()
   if (!chartRef.value) return
@@ -40,8 +53,8 @@ const render = async () => {
     chart.on('click', (params: { name: string }) => {
       const topic = props.categories.find((item) => item.name === params.name)
       if (topic) {
-        selectedTopic.value = selectedTopic.value === topic.name ? '' : topic.name
-        selectedChapter.value = ''
+        selectTopic(topic.name)
+        return
       } else if (CRIMINAL_LAW_CHAPTERS.includes(params.name as (typeof CRIMINAL_LAW_CHAPTERS)[number])) {
         selectedChapter.value = selectedChapter.value === params.name ? '' : params.name
         selectedTopic.value = ''
@@ -110,5 +123,11 @@ onUnmounted(() => { resizeObserver?.disconnect(); chart?.dispose(); chart = null
 </script>
 
 <style scoped>
-.risk-situation-wheel { width: 100%; height: 100%; min-height: 0; }
+.risk-situation-wheel { position: relative; width: 100%; height: 100%; min-height: 0; }
+.risk-situation-wheel__chart { width: 100%; height: 100%; }
+.wheel-topic-row { position: absolute; z-index: 2; right: 7px; left: 7px; display: flex; justify-content: center; gap: 4px; }
+.wheel-topic-row--top { top: 5px; }
+.wheel-topic-row--bottom { bottom: 5px; }
+.wheel-topic-row button { min-width: 0; padding: 3px 5px; overflow: hidden; border: 1px solid rgba(77, 207, 255, .32); border-radius: 3px; color: #aeeaff; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; background: rgba(5, 39, 68, .86); cursor: pointer; }
+.wheel-topic-row button.active { border-color: #5de7ff; color: #fff; box-shadow: 0 0 10px rgba(63, 220, 255, .42); background: rgba(17, 112, 158, .86); }
 </style>

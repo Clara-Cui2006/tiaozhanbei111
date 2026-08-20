@@ -125,9 +125,9 @@ onUnmounted(() => { resizeObserver?.disconnect(); chart?.dispose(); chart = null
 <style scoped>
 .risk-situation-wheel { position: relative; width: 100%; height: 100%; min-height: 0; }
 .risk-situation-wheel__chart { width: 100%; height: 100%; }
-.wheel-topic-row { position: absolute; z-index: 2; right: 7px; left: 7px; display: flex; justify-content: center; gap: 4px; }
-.wheel-topic-row--top { top: 5px; }
-.wheel-topic-row--bottom { bottom: 5px; }
-.wheel-topic-row button { min-width: 0; padding: 3px 5px; overflow: hidden; border: 1px solid rgba(77, 207, 255, .32); border-radius: 3px; color: #aeeaff; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; background: rgba(5, 39, 68, .86); cursor: pointer; }
+.wheel-topic-row { position: absolute; z-index: 2; right: 7px; left: 7px; display: flex; height: 76px; justify-content: stretch; gap: 6px; }
+.wheel-topic-row--top { top: 7px; }
+.wheel-topic-row--bottom { bottom: 7px; }
+.wheel-topic-row button { display: grid; min-width: 0; flex: 1; place-items: center; padding: 7px; overflow: hidden; border: 1px solid rgba(77, 207, 255, .42); border-radius: 6px; color: #d9f8ff; font-size: 12px; font-weight: 700; line-height: 1.35; white-space: normal; background: linear-gradient(145deg, rgba(9, 64, 103, .94), rgba(4, 31, 58, .96)); cursor: pointer; }
 .wheel-topic-row button.active { border-color: #5de7ff; color: #fff; box-shadow: 0 0 10px rgba(63, 220, 255, .42); background: rgba(17, 112, 158, .86); }
 </style>

@@ -404,4 +404,7 @@ onUnmounted(() => {
   :deep(.arco-button:not(.arco-button-primary):not(.arco-btn-status-danger):hover) { background: #e5e6eb !important; border-color: #86909c !important; }
   :deep(.arco-button-primary) { background: #165dff !important; color: #ffffff !important; }
 }
+.legal-recommend-page :deep(.arco-card:has(canvas)::after) {
+  display: none;
+}
 </style>

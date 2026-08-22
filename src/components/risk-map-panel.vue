@@ -206,46 +206,23 @@
 
       <div class="xrm-layout" :style="{ minHeight: `${mapDisplayHeight}px` }">
         <section ref="mapPanelRef" class="xrm-map-panel xrm-section-shell">
-          <div class="xrm-panel-heading">
-            <div>
-              <span class="xrm-section-kicker">空间分布</span>
-              <h3>街道案件数量分布</h3>
-            </div>
-            <div class="xrm-map-mode-switch" role="group" aria-label="地图视图切换">
-              <button
-                type="button"
-                :class="{ active: mapViewMode === '3d' }"
-                :disabled="mapBoundaryMode !== 'street'"
-                @click="setMapViewMode('3d')"
-              >3D</button>
-              <button
-                type="button"
-                :class="{ active: mapViewMode === '2d' }"
-                :disabled="mapBoundaryMode !== 'street'"
-                @click="setMapViewMode('2d')"
-              >2D</button>
-            </div>
-          </div>
-
           <div class="xrm-map-stage" :style="{ height: `${mapDisplayHeight}px` }">
-            <XichengThreeMap
-              v-if="mapBoundaryMode === 'street' && mapViewMode === '3d' && overview"
+            <EchartsHeatMap3D
+              v-if="mapBoundaryMode === 'street' && overview"
               ref="threeMapRef"
               :streets="overview.streets"
               :selected-street-name="activeStreetName"
+              :offset-x="-113"
+              :offset-y="-12"
+              :tilt-deg="51"
+              :rotation-deg="-10"
+              :map-scale="1"
+              :map-scale-x="0.7"
+              :map-scale-y="1.4"
               @select="selectStreetFromThree"
               @clear="clearSelection"
               @error="handleThreeMapError"
             />
-            <div
-              v-else
-              ref="mapRef"
-              class="xrm-map-box"
-              :style="{ height: `${mapDisplayHeight}px` }"
-              @wheel.capture.prevent.stop="handleMapWheel"
-            ></div>
-
-            <div v-if="mapViewMode === '2d'" class="xrm-map-breath-overlay" aria-hidden="true"></div>
 
             <div v-if="mapLoading || overviewLoading" class="xrm-map-state">
               <a-spin />
@@ -256,12 +233,6 @@
               <strong>数据加载失败，请重试</strong>
               <span>{{ overviewError ? '平台数据接口加载失败。' : mapErrorMessage }}</span>
               <a-button size="small" type="primary" @click="reloadAll">重新加载</a-button>
-            </div>
-
-            <div class="xrm-map-controls">
-              <button class="xrm-map-ctrl-btn" title="放大" @click="zoomIn">＋</button>
-              <button class="xrm-map-ctrl-btn" title="缩小" @click="zoomOut">－</button>
-              <button class="xrm-map-ctrl-btn home" title="恢复全区" @click="resetMap">⌂</button>
             </div>
 
             <div v-if="legendVisible" class="xrm-map-legend">
@@ -290,7 +261,7 @@
                 </span>
               </div>
               <p class="xrm-legend-difference">颜色表示15个街道的相对数量差异</p>
-              <p class="xrm-legend-rule">最低值映射为蓝色，最高值映射为红色，中间值连续渐变</p>
+              <p class="xrm-legend-rule">最低值映射为蓝灰色，最高值映射为青色，中间值连续渐变</p>
             </div>
             <button
               v-else
@@ -304,11 +275,6 @@
               <span class="xrm-legend-arrow" aria-hidden="true">▲</span>
             </button>
 
-          </div>
-
-          <div class="xrm-map-caption">
-            <span class="xrm-caption-main">地图展示精度为街道，不展示社区、门牌号和具体案发点位</span>
-            <span>点击地图空白区域可恢复全区视图</span>
           </div>
         </section>
 
@@ -580,7 +546,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import * as echarts from 'echarts'
 import 'echarts-gl'
 import { patchMap3DStreetLift } from './map3d-street-lift'
-import XichengThreeMap from './xicheng-three-map/XichengThreeMap.vue'
+import EchartsHeatMap3D from './EchartsHeatMap3D.vue'
 import {
   QUANTITY_COLORS,
   buildRelativeLegendStops,
@@ -2209,21 +2175,6 @@ const resetMap = () => {
   }
 }
 
-const setMapViewMode = async (mode: '3d' | '2d') => {
-  if (mode === '2d' && mapBoundaryMode.value !== 'street') return
-  if (mapViewMode.value === mode) return
-  if (mode === '3d' && chart) {
-    stopMapEdgeAnimation()
-    chart.dispose()
-    chart = null
-    lastRenderedMapMode = null
-  }
-  mapViewMode.value = mode
-  await nextTick()
-  if (mode === '2d') await renderMap()
-  else if (activeStreetName.value) threeMapRef.value?.focusStreet(activeStreetName.value)
-}
-
 const formatRate = (rate: number | null) => {
   if (rate === null || Number.isNaN(rate)) return '暂无数据'
   return `${(rate * 100).toFixed(1)}%`
@@ -2370,6 +2321,10 @@ onUnmounted(() => {
   color: var(--text-1);
   font-family: "Microsoft YaHei UI", "PingFang SC", "Noto Sans CJK SC", "Noto Sans SC", sans-serif;
   box-shadow: var(--shadow);
+}
+
+.xrm-card:hover {
+  transform: none !important;
 }
 
 .xrm-card :deep(.arco-card-body) {
@@ -2778,7 +2733,7 @@ onUnmounted(() => {
     linear-gradient(140deg, var(--accent-soft), transparent 64%),
     var(--surface-1);
   cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .xrm-summary-card::before {
@@ -2805,7 +2760,6 @@ onUnmounted(() => {
 .xrm-summary-card:hover,
 .xrm-summary-card.active,
 .xrm-summary-card:focus-visible {
-  transform: translateY(-2px);
   border-color: var(--accent);
   box-shadow: 0 10px 24px rgba(0, 12, 30, 0.18);
 }
@@ -3020,53 +2974,27 @@ onUnmounted(() => {
   overflow: hidden;
   border: 1px solid rgba(104, 219, 255, 0.54);
   border-radius: 12px;
-  background:
-    radial-gradient(circle at 50% 42%, rgba(30, 154, 224, 0.16), transparent 34%),
-    radial-gradient(circle at 50% 92%, rgba(18, 107, 179, 0.12), transparent 44%),
-    linear-gradient(145deg, rgba(7, 32, 62, 0.98), rgba(2, 13, 29, 0.995) 72%),
-    #030d1d;
+  background-color: #000;
+  background-image: url('/images/西城4.png');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
   box-shadow:
-    inset 0 0 82px rgba(63, 190, 245, 0.12),
     inset 0 0 0 1px rgba(200, 247, 255, 0.055),
-    inset 0 1px 0 rgba(221, 250, 255, 0.13),
-    0 18px 40px rgba(0, 10, 31, 0.30),
-    0 0 24px rgba(65, 205, 255, 0.07);
+    inset 0 1px 0 rgba(221, 250, 255, 0.13);
 }
 
 .xrm-map-stage::before {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: 0;
+  background: rgba(0, 0, 0, 0.45);
   pointer-events: none;
-  opacity: 0.38;
-  background-image:
-    radial-gradient(circle, rgba(143, 232, 255, 0.32) 0 1.2px, transparent 1.8px),
-    linear-gradient(rgba(91, 207, 247, 0.10) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(91, 207, 247, 0.10) 1px, transparent 1px),
-    linear-gradient(90deg, transparent 0 20%, rgba(111, 224, 255, 0.13) 20% 58%, transparent 58%),
-    linear-gradient(transparent 0 42%, rgba(111, 224, 255, 0.11) 42% 70%, transparent 70%);
-  background-position: 8px 8px, 0 0, 0 0, 0 16px, 16px 0;
-  background-size: 48px 48px, 24px 24px, 24px 24px, 96px 96px, 96px 96px;
-  mask-image: radial-gradient(circle at 50% 55%, #000 18%, transparent 72%);
+  z-index: 0;
 }
 
 .xrm-map-stage::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: -40%;
-  z-index: 0;
-  width: 84%;
-  aspect-ratio: 1;
-  pointer-events: none;
-  border: 1px solid rgba(95, 212, 255, 0.13);
-  border-radius: 50%;
-  box-shadow:
-    0 0 0 26px rgba(74, 178, 232, 0.035),
-    0 0 0 58px rgba(74, 178, 232, 0.028),
-    0 0 60px rgba(50, 170, 235, 0.12);
-  transform: translateX(-50%) scaleY(0.42);
+  display: none;
 }
 
 .xrm-map-box {
@@ -3077,10 +3005,6 @@ onUnmounted(() => {
   overscroll-behavior: contain;
   -webkit-user-select: none;
   user-select: none;
-  filter:
-    drop-shadow(0 18px 18px rgba(0, 14, 36, 0.26))
-    drop-shadow(0 0 8px rgba(91, 220, 255, 0.12));
-  animation: xrm-map-edge-aura 4.2s ease-in-out infinite;
 }
 
 @keyframes xrm-map-edge-aura {
@@ -3290,7 +3214,7 @@ onUnmounted(() => {
   height: 8px;
   margin: 9px 0 5px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #1689C4 0%, #16A8B7 25%, #D4B64D 50%, #EC8438 75%, #E94B5B 100%);
+  background: linear-gradient(90deg, #7A9AB5 0%, #2E5A96 25%, #1E3F80 50%, #17A2C4 75%, #35E0EC 100%);
 }
 
 .xrm-legend-scale {
@@ -4179,9 +4103,11 @@ onUnmounted(() => {
 }
 
 .xrm-card .xrm-map-stage {
-  background:
-    linear-gradient(145deg, rgba(21, 61, 96, 0.96), rgba(7, 24, 45, 0.98) 72%),
-    #07182e !important;
+  background-color: #000 !important;
+  background-image: url('/images/西城4.png') !important;
+  background-repeat: no-repeat !important;
+  background-position: center center !important;
+  background-size: cover !important;
 }
 
 .xrm-card .xrm-map-legend {
@@ -4295,8 +4221,11 @@ onUnmounted(() => {
 }
 
 .xrm-card.xrm-theme-light .xrm-map-stage {
-  background:
-    linear-gradient(145deg, #edf7ff 0%, #d8ebfa 68%, #c8e0f3 100%) !important;
+  background-color: #000 !important;
+  background-image: url('/images/西城.png') !important;
+  background-repeat: no-repeat !important;
+  background-position: center center !important;
+  background-size: cover !important;
   box-shadow: inset 0 0 34px rgba(54, 126, 173, 0.10), 0 16px 34px rgba(54, 126, 173, 0.12);
 }
 

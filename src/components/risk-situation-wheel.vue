@@ -1,28 +1,44 @@
 <template>
-  <div class="risk-situation-wheel" role="img" aria-label="重点专题与刑法分则双圈联动态势盘">
+  <div class="risk-situation-wheel" role="img" aria-label="重点专题与刑法分则嵌套环形图">
     <div ref="chartRef" class="risk-situation-wheel__chart"></div>
-    <template v-if="compact">
-      <div class="wheel-topic-row wheel-topic-row--top"><button v-for="item in categories.slice(0, 3)" :key="item.name" :class="{ active: selectedTopic === item.name }" @click="selectTopic(item.name)">{{ item.name }}</button></div>
-      <div class="wheel-topic-row wheel-topic-row--bottom"><button v-for="item in categories.slice(3, 7)" :key="item.name" :class="{ active: selectedTopic === item.name }" @click="selectTopic(item.name)">{{ item.name }}</button></div>
-    </template>
+    <div
+      class="risk-situation-wheel__inner-rotate"
+      :style="{ transform: `rotate(${innerDeg}deg)` }"
+      ref="innerChartWrapRef"
+    >
+      <div ref="innerChartRef" class="risk-situation-wheel__inner-chart"></div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
-import { CRIMINAL_LAW_CHAPTERS, resolveVisibleChapters, resolveVisibleTopics } from '../features/risk-analysis/classification'
-import type { PriorityTag } from '../features/priority-alerts'
-import type { CaseCategory } from '../types/platform'
-import { CHART_PALETTES, buildPieDepthLayers, chartTooltip, raisedPieStyle, shadeHex, type ChartDatum } from '../utils/chart-visual'
+import { chartTooltip } from '../utils/chart-visual'
 
-const props = withDefaults(defineProps<{ categories: CaseCategory[]; compact?: boolean }>(), { compact: false })
+export interface WheelDatum {
+  name: string
+  value: number
+}
+
+const props = withDefaults(defineProps<{
+  outerData: WheelDatum[]
+  innerData: WheelDatum[]
+  compact?: boolean
+  /** 内环整体旋转速度（度/帧），0 关闭 */
+  innerRotateSpeed?: number
+}>(), { compact: false, innerRotateSpeed: 0.02 })
+
 const emit = defineEmits<{ select: [name: string] }>()
 const chartRef = ref<HTMLDivElement | null>(null)
-const selectedTopic = ref('')
-const selectedChapter = ref('')
-let chart: echarts.ECharts | null = null
+const innerChartRef = ref<HTMLDivElement | null>(null)
+const innerChartWrapRef = ref<HTMLDivElement | null>(null)
+const selectedName = ref('')
+let outerChart: echarts.ECharts | null = null
+let innerChart: echarts.ECharts | null = null
 let resizeObserver: ResizeObserver | null = null
+let rotateTimer: number | null = null
+const innerDeg = ref(0)
 
 const isLight = () => document.body.classList.contains('theme-light')
 const labelWrap = (value: string, size: number) => Array.from(value).reduce<string[]>((out, char, index) => {
@@ -31,103 +47,218 @@ const labelWrap = (value: string, size: number) => Array.from(value).reduce<stri
   return out
 }, []).join('\n')
 
-const selectTopic = (name: string) => {
-  selectedTopic.value = selectedTopic.value === name ? '' : name
-  selectedChapter.value = ''
-  emit('select', name)
-  render()
+const outerPalette = ['#5DADE2', '#5DADE2', '#5DADE2', '#5DADE2', '#5DADE2', '#5DADE2', '#5DADE2', '#5DADE2']
+const innerPalette = ['#3971DE', '#3971DE', '#3971DE', '#3971DE', '#3971DE', '#3971DE', '#3971DE', '#3971DE']
+const colorFor = (palette: string[], index: number) => palette[index % palette.length]!
+
+const startInnerRotation = () => {
+  stopInnerRotation()
+  if (props.innerRotateSpeed <= 0) return
+  const step = () => {
+    innerDeg.value = (innerDeg.value + props.innerRotateSpeed) % 360
+    rotateTimer = window.requestAnimationFrame(step)
+  }
+  rotateTimer = window.requestAnimationFrame(step)
+}
+const stopInnerRotation = () => {
+  if (rotateTimer !== null) {
+    cancelAnimationFrame(rotateTimer)
+    rotateTimer = null
+  }
 }
 
-const render = async () => {
+const renderOuter = async () => {
   await nextTick()
   if (!chartRef.value) return
-  if (!chart) {
-    chart = echarts.init(chartRef.value)
-    chart.getZr().on('click', (event: { target?: unknown }) => {
-      if (!event.target && (selectedTopic.value || selectedChapter.value)) {
-        selectedTopic.value = ''
-        selectedChapter.value = ''
-        render()
+  if (!outerChart) {
+    outerChart = echarts.init(chartRef.value)
+    outerChart.getZr().on('click', (event: { target?: unknown }) => {
+      if (!event.target && selectedName.value) {
+        selectedName.value = ''
+        renderOuter()
       }
     })
-    chart.on('click', (params: { name: string }) => {
-      const topic = props.categories.find((item) => item.name === params.name)
-      if (topic) {
-        selectTopic(topic.name)
-        return
-      } else if (CRIMINAL_LAW_CHAPTERS.includes(params.name as (typeof CRIMINAL_LAW_CHAPTERS)[number])) {
-        selectedChapter.value = selectedChapter.value === params.name ? '' : params.name
-        selectedTopic.value = ''
-      }
+    outerChart.on('click', (params: { name: string }) => {
+      selectedName.value = selectedName.value === params.name ? '' : params.name
       emit('select', params.name)
-      render()
+      renderOuter()
     })
   }
 
   const light = isLight()
-  const palette = light ? CHART_PALETTES.governance.map((color) => shadeHex(color, -22)) : CHART_PALETTES.governance
-  const visibleTopics = resolveVisibleTopics(selectedChapter.value)
-  const visibleChapters = resolveVisibleChapters(selectedTopic.value)
-  const topicData: ChartDatum[] = props.categories
-    .filter((item) => visibleTopics.includes(item.name as PriorityTag))
-    .map((item, index) => ({ ...item, baseColor: palette[index % palette.length], itemStyle: raisedPieStyle(palette[index % palette.length]!, index) }))
-  const chapterData: ChartDatum[] = visibleChapters.map((name, index) => ({
-    name,
-    value: Math.max(1, ...props.categories.flatMap((topic) => topic.children.filter((item) => item.name === name).map((item) => item.value))),
-    baseColor: palette[(index + 2) % palette.length],
-    itemStyle: raisedPieStyle(palette[(index + 2) % palette.length]!, index + 1)
-  }))
-  const center: [string, string] = props.compact ? ['50%', '49%'] : ['54%', '50%']
-  const innerRadius: [string, string] = props.compact ? ['11%', '31%'] : ['14%', '36%']
-  const outerRadius: [string, string] = props.compact ? ['39%', '55%'] : ['49%', '69%']
+  const outer = props.outerData.length > 0 ? props.outerData : [{ name: '暂无数据', value: 1 }]
+  const outerMax = Math.max(...outer.map((d) => d.value), 1)
+  const center: [string, string] = props.compact ? ['50%', '50%'] : ['50%', '50%']
 
-  chart.setOption({
+  outerChart.setOption({
     backgroundColor: 'transparent',
     animationDuration: 900,
     animationEasing: 'cubicOut',
-    tooltip: { trigger: 'item', formatter: '{b}<br/>{c}（{d}%）', ...chartTooltip(light, '#65dfff') },
-    legend: props.compact ? { show: false } : {
-      orient: 'vertical', left: 8, top: 'middle', itemWidth: 10, itemHeight: 10, itemGap: 9,
-      textStyle: { color: light ? '#315f83' : '#bfe8f8', fontSize: 11 }, data: props.categories.map((item) => item.name)
+    tooltip: {
+      trigger: 'item',
+      formatter: (params: { name: string; value: number; percent: number }) => {
+        return `<strong>${params.name}</strong><br/>${params.value}（${params.percent}%）`
+      },
+      ...chartTooltip(light, '#65dfff')
     },
     series: [
-      ...buildPieDepthLayers('重点专题', topicData, innerRadius, center, 8, 96),
-      ...buildPieDepthLayers('刑法分则一级章名', chapterData, outerRadius, center, 8, 96),
       {
-        name: '重点专题', type: 'pie', radius: innerRadius, center, startAngle: 96, z: 30,
-        selectedMode: 'single', selectedOffset: 0, padAngle: 2,
-        label: { show: !props.compact, position: 'inside', color: '#fff', fontSize: 11, lineHeight: 14, fontWeight: 700, formatter: (p: { name: string }) => labelWrap(p.name, 4), textBorderWidth: 2, textBorderColor: 'rgba(0,15,36,.72)' },
-        labelLine: { show: false }, emphasis: { scale: true, scaleSize: 6 }, data: topicData
-      },
-      {
-        name: '刑法分则一级章名', type: 'pie', radius: outerRadius, center, startAngle: 96, z: 24,
-        selectedMode: 'single', selectedOffset: 0, padAngle: 2.5,
-        label: { show: true, color: light ? '#315f83' : '#d9f5ff', fontSize: props.compact ? 8 : 11, lineHeight: props.compact ? 10 : 14, formatter: (p: { name: string; percent: number }) => props.compact ? labelWrap(p.name, 4) : `${labelWrap(p.name, 5)}\n${p.percent}%`, textBorderWidth: 2, textBorderColor: light ? '#fff' : '#06152c' },
-        labelLine: { show: true, length: props.compact ? 6 : 9, length2: props.compact ? 4 : 7, smooth: 0.2 },
-        emphasis: { scale: true, scaleSize: 7 }, data: chapterData
+        id: 'outer',
+        name: '外环',
+        type: 'pie',
+        radius: ['43.5%', '70.5%'],
+        center,
+        startAngle: 90,
+        padAngle: 2,
+        itemStyle: { borderRadius: 3, borderWidth: 2, borderColor: 'transparent' },
+        label: {
+          position: 'inside',
+          color: '#111',
+          fontSize: props.compact ? 12 : 15,
+          fontWeight: 600,
+          lineHeight: props.compact ? 15 : 20,
+          letterSpacing: 1.5,
+          formatter: (p: { name: string }) => labelWrap(p.name, 5)
+        },
+        labelLine: { show: false },
+        emphasis: { scale: true, scaleSize: 7 },
+        data: outer.map((d, i) => ({
+          name: d.name,
+          value: d.value,
+          itemStyle: {
+            color: colorFor(outerPalette, i),
+            opacity: !selectedName.value || selectedName.value === d.name ? 1 : 0.32
+          }
+        }))
       }
     ]
   }, true)
-  chart.resize()
+  outerChart.resize()
 }
 
-watch(() => [props.categories, props.compact], render, { deep: true })
+const renderInner = async () => {
+  await nextTick()
+  if (!innerChartRef.value) return
+  if (!innerChart) {
+    innerChart = echarts.init(innerChartRef.value)
+    innerChart.on('click', (params: { name: string }) => {
+      selectedName.value = selectedName.value === params.name ? '' : params.name
+      emit('select', params.name)
+      renderInner()
+    })
+  }
+
+  const light = isLight()
+  const inner = props.innerData.length > 0 ? props.innerData : [{ name: '暂无数据', value: 1 }]
+  const innerMax = Math.max(...inner.map((d) => d.value), 1)
+
+  innerChart.setOption({
+    backgroundColor: 'transparent',
+    animationDuration: 900,
+    animationEasing: 'cubicOut',
+    tooltip: {
+      trigger: 'item',
+      formatter: (params: { name: string; value: number; percent: number }) => {
+        return `<strong>${params.name}</strong><br/>${params.value}（${params.percent}%）`
+      },
+      ...chartTooltip(light, '#65dfff')
+    },
+    series: [
+      {
+        id: 'inner',
+        name: '内环',
+        type: 'pie',
+        radius: ['35%', '92%'],
+        center: ['50%', '50%'],
+        startAngle: 90,
+        padAngle: 3,
+        itemStyle: { borderRadius: 3, borderWidth: 2, borderColor: 'transparent' },
+        label: {
+          position: 'inside',
+          color: '#fff',
+          fontSize: props.compact ? 13 : 16,
+          fontWeight: 700,
+          lineHeight: props.compact ? 17 : 22,
+          letterSpacing: 2,
+          formatter: (p: { name: string }) => labelWrap(p.name, 4)
+        },
+        labelLine: { show: false },
+        emphasis: { scale: true, scaleSize: 6 },
+        data: inner.map((d, i) => ({
+          name: d.name,
+          value: d.value,
+          itemStyle: {
+            color: colorFor(innerPalette, i),
+            opacity: !selectedName.value || selectedName.value === d.name ? 1 : 0.32
+          }
+        }))
+      }
+    ]
+  }, true)
+  innerChart.resize()
+}
+
+const render = () => {
+  renderOuter()
+  renderInner()
+}
+
+watch(() => [props.outerData, props.compact], renderOuter, { deep: true })
+watch(() => [props.innerData, props.compact], renderInner, { deep: true })
+watch(() => props.innerRotateSpeed, () => { startInnerRotation() })
 onMounted(() => {
   render()
+  startInnerRotation()
   if (chartRef.value) {
-    resizeObserver = new ResizeObserver(() => chart?.resize())
+    resizeObserver = new ResizeObserver(() => {
+      outerChart?.resize()
+      innerChart?.resize()
+    })
     resizeObserver.observe(chartRef.value)
   }
 })
-onUnmounted(() => { resizeObserver?.disconnect(); chart?.dispose(); chart = null })
+onUnmounted(() => {
+  stopInnerRotation()
+  resizeObserver?.disconnect()
+  outerChart?.dispose()
+  innerChart?.dispose()
+  outerChart = null
+  innerChart = null
+})
 </script>
 
 <style scoped>
-.risk-situation-wheel { position: relative; width: 100%; height: 100%; min-height: 0; }
-.risk-situation-wheel__chart { width: 100%; height: 100%; }
-.wheel-topic-row { position: absolute; z-index: 2; right: 7px; left: 7px; display: flex; height: 76px; justify-content: stretch; gap: 6px; }
-.wheel-topic-row--top { top: 7px; }
-.wheel-topic-row--bottom { bottom: 7px; }
-.wheel-topic-row button { display: grid; min-width: 0; flex: 1; place-items: center; padding: 7px; overflow: hidden; border: 1px solid rgba(77, 207, 255, .42); border-radius: 6px; color: #d9f8ff; font-size: 12px; font-weight: 700; line-height: 1.35; white-space: normal; background: linear-gradient(145deg, rgba(9, 64, 103, .94), rgba(4, 31, 58, .96)); cursor: pointer; }
-.wheel-topic-row button.active { border-color: #5de7ff; color: #fff; box-shadow: 0 0 10px rgba(63, 220, 255, .42); background: rgba(17, 112, 158, .86); }
+.risk-situation-wheel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.risk-situation-wheel__chart {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+/* 内环旋转容器：中心对齐，尺寸恰好落在内环半径范围内 */
+.risk-situation-wheel__inner-rotate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  transform-origin: center center;
+  will-change: transform;
+}
+/* 内环画布：裁剪到环中心的小方块，让 CSS rotate 带着它整体转 */
+.risk-situation-wheel__inner-chart {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40.5%;
+  height: 40.5%;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
 </style>

@@ -79,7 +79,7 @@
     </a-card>
 
     <div class="procuratorial-cockpit-grid" :class="{ 'procuratorial-cockpit-grid--focused': focusedPanel }">
-      <DashboardFocusPanel v-model="focusedPanel" panel-key="analytics" title="检察建议分析" eyebrow="DISTRIBUTION · TREND">
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="analytics" title="检察建议分析">
         <a-card title="检察建议类别分布" :bordered="false" class="content-card">
           <div ref="pieChartRef" class="chart-container"></div>
         </a-card>
@@ -88,7 +88,7 @@
         </a-card>
       </DashboardFocusPanel>
 
-      <DashboardFocusPanel v-model="focusedPanel" panel-key="list" title="线索复核与履职办理" eyebrow="PROCURATORIAL WORKFLOW" class="suggestion-list-panel">
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="list" title="线索复核与履职办理" class="suggestion-list-panel">
         <template #default="{ focused }">
         <a-card v-if="focused" title="检察建议列表" :bordered="false" class="content-card">
           <template #extra>
@@ -131,7 +131,7 @@
         </template>
       </DashboardFocusPanel>
 
-      <DashboardFocusPanel v-model="focusedPanel" panel-key="feed" title="办理反馈动态" eyebrow="LIVE FEEDBACK">
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="feed" title="办理反馈动态">
         <a-card title="实时动态流" :bordered="false" class="content-card">
           <div class="feed-list">
             <div v-for="item in feedItems" :key="item.time" class="feed-item">
@@ -178,10 +178,10 @@ const themeMode = ref<'light' | 'dark'>(isLightTheme() ? 'light' : 'dark')
 const focusedPanel = ref('')
 const focusKeys = new Set(['analytics', 'list', 'feed'])
 const dutyEntries = [
-  { kicker: 'MONTHLY BRIEFING', title: '检察业务月报', description: '归集业务数据，生成待审核月报草稿', path: '/procuratorate-suggestion/monthly-report' },
-  { kicker: 'RISK ALERT', title: '预警推送', description: '查看预警强度与人工复核状态', path: '/alert-push' },
-  { kicker: 'TARGETED LEGALITY', title: '靶向普法', description: '查看普法方案、投放对象与执行进度', path: '/legal-recommend' },
-  { kicker: 'FEEDBACK', title: '办理反馈', description: '查看履职办理结果与效果观察', path: '/effect-stats' }
+  { kicker: '检察业务月报', title: '检察业务月报', description: '归集业务数据，生成待审核月报草稿', path: '/procuratorate-suggestion/monthly-report' },
+  { kicker: '预警推送', title: '预警推送', description: '查看预警强度与人工复核状态', path: '/alert-push' },
+  { kicker: '靶向普法', title: '靶向普法', description: '查看普法方案、投放对象与执行进度', path: '/legal-recommend' },
+  { kicker: '办理反馈', title: '办理反馈', description: '查看履职办理结果与效果观察', path: '/effect-stats' }
 ]
 const workflowSteps = [
   { title: '线索筛查', description: '汇聚各板块转入的待研判事项' },
@@ -190,12 +190,12 @@ const workflowSteps = [
   { title: '跟踪评估', description: '回写办理反馈并观察同类风险变化' }
 ]
 const dutyActions = [
-  { kicker: 'REVIEW', title: '人工复核', description: '确认、排除或继续核查' },
-  { kicker: 'ALERT', title: '预警推送', description: '按权限推送待关注事项' },
-  { kicker: 'SUGGESTION', title: '检察建议', description: '形成待审核建议材料' },
-  { kicker: 'LEGALITY', title: '靶向普法', description: '匹配对象、主题与方案' },
-  { kicker: 'TRANSFER', title: '业务移送', description: '保留来源与事项上下文' },
-  { kicker: 'FEEDBACK', title: '办理反馈', description: '记录进度、结果与效果' }
+  { kicker: '人工复核', title: '人工复核', description: '确认、排除或继续核查' },
+  { kicker: '预警推送', title: '预警推送', description: '按权限推送待关注事项' },
+  { kicker: '检察建议', title: '检察建议', description: '形成待审核建议材料' },
+  { kicker: '靶向普法', title: '靶向普法', description: '匹配对象、主题与方案' },
+  { kicker: '业务移送', title: '业务移送', description: '保留来源与事项上下文' },
+  { kicker: '办理反馈', title: '办理反馈', description: '记录进度、结果与效果' }
 ]
 const updateTheme = () => { themeMode.value = isLightTheme() ? 'light' : 'dark' }
 const handleStorageChange = (e: StorageEvent) => { if (e.key === 'platform:theme-mode') updateTheme() }

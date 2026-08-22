@@ -4,8 +4,8 @@
   <div v-else class="app-container" :class="`theme-${theme}`">
     <a-layout class="layout-shell">
       <a-layout-header class="header">
-        <button class="brand" type="button" aria-label="返回首页" @click="goTo('/')">
-          红墙智检
+        <button class="brand nav-link-style" type="button" aria-label="返回首页" @click="goTo('/')">
+          首页
         </button>
 
         <nav
@@ -1039,6 +1039,7 @@ onBeforeUnmount(() => {
 
   .brand {
     font-size: 14px;
+    padding: 0 10px;
   }
 
   .theme-toggle-btn {
@@ -1074,8 +1075,7 @@ onBeforeUnmount(() => {
 
   .brand {
     font-size: 13px !important;
-    justify-content: center !important;
-    text-align: center !important;
+    padding: 0 8px !important;
   }
 
   .brand-dot { width: 7px; height: 7px; }
@@ -1237,25 +1237,32 @@ onBeforeUnmount(() => {
 
 .brand {
   appearance: none;
-  display: block !important;
-  width: max-content;
-  padding: 0 !important;
-  border: 0;
-  color: transparent !important;
-  font-family: "Microsoft YaHei UI", "PingFang SC", "Source Han Sans SC", sans-serif;
-  font-size: clamp(34px, 2vw, 40px) !important;
-  font-weight: 900 !important;
-  font-style: normal;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  min-width: 0;
+  flex: 0 0 auto;
+  padding: 0 18px;
+  border: 1px solid rgba(66, 213, 255, 0.24);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.88);
+  font-family: "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  font-size: clamp(20px, 1.25vw, 25px);
+  font-weight: 700;
   line-height: 1;
-  letter-spacing: 1px !important;
+  letter-spacing: 0;
   cursor: pointer;
-  background: linear-gradient(180deg, #42efff 0%, #00c9f5 48%, #078edb 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 8px rgba(29, 215, 255, 0.28);
-  transform: skewX(-8deg);
-  transform-origin: left center;
+  background: linear-gradient(180deg, rgba(18, 74, 119, 0.22), rgba(4, 24, 48, 0.42));
+  box-shadow: inset 0 0 18px rgba(30, 167, 225, 0.06);
+  transition: color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.brand:hover,
+.brand:focus-visible {
+  color: #fff;
+  border-color: rgba(66, 213, 255, 0.5);
+  box-shadow: 0 0 16px rgba(30, 167, 225, 0.18);
 }
 
 .top-nav {
@@ -1617,12 +1624,11 @@ onBeforeUnmount(() => {
 }
 
 .app-container.theme-light .brand {
-  color: transparent !important;
-  background: linear-gradient(180deg, #16cde7 0%, #0799c6 50%, #0873ad 100%) !important;
-  -webkit-background-clip: text !important;
-  background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
-  text-shadow: 0 2px 7px rgba(6, 122, 167, 0.18) !important;
+  color: rgba(15, 50, 80, 0.88) !important;
+  -webkit-text-fill-color: rgba(15, 50, 80, 0.88) !important;
+  background: linear-gradient(180deg, rgba(180, 225, 250, 0.35), rgba(140, 195, 230, 0.25)) !important;
+  border-color: rgba(51, 139, 193, 0.35) !important;
+  text-shadow: none !important;
 }
 
 .app-container.theme-light .nav-link,
@@ -1730,7 +1736,7 @@ onBeforeUnmount(() => {
   }
 
   .brand {
-    font-size: 32px !important;
+    font-size: 19px !important;
   }
 
   .top-nav {
@@ -1765,7 +1771,7 @@ onBeforeUnmount(() => {
   }
 
   .brand {
-    font-size: 25px !important;
+    font-size: 17px !important;
   }
 
   .top-nav {
@@ -1821,9 +1827,8 @@ onBeforeUnmount(() => {
   }
 
   .brand {
-    justify-content: initial !important;
-    font-size: 21px !important;
-    text-align: left !important;
+    font-size: 14px !important;
+    padding: 0 8px !important;
   }
 
   .top-nav {

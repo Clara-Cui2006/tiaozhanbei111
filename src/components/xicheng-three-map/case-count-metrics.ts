@@ -22,11 +22,11 @@ export interface StreetMetricIdentity {
 }
 
 export const QUANTITY_COLORS: readonly string[] = [
-  '#1689C4',
-  '#16A8B7',
-  '#D4B64D',
-  '#EC8438',
-  '#E94B5B'
+  '#7A9AB5',
+  '#2E5A96',
+  '#1E3F80',
+  '#17A2C4',
+  '#35E0EC'
 ]
 
 export function normalizeStreetName(name: string): string {

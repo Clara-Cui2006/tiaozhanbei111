@@ -83,29 +83,30 @@ export const PERMISSION_RULES = {
 /** 四个一级业务入口，顺序不得调整。 */
 export const HOME_BUSINESS_ITEMS: readonly NavigationItem[] = [
   {
-    key: '/dashboard',
-    label: '风险态势',
-    ...PERMISSION_RULES.dashboardRead,
-    homeCard: { icon: 'dashboard', descriptions: ['风险全景感知', '指标地图联动'] }
-  },
-  {
     key: '/political-security',
     label: '政治安全',
     ...PERMISSION_RULES.politicalRead,
     homeCard: { icon: 'political', descriptions: ['四维风险研判', '核心区重点防控'] }
   },
   {
+    key: '/petition-litigation/overview',
+    label: '民情智析',
+    ...PERMISSION_RULES.caseReadAny,
+    homeCard: { icon: 'petition', descriptions: ['12345·综治数据', '诉求识别研判'] }
+  },
+    {
+    key: '/dashboard',
+    label: '基层治理',
+    ...PERMISSION_RULES.dashboardRead,
+    homeCard: { icon: 'dashboard', descriptions: ['风险全景感知', '指标地图联动'] }
+  },
+  {
     key: '/procuratorate-suggestion',
     label: '检察履职',
     ...PERMISSION_RULES.procuratorateReadAny,
     homeCard: { icon: 'suggestion', descriptions: ['线索筛查复核', '履职办理反馈'] }
-  },
-  {
-    key: '/petition-litigation/overview',
-    label: '涉访涉诉',
-    ...PERMISSION_RULES.caseReadAny,
-    homeCard: { icon: 'petition', descriptions: ['12345·综治数据', '诉求识别研判'] }
   }
+
 ]
 
 /** 首页顶部仅展示四个一级入口。 */
@@ -116,21 +117,19 @@ export const BUSINESS_WORKSPACES: readonly BusinessWorkspace[] = [
   {
     ...HOME_BUSINESS_ITEMS[0]!,
     secondary: [
-      { key: '/dashboard', label: '总体态势', ...PERMISSION_RULES.dashboardRead },
-      { key: '/dashboard?panel=indices', label: '风险指数', ...PERMISSION_RULES.dashboardRead },
-      { key: '/dashboard?panel=map', label: '空间分布', ...PERMISSION_RULES.dashboardRead },
-      { key: '/dashboard?panel=trend', label: '趋势分析', ...PERMISSION_RULES.dashboardRead }
+      { key: '/political-security', label: '总体态势', ...PERMISSION_RULES.politicalRead },
+      { key: '/political-security?panel=dimensions', label: '四维研判', ...PERMISSION_RULES.politicalRead },
+      { key: '/political-security?panel=topics&lens=traditional', label: '传统安全', ...PERMISSION_RULES.politicalRead },
+      { key: '/political-security?panel=topics&lens=nontraditional', label: '非传统安全', ...PERMISSION_RULES.politicalRead },
+      { key: '/political-security?panel=topics', label: '重点事项', ...PERMISSION_RULES.politicalRead }
     ]
   },
   {
     ...HOME_BUSINESS_ITEMS[1]!,
     secondary: [
-      { key: '/political-security', label: '总体态势', ...PERMISSION_RULES.politicalRead },
-      { key: '/political-security?panel=dimensions', label: '四维研判', ...PERMISSION_RULES.politicalRead },
-      { key: '/political-security?panel=topics&lens=traditional', label: '传统安全', ...PERMISSION_RULES.politicalRead },
-      { key: '/political-security?panel=topics&lens=nontraditional', label: '非传统安全', ...PERMISSION_RULES.politicalRead },
-      { key: '/political-security?panel=topics', label: '重点事项', ...PERMISSION_RULES.politicalRead },
-      { key: '/political-security?panel=map', label: '空间分布', ...PERMISSION_RULES.politicalRead }
+      { key: '/petition-litigation/overview', label: '整体情况', ...PERMISSION_RULES.caseReadAny },
+      { key: '/petition-litigation/clues', label: '监督线索', ...PERMISSION_RULES.caseReadAny },
+      { key: '/petition-litigation/reverse-review', label: '反向审视', ...PERMISSION_RULES.caseReadAny }
     ]
   },
   {
@@ -147,9 +146,9 @@ export const BUSINESS_WORKSPACES: readonly BusinessWorkspace[] = [
   {
     ...HOME_BUSINESS_ITEMS[3]!,
     secondary: [
-      { key: '/petition-litigation/overview', label: '整体情况', ...PERMISSION_RULES.caseReadAny },
-      { key: '/petition-litigation/clues', label: '监督线索', ...PERMISSION_RULES.caseReadAny },
-      { key: '/petition-litigation/reverse-review', label: '反向审视', ...PERMISSION_RULES.caseReadAny }
+      { key: '/dashboard', label: '总体态势', ...PERMISSION_RULES.dashboardRead },
+      { key: '/dashboard?panel=indices', label: '风险指数', ...PERMISSION_RULES.dashboardRead },
+      { key: '/dashboard?panel=trend', label: '趋势分析', ...PERMISSION_RULES.dashboardRead }
     ]
   }
 ]

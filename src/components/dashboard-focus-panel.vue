@@ -10,10 +10,11 @@
         <span v-if="eyebrow" class="focus-panel__eyebrow">{{ eyebrow }}</span>
         <h2>{{ title }}</h2>
       </div>
-      <button type="button" class="focus-panel__action" @click="toggle">
+      <button v-if="!hideAction" type="button" class="focus-panel__action" @click="toggle">
         {{ active ? '返回总览' : '更多' }}
         <span aria-hidden="true">{{ active ? '↙' : '↗' }}</span>
       </button>
+      <slot v-else name="header-extra" />
     </header>
     <div class="focus-panel__body">
       <slot :focused="active" />
@@ -29,9 +30,11 @@ const props = withDefaults(defineProps<{
   title: string
   eyebrow?: string
   modelValue?: string
+  hideAction?: boolean
 }>(), {
   eyebrow: '',
-  modelValue: ''
+  modelValue: '',
+  hideAction: false
 })
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
@@ -145,7 +148,7 @@ const toggle = () => {
 .focus-panel__header h2 {
   margin: 0;
   color: #effbff;
-  font-size: 17px;
+  font-size: 24px;
   line-height: 1.1;
 }
 

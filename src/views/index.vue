@@ -1,7 +1,22 @@
 <template>
   <div class="dashboard cockpit-page">
+    <div v-if="focusedPanel !== 'indices'" class="kpi-strip dashboard-kpi-strip">
+      <div
+        v-for="item in indexCards"
+        :key="item.label"
+        class="kpi-item"
+        :class="[`kpi-${item.tone}`]"
+        type="button"
+        @click="focusedPanel = 'indices'"
+      >
+        <div class="kpi-accent"></div>
+        <div class="kpi-label">{{ item.label }}</div>
+        <div class="kpi-value" :class="{ 'kpi-value-text': item.text }">{{ item.value }}</div>
+      </div>
+    </div>
+
     <div class="cockpit-grid" :class="{ 'cockpit-grid--focused': focusedPanel }">
-      <DashboardFocusPanel v-model="focusedPanel" panel-key="indices" title="风险综合指标" eyebrow="RISK INDEX" class="indices-focus-panel">
+      <DashboardFocusPanel v-if="focusedPanel === 'indices'" v-model="focusedPanel" panel-key="indices" title="风险综合指标" class="indices-focus-panel">
         <template #default="{ focused }">
           <div class="index-stack" :class="{ 'index-stack--focused': focused }">
             <article v-for="item in indexCards" :key="item.label" class="index-card" :class="`index-card--${item.tone}`">
@@ -17,7 +32,7 @@
               </div>
               <div v-if="aiAssessing" class="ai-loading-text">正在生成辅助草稿...</div>
               <div v-else-if="aiAssessment" class="ai-assessment" v-html="formatAssessment(aiAssessment)"></div>
-              <div v-else class="ai-empty-text">AI 仅辅助生成草稿，最终结论须由人工复核。</div>
+              <div v-else class="ai-empty-text">仅辅助生成草稿，最终结论须由人工复核。</div>
               <div v-if="focused" class="index-detail-grid">
                 <section>
                   <h3>指标使用边界</h3>
@@ -42,7 +57,7 @@
         </template>
       </DashboardFocusPanel>
 
-      <DashboardFocusPanel v-model="focusedPanel" panel-key="map" title="西城区风险空间态势" eyebrow="SPATIAL DISTRIBUTION" class="map-focus-panel">
+      <DashboardFocusPanel v-if="focusedPanel !== 'indices'" v-model="focusedPanel" panel-key="map" title="西城区风险空间态势" class="map-focus-panel">
         <template #default="{ focused }">
           <RiskMapPanel
             :points="mapPoints"
@@ -52,16 +67,14 @@
         </template>
       </DashboardFocusPanel>
 
-      <DashboardFocusPanel v-model="focusedPanel" panel-key="trend" title="社区风险趋势" eyebrow="RISK TREND" class="trend-focus-panel">
+      <DashboardFocusPanel v-if="focusedPanel !== 'indices'" v-model="focusedPanel" panel-key="trend" title="社区风险趋势" class="trend-focus-panel">
         <template #default="{ focused }">
           <div class="analysis-stack" :class="{ 'analysis-stack--focused': focused }">
-            <section class="situation-wheel-block">
-              <div class="situation-wheel-heading">
-                <span>重点专题与刑法分则联动态势盘</span>
-                <small>内圈重点专题 · 外圈刑法分则</small>
-              </div>
-              <RiskSituationWheel :categories="riskCategories" :compact="!focused" />
-            </section>
+            <RiskSituationWheel
+              :outer-data="wheelOuterData"
+              :inner-data="wheelInnerData"
+              :compact="!focused"
+            />
             <div v-if="focused" class="trend-detail-row">
               <div class="trend-chart-block">
                 <div class="trend-toolbar">
@@ -141,11 +154,11 @@ const focusedPanel = ref('')
 const focusKeys = new Set(['indices', 'map', 'trend'])
 
 const indexCards = computed(() => [
-  { label: '本年度案件总数', value: overview.value.totalCasesThisYear, hint: '当前统计口径', tone: 'red' },
-  { label: '高发案件类型', value: overview.value.highIncidenceTypes || '暂无数据', hint: '当前最高频类型', tone: 'cyan', text: true },
-  { label: '风险预警推送', value: overview.value.riskAlertPushCount, hint: '履职联动次数', tone: 'orange' },
-  { label: '检察建议', value: overview.value.procuratorateSuggestions, hint: '已发送次数', tone: 'yellow' },
-  { label: '普法方案投递', value: overview.value.legalPushCount, hint: '已投递次数', tone: 'blue' }
+  { label: '本年度案件总数', value: overview.value.totalCasesThisYear, hint: '', tone: 'red' },
+  { label: '高发案件类型', value: overview.value.highIncidenceTypes || '暂无数据', hint: '', tone: 'cyan', text: true },
+  { label: '风险预警推送', value: overview.value.riskAlertPushCount, hint: '', tone: 'orange' },
+  { label: '检察建议', value: overview.value.procuratorateSuggestions, hint: '', tone: 'yellow' },
+  { label: '普法方案投递', value: overview.value.legalPushCount, hint: '', tone: 'blue' }
 ])
 const topStreetPoints = computed(() => {
   const sorted = [...mapPoints.value].sort((a, b) => (b.annualCases || 0) - (a.annualCases || 0)).slice(0, 4)
@@ -161,7 +174,31 @@ const workflowMetrics = computed(() => {
   const max = Math.max(1, ...values.map((item) => item.value))
   return values.map((item) => ({ ...item, percent: Math.round((item.value / max) * 100) }))
 })
-
+// 嵌套环形图：外环 = 刑法分则章名聚合（独立数据源，小值合并为"其他"）
+const wheelOuterData = computed(() => {
+  const chapterMap = new Map<string, number>()
+  riskCategories.value.forEach((topic) => {
+    topic.children.forEach((child) => {
+      chapterMap.set(child.name, (chapterMap.get(child.name) || 0) + Math.max(1, child.value))
+    })
+  })
+  const threshold = 10
+  const all = Array.from(chapterMap, ([name, value]) => ({ name, value }))
+  const small = all.filter((d) => d.value < threshold)
+  const major = all.filter((d) => d.value >= threshold)
+  const otherValue = small.reduce((sum, d) => sum + d.value, 0)
+  return [
+    ...major,
+    ...(otherValue > 0 ? [{ name: '其他', value: otherValue }] : [])
+  ]
+})
+// 嵌套环形图：内圈 = 重点专题聚合（独立数据源）
+const wheelInnerData = computed(() =>
+  riskCategories.value.map((item) => ({
+    name: item.name,
+    value: item.children.reduce((sum, child) => sum + Math.max(1, child.value), 0)
+  }))
+)
 // Reactive theme for dashboard
 const themeMode = ref<'light' | 'dark'>('dark')
 const isLightTheme = computed(() => themeMode.value === 'light')
@@ -606,21 +643,140 @@ onUnmounted(() => {
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
+  gap: 10px;
 }
 
+/* ===== 顶部 KPI 条：参照政治安全页格局 ===== */
+.dashboard-kpi-strip {
+  position: relative;
+  z-index: 50;
+  height: 92px;
+  flex: 0 0 92px;
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  min-height: 0;
+}
+
+.dashboard-kpi-strip .kpi-item {
+  --kpi-accent: #64d8ff;
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 10px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--kpi-accent) 40%, transparent);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 90% 10%, color-mix(in srgb, var(--kpi-accent) 18%, transparent) 0%, transparent 44%),
+    linear-gradient(145deg, color-mix(in srgb, var(--kpi-accent) 14%, transparent), transparent 50%),
+    linear-gradient(180deg, rgba(14, 39, 65, 0.84), rgba(7, 23, 40, 0.92));
+  box-shadow:
+    inset 0 0 26px color-mix(in srgb, var(--kpi-accent) 7%, transparent),
+    0 14px 28px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dashboard-kpi-strip .kpi-item:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--kpi-accent) 58%, transparent);
+  box-shadow:
+    inset 0 0 28px color-mix(in srgb, var(--kpi-accent) 10%, transparent),
+    0 16px 30px rgba(0, 0, 0, 0.22),
+    0 0 22px color-mix(in srgb, var(--kpi-accent) 14%, transparent);
+}
+
+.dashboard-kpi-strip .kpi-item::before {
+  position: absolute;
+  inset: 0 18px auto;
+  height: 2px;
+  content: '';
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--kpi-accent), #eef2ee, var(--kpi-accent), transparent);
+  box-shadow: 0 0 13px color-mix(in srgb, var(--kpi-accent) 58%, transparent);
+}
+
+.dashboard-kpi-strip .kpi-item::after {
+  position: absolute;
+  right: -28px;
+  bottom: -28px;
+  width: 120px;
+  height: 120px;
+  content: '';
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, color-mix(in srgb, var(--kpi-accent) 22%, transparent) 0%, transparent 68%);
+  opacity: 0.6;
+}
+
+.dashboard-kpi-strip .kpi-accent { display: none; }
+.dashboard-kpi-strip .kpi-red { --kpi-accent: #ff726b; }
+.dashboard-kpi-strip .kpi-cyan { --kpi-accent: #64d8ff; }
+.dashboard-kpi-strip .kpi-orange { --kpi-accent: #ff9b52; }
+.dashboard-kpi-strip .kpi-yellow { --kpi-accent: #f2c86f; }
+.dashboard-kpi-strip .kpi-blue { --kpi-accent: #5b9fd4; }
+
+.dashboard-kpi-strip .kpi-label {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 6px;
+  color: color-mix(in srgb, var(--kpi-accent) 72%, #d9edf4);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--kpi-accent) 22%, transparent);
+}
+
+.dashboard-kpi-strip .kpi-value {
+  position: relative;
+  z-index: 1;
+  color: var(--kpi-accent);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 17px color-mix(in srgb, var(--kpi-accent) 50%, transparent);
+}
+
+.dashboard-kpi-strip .kpi-value-text {
+  font-size: 20px !important;
+  font-weight: 700;
+  line-height: 1.18;
+}
+
+.dashboard-kpi-strip .kpi-sub {
+  margin-top: 4px;
+  color: rgba(219, 242, 255, 0.82);
+  font-size: 11px;
+  text-align: center;
+}
+
+/* ===== 主体网格：参照政治安全页 3:2 比例 ===== */
 .cockpit-grid {
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(260px, .72fr) minmax(520px, 1.42fr) minmax(330px, .92fr);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   grid-template-rows: minmax(0, 1fr);
   gap: 10px;
   overflow: hidden;
 }
 
-.indices-focus-panel { grid-column: 1; grid-row: 1; }
-.map-focus-panel { grid-column: 2; grid-row: 1; }
-.trend-focus-panel { grid-column: 3; grid-row: 1; }
+.indices-focus-panel { grid-column: 1 / -1; grid-row: 1; }
+.map-focus-panel { grid-column: 1; grid-row: 1; }
+.trend-focus-panel { grid-column: 2; grid-row: 1; }
+
+/* 移除地图栏目的扫描线特效 */
+.map-focus-panel :deep(.arco-card:has(canvas)::after) {
+  display: none;
+}
 
 .index-stack {
   display: grid;
@@ -663,9 +819,9 @@ onUnmounted(() => {
 .index-card strong { color: var(--index-color); font-size: 24px; font-variant-numeric: tabular-nums; text-align: right; }
 .index-card__text { max-width: 112px; font-size: 15px !important; line-height: 1.2; }
 .index-stack--focused .index-card { align-items: flex-start; flex-direction: column; padding: 18px; }
-.index-stack--focused .index-card span { font-size: 16px; }
-.index-stack--focused .index-card strong { max-width: none; font-size: 34px; text-align: left; }
-.index-stack--focused .index-card__text { font-size: 22px !important; }
+.index-stack--focused .index-card span { font-size: 30px; }
+.index-stack--focused .index-card strong { max-width: none; font-size: 28px; text-align: left; }
+.index-stack--focused .index-card__text { font-size: 28px !important; }
 
 .assessment-content {
   min-height: 0;
@@ -677,12 +833,12 @@ onUnmounted(() => {
 }
 .index-stack--focused .assessment-content { grid-column: 1 / -1; padding: 18px; }
 .assessment-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.assessment-heading > span { color: #dff7ff; font-size: 13px; font-weight: 700; }
+.assessment-heading > span { color: #dff7ff; font-size: 20px; font-weight: 700; }
 .index-detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
 .index-detail-grid section { padding: 15px; border: 1px solid rgba(83, 207, 255, .18); border-radius: 9px; background: rgba(8, 42, 72, .56); }
-.index-detail-grid h3 { margin: 0 0 10px; color: #dff7ff; font-size: 15px; }
-.index-detail-grid p { margin: 8px 0; color: #90bfd2; font-size: 12px; line-height: 1.65; }
-.detail-rank-row { display: flex; align-items: center; gap: 8px; margin: 10px 0; color: #9bc9dc; font-size: 12px; }
+.index-detail-grid h3 { margin: 0 0 10px; color: #dff7ff; font-size: 20px; }
+.index-detail-grid p { margin: 8px 0; color: #90bfd2; font-size: 16px; line-height: 1.65; }
+.detail-rank-row { display: flex; align-items: center; gap: 8px; margin: 10px 0; color: #9bc9dc; font-size: 16px; }
 .detail-rank-row span { width: 84px; }
 .detail-rank-row i { height: 6px; flex: 1; overflow: hidden; border-radius: 8px; background: rgba(78, 145, 177, .18); }
 .detail-rank-row b { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #147ec4, #47e5ff); }
@@ -696,13 +852,8 @@ onUnmounted(() => {
   padding: 7px;
 }
 .analysis-stack--focused { grid-template-rows: minmax(300px, 1.1fr) minmax(220px, .9fr); gap: 10px; padding: 12px; }
-.situation-wheel-block { display: flex; min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid rgba(83, 197, 243, .2); border-radius: 9px; background: radial-gradient(circle at 50% 55%, rgba(37, 112, 208, .14), transparent 52%), rgba(2, 16, 35, .42); }
-.situation-wheel-heading { display: flex; min-height: 42px; flex: 0 0 42px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 11px; border-bottom: 1px solid rgba(83, 197, 243, .14); }
-.situation-wheel-heading span { color: #dff7ff; font-size: 13px; font-weight: 700; }
-.situation-wheel-heading small { color: #65dfff; font-size: 9px; }
-.analysis-stack--focused .situation-wheel-heading span { font-size: 17px; }
-.analysis-stack--focused .situation-wheel-heading small { font-size: 11px; }
-.situation-wheel-block :deep(.risk-situation-wheel) { flex: 1; }
+.situation-wheel-block { display: flex; min-height: 0; flex-direction: column; overflow: hidden; }
+.analysis-stack :deep(.risk-situation-wheel) { flex: 1; min-height: 0; }
 .trend-detail-row { display: grid; min-height: 0; grid-template-columns: minmax(0, 1.65fr) minmax(260px, .75fr); gap: 10px; }
 .trend-chart-block { position: relative; min-height: 0; overflow: hidden; border: 1px solid rgba(83, 197, 243, .16); border-radius: 8px; background: rgba(2, 16, 35, .36); }
 .mini-analysis-grid { display: grid; min-height: 0; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 7px; }

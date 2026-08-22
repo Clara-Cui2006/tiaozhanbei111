@@ -46,7 +46,12 @@ import type {
   PoliticalOverview,
   PetitionLitigationItem
 } from '../types/platform'
-import { PRIORITY_ALERT_FIXTURES, type PriorityAlert } from '../features/priority-alerts'
+import {
+  PRIORITY_ALERT_FIXTURES,
+  assessOfflineRisk,
+  inferPriorityTags,
+  type PriorityAlert
+} from '../features/priority-alerts'
 
 // 演示数据只能由构建环境显式开启；真实部署接口失败时不得自动回退。
 const useMock = import.meta.env.VITE_USE_MOCK === 'true'
@@ -616,7 +621,38 @@ export async function fetchPushTasks(): Promise<PushTask[]> {
 }
 
 export async function fetchPriorityAlerts(): Promise<PriorityAlert[]> {
-  return Promise.resolve(PRIORITY_ALERT_FIXTURES)
+  if (useMock) return Promise.resolve(PRIORITY_ALERT_FIXTURES)
+
+  const [cases, events] = await Promise.all([fetchCaseDetails(), fetchRiskEvents()])
+  const eventsById = new Map(events.map((event) => [event.id, event]))
+
+  return cases.map((item) => {
+    const event = eventsById.get(item.id)
+    const summary = item.summary || item.judgmentReason || event?.detail || ''
+    const tags = inferPriorityTags({
+      caseName: item.caseName,
+      category: item.category,
+      keywords: item.keywords,
+      summary
+    })
+    const assessment = assessOfflineRisk({ summary })
+    const status = event?.status || item.procedureType
+    return {
+      id: item.id,
+      caseName: item.caseName,
+      caseNumber: item.caseNumber,
+      street: event?.community || item.street || '未确认街道',
+      caseType: item.category,
+      tags,
+      riskLevel: event?.level || item.riskLevel || (assessment.confidence >= 72 ? '中' : '低'),
+      alertStatus: /确认|办结|判决|已复核/.test(status) ? '已复核' : '待人工复核',
+      summary,
+      ruleHits: assessment.ruleHits,
+      aiHints: assessment.aiHints,
+      confidence: event?.riskScore || assessment.confidence,
+      subject: item.subject || { name: '未提供', age: 0, occupation: '未提供', specialIdentity: '未提供' }
+    }
+  })
 }
 
 export async function fetchEffectRates(): Promise<EffectRate> {

@@ -9,7 +9,6 @@
         :class="[{ active: activeCockpitPanel === item.key }, `kpi-${item.tone}`]"
         @click="openCockpitPanel(item.key)"
       >
-        <span>{{ item.eyebrow }}</span>
         <strong>{{ item.title }}</strong>
         <small>{{ item.summary }}</small>
       </button>
@@ -19,17 +18,18 @@
         <div class="kpi-accent"></div>
         <div class="kpi-label">年度政治安全案件总数</div>
         <div class="kpi-value">{{ overview.totalSignalsThisYear }}</div>
-        <div class="kpi-sub">同比 {{ formatSignedRate(overview.yearOverYearRate) }}</div>
       </div>
-      <div class="kpi-item kpi-cyan">
-        <div class="kpi-accent"></div>
-        <div class="kpi-label">高发风险类型</div>
-        <div class="kpi-value kpi-value-text">{{ overview.highIncidenceTypes }}</div>
-      </div>
-      <div class="kpi-item kpi-orange">
+      <div class="kpi-item kpi-orange kpi-risk-host">
         <div class="kpi-accent"></div>
         <div class="kpi-label">风险预警推送</div>
         <div class="kpi-value">{{ overview.riskAlertPushCount }}</div>
+        <div class="kpi-risk-bridge"></div>
+        <div class="kpi-risk-dropdown">
+          <button v-for="alert in riskAlertItems" :key="alert.id" type="button" class="kpi-risk-item" @click="openRiskModal(alert)">
+            <span class="kpi-risk-name">{{ alert.title }}</span>
+            <span class="kpi-risk-level" data-level="高">高风险</span>
+          </button>
+        </div>
       </div>
       <div class="kpi-item kpi-yellow">
         <div class="kpi-accent"></div>
@@ -44,126 +44,86 @@
     </div>
 
     <div class="political-cockpit-grid" :class="{ 'political-cockpit-grid--focused': focusedPanel }">
-      <DashboardFocusPanel v-model="focusedPanel" panel-key="map" title="政治安全风险空间分布" eyebrow="FOUR-DIMENSIONAL ANALYSIS" class="political-map-panel">
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="map" title="政治安全风险空间分布" class="political-map-panel">
         <template #default="{ focused }">
           <RiskMapPanel :height="focused ? 350 : 345" :default-overlay-political="true" :display-mode="focused ? 'focus' : 'cockpit'" />
         </template>
       </DashboardFocusPanel>
 
-      <DashboardFocusPanel v-model="focusedPanel" panel-key="topics" title="重点事项与人工复核" eyebrow="PRIORITY ITEMS" class="political-topic-panel">
-        <template #default="{ focused }">
-        <a-card :bordered="false" class="chart-card topic-card">
-          <div class="topic-card-layout">
-            <div class="topic-list">
-              <PriorityTopicTabs v-model="selectedPriorityTag" :alerts="priorityAlerts" />
-            </div>
-            <div class="review-metrics">
-              <div class="review-pod review-pod-cyan">
-                <div class="review-metric-copy">
-                  <span class="review-pod-kicker">HUMAN REVIEW</span>
-                  <h3>人工复核案件总量</h3>
-                  <strong>{{ overview.pendingManualReview || 0 }}<small>件</small></strong>
-                  <p>进入人工复核流程的政治安全案件</p>
-                </div>
-                <div class="review-ring" :style="ringStyle(overview.pendingManualReviewRate)">
-                  <div><i>{{ formatRate(overview.pendingManualReviewRate) }}</i><small>复核占比</small></div>
-                </div>
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="dimensions" title="四维研判数据驾驶舱" class="political-dimension-panel">
+        <a-card class="chart-card" :bordered="false">
+          <div class="dimension-grid">
+            <section class="dimension-chart-cell" :class="{ active: activeCockpitPanel === 'location' }">
+              <div class="dimension-cell-heading">
+                <div><h3>地点因素分析</h3></div>
               </div>
-              <div class="review-pod review-pod-amber">
-                <div class="review-metric-copy">
-                  <span class="review-pod-kicker">PRIORITY TOPICS</span>
-                  <h3>重点专题案件总量</h3>
-                  <strong>{{ overview.highConcernRisks || 0 }}<small>件</small></strong>
-                  <p>命中重点专题规则并纳入联动研判</p>
-                </div>
-                <div class="review-ring" :style="ringStyle(overview.highConcernRiskRate)">
-                  <div><i>{{ formatRate(overview.highConcernRiskRate) }}</i><small>专题占比</small></div>
-                </div>
-              </div>
-              <div class="review-pod review-pod-portrait">
-                <div class="portrait-heading">
-                  <span class="review-pod-kicker">TOPIC PORTRAIT</span>
-                  <em>动态画像</em>
-                </div>
-                <h3>重点专题画像</h3>
-                <strong class="portrait-topic">{{ selectedPriorityTag }}</strong>
-                <div class="portrait-facts">
-                  <div><span>关联案件</span><b>{{ selectedTopicAlerts.length }}</b><small>件</small></div>
-                  <div><span>高发街道</span><b>{{ selectedTopStreet }}</b></div>
-                  <div><span>待复核</span><b>{{ selectedPendingReview }}</b><small>件</small></div>
-                </div>
-                <p>综合专题规则命中、案件文本风险特征与人工复核状态，形成专题联动研判画像。</p>
-              </div>
-            </div>
-          </div>
-          <a-alert type="info" class="method-alert">“高风险/高关注”不单纯依据案件数量判断，需结合案件分类标签、风险规则匹配和人工复核结果；高发风险类型可按案件数量排序。</a-alert>
-          <div class="political-ai-strip">
-            <a-button type="primary" status="danger" size="small" :loading="aiAssessing" @click="generateAssessment">
-              {{ aiAssessment ? '重新生成草稿' : '生成研判草稿' }}
-            </a-button>
-            <div v-if="aiAssessing" class="ai-loading-text">AI 正在综合分析政治安全风险态势...</div>
-            <div v-else-if="aiAssessment" class="ai-assessment" v-html="formatAssessment(aiAssessment)"></div>
-            <div v-else class="ai-empty-text">AI 仅辅助生成草稿，最终结论须由人工复核。</div>
-          </div>
-          <div v-if="focused" class="topic-focus-detail">
-            <section class="security-lens-panel">
-              <h3>政治安全分析视角</h3>
-              <div class="security-lens-grid">
-                <article :class="{ active: activeSecurityLens === 'traditional' }"><strong>传统政治安全</strong><span>作为重点事项的专题标签和人工研判视角，不自动定性。</span></article>
-                <article :class="{ active: activeSecurityLens === 'nontraditional' }"><strong>非传统政治安全</strong><span>围绕金融、网络、公共安全等交叉风险设置关联分析位置。</span></article>
-                <article><strong>涉访涉诉关联</strong><span>承接外部治理数据中经人工确认需继续专题研判的事项。</span></article>
-              </div>
+              <div ref="locationChartRef" class="dimension-chart-box"></div>
             </section>
-            <section class="priority-item-panel">
-              <h3>{{ selectedPriorityTag }} · 当前事项</h3>
-              <div class="priority-item-list">
-                <article v-for="item in selectedTopicAlerts" :key="item.id">
-                  <div><strong>{{ item.caseName }}</strong><span>{{ item.caseNumber }} · {{ item.street }}</span></div>
-                  <p>{{ item.summary }}</p>
-                  <div class="priority-item-tags"><i>{{ item.riskLevel }}风险</i><i>{{ item.alertStatus }}</i><i>{{ item.caseType }}</i></div>
-                </article>
-                <div v-if="!selectedTopicAlerts.length" class="ai-empty-text">当前专题暂无匹配事项。</div>
+            <section class="dimension-chart-cell" :class="{ active: activeCockpitPanel === 'behavior' }">
+              <div class="dimension-cell-heading">
+                <div><h3>行为内容分析</h3></div>
               </div>
+              <div ref="behaviorChartRef" class="dimension-chart-box"></div>
+            </section>
+            <section class="dimension-chart-cell" :class="{ active: activeCockpitPanel === 'subject' }">
+              <div class="dimension-cell-heading">
+                <div><h3>涉及主体分析</h3></div>
+              </div>
+              <div ref="subjectChartRef" class="dimension-chart-box"></div>
+            </section>
+            <section class="dimension-chart-cell" :class="{ active: activeCockpitPanel === 'time' }">
+              <div class="dimension-cell-heading">
+                <div><h3>传播影响分析</h3></div>
+              </div>
+              <div ref="timeChartRef" class="dimension-chart-box"></div>
             </section>
           </div>
         </a-card>
-        </template>
       </DashboardFocusPanel>
 
-      <DashboardFocusPanel v-model="focusedPanel" panel-key="dimensions" title="四维研判数据驾驶舱" eyebrow="LOCATION · CONTENT · SUBJECT · IMPACT" class="political-dimension-panel">
-        <a-card class="chart-card" :bordered="false">
-          <div v-if="activeCockpitPanel" class="dimension-analysis-layout">
-            <section class="dimension-chart-pane">
-              <div class="dimension-pane-heading">
-                <div><span>{{ activeDimensionCard?.eyebrow }}</span><h3>{{ activeCockpitPanelTitle }}分析</h3></div>
-                <small>{{ activeDimensionCard?.description }}</small>
+      <DashboardFocusPanel v-model="focusedPanel" panel-key="topics" :title="topicsPanelTitle" class="political-topic-panel">
+        <template #default="{ focused }">
+          <a-card class="chart-card" :bordered="false">
+            <div class="topic-card-layout">
+              <PriorityTopicTabs v-if="!activeSecurityLens" v-model="selectedPriorityTag" :alerts="priorityAlerts" :compact="true" />
+              <div v-if="activeSecurityLens === 'traditional'" class="security-lens-panel">
+                <h3>传统安全</h3>
+                <div class="security-lens-grid">
+                  <article v-for="alert in traditionalRiskCases" :key="alert.id" @click="openTraditionalCase(alert)">
+                    <strong>{{ alert.caseName }}</strong>
+                    <span>{{ alert.street }} · {{ alert.riskLevel }}风险 · {{ alert.alertStatus }}</span>
+                    <span>{{ alert.summary }}</span>
+                  </article>
+                </div>
               </div>
-              <div v-if="activeCockpitPanel === 'location'" ref="locationChartRef" class="dimension-chart-box"></div>
-              <div v-else-if="activeCockpitPanel === 'behavior'" ref="behaviorChartRef" class="dimension-chart-box"></div>
-              <div v-else-if="activeCockpitPanel === 'subject'" ref="subjectChartRef" class="dimension-chart-box"></div>
-              <div v-else ref="timeChartRef" class="dimension-chart-box"></div>
-            </section>
-            <section class="dimension-alert-pane">
-              <div class="dimension-pane-heading">
-                <div><span>POLITICAL SECURITY ALERT</span><h3>{{ activeCockpitPanelTitle }}筛查预警</h3></div>
-                <small>仅作辅助提示 · 须人工复核</small>
+              <div v-else-if="activeSecurityLens === 'nontraditional'" class="security-lens-panel">
+                <h3>非传统安全</h3>
+                <div class="security-lens-grid">
+                  <article v-for="alert in nontraditionalRiskCases" :key="alert.id" @click="openNontraditionalCase(alert)">
+                    <strong>{{ alert.caseName }}</strong>
+                    <span>{{ alert.street }} · {{ alert.riskLevel }}风险 · {{ alert.alertStatus }}</span>
+                    <span>{{ alert.summary }}</span>
+                  </article>
+                </div>
               </div>
-              <div class="dimension-alert-list">
-                <button v-for="alert in dimensionAlerts" :key="alert.id" type="button" @click="openDimensionAlert(alert)">
-                  <div class="dimension-alert-topline"><i :class="`risk-${alert.riskLevel}`">{{ alert.riskLevel }}风险</i><span>{{ alert.alertStatus }}</span></div>
-                  <strong>{{ dimensionWarningTitle(alert) }}</strong>
-                  <p>{{ alert.summary }}</p>
-                  <footer><span>{{ alert.caseNumber }}</span><em>查看案件分析 →</em></footer>
-                </button>
-                <div v-if="!dimensionAlerts.length" class="ai-empty-text">当前数据口径下暂无待展示预警。</div>
+              <div v-else class="priority-item-panel">
+                <h3>重点事项</h3>
+                <div class="priority-item-list">
+                  <article v-for="alert in selectedTopicAlerts" :key="alert.id" @click="openDimensionAlert(alert)">
+                    <div>
+                      <strong>{{ alert.caseName }}</strong>
+                      <span>{{ alert.riskLevel }}风险 · {{ alert.alertStatus }}</span>
+                    </div>
+                    <p>{{ alert.summary }}</p>
+                    <div class="priority-item-tags">
+                      <i v-for="tag in alert.tags" :key="tag">{{ tag }}</i>
+                    </div>
+                  </article>
+                </div>
               </div>
-            </section>
-          </div>
-          <div v-else class="dimension-empty-state">
-            <strong>请选择上方四维研判卡片</strong>
-            <span>按地点因素、行为内容、涉及主体、传播影响查看对应图表和政治安全预警。</span>
-          </div>
-        </a-card>
+            </div>
+          </a-card>
+        </template>
       </DashboardFocusPanel>
     </div>
 
@@ -177,6 +137,61 @@
         <section><h3>下一步处置意见</h3><p>建议结合原始案件材料进一步核实。是否形成政治安全预警、转入检察履职或采取其他措施，须由检察官人工决定。</p></section>
       </div>
     </a-drawer>
+
+    <a-modal
+      v-model:visible="riskModalVisible"
+      :width="960"
+      :footer="false"
+      :mask-closable="true"
+      unmount-on-close
+      modal-class="risk-case-modal"
+    >
+      <div class="risk-case-modal-body">
+        <header class="risk-case-title-bar">
+          <div class="risk-case-title-text">
+            <span class="risk-case-eyebrow">地点因素</span>
+            <h3>{{ activeRiskTitle }}</h3>
+          </div>
+          <button type="button" class="risk-case-close" aria-label="关闭" @click="riskModalVisible = false">×</button>
+        </header>
+        <div class="risk-case-split">
+          <aside class="risk-case-list-pane">
+            <div class="risk-case-pane-head"><span>案件列表</span><small>{{ activeRiskCases.length }} 件</small></div>
+            <div class="risk-case-list">
+              <button
+                v-for="item in activeRiskCases"
+                :key="item.id"
+                type="button"
+                class="risk-case-list-item"
+                :class="{ active: activeRiskCase?.id === item.id }"
+                @click="selectRiskCase(item)"
+              >
+                <div class="risk-case-list-top">
+                  <i :class="`risk-${item.riskLevel}`">{{ item.riskLevel }}风险</i>
+                  <span>{{ item.alertStatus }}</span>
+                </div>
+                <strong>{{ item.caseName }}</strong>
+                <div class="risk-case-list-meta">{{ item.caseNumber }} · {{ item.street }}</div>
+              </button>
+              <div v-if="!activeRiskCases.length" class="risk-case-empty">暂无对应案件数据</div>
+            </div>
+          </aside>
+          <section class="risk-case-detail-pane">
+            <div v-if="activeRiskCase" class="dimension-case-detail">
+              <section><h3>案件基础信息</h3><div class="dimension-case-grid"><label>案号<strong>{{ activeRiskCase.caseNumber }}</strong></label><label>案由<strong>{{ activeRiskCase.caseType }}</strong></label><label>所属街道<strong>{{ activeRiskCase.street }}</strong></label><label>风险状态<strong>{{ activeRiskCase.riskLevel }}风险 · {{ activeRiskCase.alertStatus }}</strong></label></div><p>{{ activeRiskCase.summary }}</p></section>
+              <section><h3>人物画像</h3><div class="dimension-case-grid"><label>姓名<strong>{{ activeRiskCase.subject.name }}</strong></label><label>年龄<strong>{{ activeRiskCase.subject.age }}</strong></label><label>职业<strong>{{ activeRiskCase.subject.occupation }}</strong></label><label>特殊身份<strong>{{ activeRiskCase.subject.specialIdentity }}</strong></label></div></section>
+              <section><h3>重点标签</h3><div class="dimension-detail-tags"><i v-for="tag in activeRiskCase.tags" :key="tag">{{ tag }}</i><i>地点因素</i></div></section>
+              <section><h3>AI辅助研判依据</h3><ul><li v-for="item in activeRiskCase.ruleHits" :key="`rule-${item}`">{{ item }}</li><li v-for="item in activeRiskCase.aiHints" :key="`hint-${item}`">{{ item }}</li></ul><p v-if="!activeRiskCase.ruleHits.length && !activeRiskCase.aiHints.length">当前数据未提供额外模型依据，需结合原始材料人工核实。</p></section>
+              <section><h3>下一步处置意见</h3><p>建议结合原始案件材料进一步核实。是否形成政治安全预警、转入检察履职或采取其他措施，须由检察官人工决定。</p></section>
+            </div>
+            <div v-else class="risk-case-detail-empty">
+              <strong>请选择左侧案件查看详情</strong>
+              <span>点击左侧案件条目即可显示完整案件信息与 AI 辅助研判依据。</span>
+            </div>
+          </section>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -191,14 +206,9 @@ import { fetchPoliticalMonthlyTrend, fetchPoliticalStreetStats, fetchPoliticalOv
 import { PRIORITY_TAGS, type PriorityAlert, type PriorityTag } from '../features/priority-alerts'
 import type { PoliticalMonthlyTrend, PoliticalStreetStat, PoliticalOverview } from '../types/platform'
 import {
-  CHART_PALETTES,
   areaGradient,
-  buildPieDepthLayers,
   chartTooltip,
-  raisedPieStyle,
-  rgbaHex,
-  shadeHex,
-  type ChartDatum
+  rgbaHex
 } from '../utils/chart-visual'
 
 // 引入 LLM 相关服务
@@ -216,6 +226,7 @@ const activeCockpitPanel = ref<CockpitPanelKey | null>('location')
 const focusedPanel = ref('')
 const focusKeys = new Set(['map', 'topics', 'dimensions'])
 const activeSecurityLens = computed(() => route.query.lens === 'traditional' || route.query.lens === 'nontraditional' ? route.query.lens : '')
+const topicsPanelTitle = computed(() => activeSecurityLens.value === 'traditional' ? '传统安全' : activeSecurityLens.value === 'nontraditional' ? '非传统安全' : '重点事项研判')
 const cockpitPanelTitles: Record<CockpitPanelKey, string> = {
   location: '地点因素',
   behavior: '行为内容',
@@ -237,6 +248,50 @@ const streetData = ref<PoliticalStreetStat[]>([])
 const priorityAlerts = ref<PriorityAlert[]>([])
 const selectedPriorityTag = ref<PriorityTag>(PRIORITY_TAGS[0])
 const selectedTopicAlerts = computed(() => priorityAlerts.value.filter(item => item.tags.includes(selectedPriorityTag.value)))
+interface RiskAlertItem {
+  id: number
+  title: string
+}
+const riskAlertItems = computed<RiskAlertItem[]>(() => [
+  { id: 1, title: '传统安全重点案件' },
+  { id: 2, title: '非传统安全重点案件' }
+])
+const traditionalRiskCases = computed(() => priorityAlerts.value.filter((item) =>
+  item.tags.some((tag) => ['违规异地执法和趋利性执法司法', '检护民生', '法治化营商环境'].includes(tag))
+))
+const nontraditionalRiskCases = computed(() => priorityAlerts.value.filter((item) =>
+  item.tags.some((tag) => ['涉外检察', '涉老检察', '涉医检察', '金融检察'].includes(tag))
+))
+const riskCaseDataset = computed<Record<number, PriorityAlert[]>>(() => ({
+  1: traditionalRiskCases.value,
+  2: nontraditionalRiskCases.value
+}))
+const riskModalVisible = ref(false)
+const activeRiskId = ref<number | null>(null)
+const activeRiskCase = ref<PriorityAlert | null>(null)
+const activeRiskTitle = computed(() => riskAlertItems.value.find(item => item.id === activeRiskId.value)?.title || '风险条目案件')
+const activeRiskCases = computed<PriorityAlert[]>(() => {
+  if (!activeRiskId.value) return []
+  return riskCaseDataset.value[activeRiskId.value] || []
+})
+const openRiskModal = (alert: RiskAlertItem) => {
+  activeRiskId.value = alert.id
+  activeRiskCase.value = null
+  riskModalVisible.value = true
+}
+const selectRiskCase = (alert: PriorityAlert) => {
+  activeRiskCase.value = alert
+}
+const openTraditionalCase = (item: PriorityAlert) => {
+  activeRiskId.value = 1
+  activeRiskCase.value = item
+  riskModalVisible.value = true
+}
+const openNontraditionalCase = (item: PriorityAlert) => {
+  activeRiskId.value = 2
+  activeRiskCase.value = item
+  riskModalVisible.value = true
+}
 const selectedTopStreet = computed(() => {
   const counts: Record<string, number> = {}
   selectedTopicAlerts.value.forEach(item => { counts[item.street] = (counts[item.street] || 0) + 1 })
@@ -329,14 +384,18 @@ const ringStyle = (value?: number | null) => {
   return { '--ring-value': `${rate * 100}%` } as Record<string, string>
 }
 
-const behaviorNames = ['涉密材料异常流转', '重点人员异常聚集', '涉外敏感接触', '网络政治安全线索', '重大活动周边异常']
-const subjectNames = ['重点关注人员', '涉外关联人员', '重点单位从业人员', '网络账号主体', '群体性诉求参与人员']
-const buildSyntheticDistribution = (names: string[], total: number, seed: number) => {
-  const safeTotal = Math.max(0, total)
-  const weights = names.map((_, index) => ((seed + 5) * (index + 3) * 11) % 23 + 8)
-  const sum = weights.reduce((acc, item) => acc + item, 0)
-  return names.map((name, index) => ({ name, value: Math.max(0, Math.round(safeTotal * weights[index]! / sum)) }))
+const countValues = (values: string[]) => {
+  const counts = new Map<string, number>()
+  values.filter(Boolean).forEach((value) => counts.set(value, (counts.get(value) || 0) + 1))
+  return Array.from(counts, ([name, value]) => ({ name, value }))
 }
+
+// 圆角环形图示例配色（青、黄、桔红、绿等）
+const RING_PALETTE = [
+  '#73c0de', '#fac800', '#ff6b35', '#91cc75',
+  '#5470c6', '#ee6666', '#3ba272', '#fc8452',
+  '#9a60fd', '#ea7ccc'
+]
 
 const renderPie = (
   container: HTMLElement | null,
@@ -349,12 +408,11 @@ const renderPie = (
   instance?.dispose()
   const chart = echarts.init(container)
   const light = isLightTheme()
-  const center: [string, string] = ['50%', '51%']
-  const radius: [string, string] = ['34%', '62%']
-  const prepared: ChartDatum[] = data.map((item, index) => {
-    const color = light ? shadeHex(palette[index % palette.length]!, -24) : palette[index % palette.length]!
-    return { ...item, baseColor: color, itemStyle: raisedPieStyle(color, index) }
-  })
+  const prepared = data.map((item, index) => ({
+    name: item.name,
+    value: item.value,
+    itemStyle: { color: palette[index % palette.length] }
+  }))
   chart.setOption({
     backgroundColor: 'transparent',
     animationDuration: 1050,
@@ -365,33 +423,31 @@ const renderPie = (
       ...chartTooltip(light, palette[0]),
       formatter: (params: any) => `${params.name}<br/>政治安全案件数量：${params.value} 件<br/>占比：${params.percent}%`
     },
-    series: [
-      ...buildPieDepthLayers(title, prepared, radius, center, 6),
-      {
-        name: title,
-        type: 'pie',
-        radius,
-        center,
-        z: 20,
-        selectedMode: 'single',
-        selectedOffset: 0,
-        padAngle: 2.5,
-        minShowLabelAngle: 4,
-        avoidLabelOverlap: true,
-        label: {
-          color: chartTextPrimary(),
-          fontSize: 12,
-          lineHeight: 17,
-          formatter: '{b}\n{d}%',
-          textBorderWidth: 2,
-          textBorderColor: light ? 'rgba(255,255,255,.88)' : 'rgba(2,12,30,.84)'
-        },
-        labelLine: { length: 8, length2: 7, smooth: 0.2, lineStyle: { color: chartAxisColor(), width: 1.1 } },
-        labelLayout: { hideOverlap: true },
-        emphasis: { scale: true, scaleSize: 8, itemStyle: { shadowBlur: 30, shadowOffsetY: 14 } },
-        data: prepared
-      }
-    ]
+    series: [{
+      name: title,
+      type: 'pie',
+      radius: ['38%', '66%'],
+      center: ['50%', '52%'],
+      avoidLabelOverlap: true,
+      padAngle: 3,
+      minShowLabelAngle: 4,
+      itemStyle: {
+        borderRadius: 3,
+        borderColor: 'transparent'
+      },
+      label: {
+        color: chartTextPrimary(),
+        fontSize: 14,
+        lineHeight: 19,
+        formatter: '{b}\n{d}%',
+        textBorderWidth: 2,
+        textBorderColor: light ? 'rgba(255,255,255,.88)' : 'rgba(2,12,30,.84)'
+      },
+      labelLine: { length: 8, length2: 7, smooth: 0.2, lineStyle: { color: chartAxisColor(), width: 1.1 } },
+      labelLayout: { hideOverlap: true },
+      emphasis: { scale: true, scaleSize: 8, itemStyle: { shadowBlur: 24, shadowOffsetY: 8 } },
+      data: prepared
+    }]
   })
   return chart
 }
@@ -399,14 +455,13 @@ const renderPie = (
 const renderCharts = () => {
   locationChart?.dispose(); behaviorChart?.dispose(); subjectChart?.dispose(); timeChart?.dispose()
   locationChart = null; behaviorChart = null; subjectChart = null; timeChart = null
-  const total = overview.value.totalSignalsThisYear || streetData.value.reduce((sum, item) => sum + item.count, 0)
-  if (activeCockpitPanel.value === 'location') locationChart = renderPie(locationChartRef.value, null, '地点因素', streetData.value.map((item) => ({ name: item.community, value: item.count })), CHART_PALETTES.caseBlue)
-  if (activeCockpitPanel.value === 'behavior') behaviorChart = renderPie(behaviorChartRef.value, null, '行为内容', buildSyntheticDistribution(behaviorNames, total, 7), CHART_PALETTES.political)
-  if (activeCockpitPanel.value === 'subject') subjectChart = renderPie(subjectChartRef.value, null, '涉及主体', buildSyntheticDistribution(subjectNames, total, 13), CHART_PALETTES.violetCyan)
-  if (activeCockpitPanel.value === 'time' && timeChartRef.value) {
+  locationChart = renderPie(locationChartRef.value, null, '地点因素', streetData.value.map((item) => ({ name: item.community, value: item.count })), RING_PALETTE)
+  behaviorChart = renderPie(behaviorChartRef.value, null, '行为内容', countValues(priorityAlerts.value.map((item) => item.caseType)), RING_PALETTE)
+  subjectChart = renderPie(subjectChartRef.value, null, '涉及主体', countValues(priorityAlerts.value.map((item) => item.subject.specialIdentity || item.subject.occupation)), RING_PALETTE)
+  if (timeChartRef.value) {
     timeChart = echarts.init(timeChartRef.value)
     const light = isLightTheme()
-    const lineColor = light ? '#c82f45' : '#f0445e'
+    const lineColor = light ? '#2e8bb8' : '#36c5f0'
     timeChart.setOption({
       backgroundColor: 'transparent',
       animationDuration: 1200,
@@ -414,7 +469,7 @@ const renderCharts = () => {
       animationDelay: (index: number) => index * 60,
       tooltip: {
         trigger: 'axis',
-        ...chartTooltip(light, '#e8c36a'),
+        ...chartTooltip(light, '#36c5f0'),
         formatter: (params: any) => {
           const item = params?.[0]
           return `${item?.axisValue || ''}<br/>政治安全案件数量：${item?.data ?? 0}`
@@ -424,25 +479,27 @@ const renderCharts = () => {
       xAxis: {
         type: 'category',
         data: trendData.value.map(d => d.month),
-        axisLabel: { color: chartTextSecondary(), fontSize: 12 },
+        axisLabel: { color: chartTextSecondary(), fontSize: 14 },
         axisLine: { lineStyle: { color: chartAxisColor() } }
       },
       yAxis: {
         type: 'value',
-        axisLabel: { color: chartTextSecondary(), fontSize: 12 },
+        min: 0,
+        max: 50,
+        axisLabel: { color: chartTextSecondary(), fontSize: 14 },
         splitLine: { lineStyle: { color: chartSplitColor() } }
       },
       series: [{
         name: '政治安全案件数量',
         data: trendData.value.map(d => d.count),
         type: 'line',
-        smooth: true,
+        smooth: false,
         symbol: 'circle',
-        symbolSize: 9,
-        lineStyle: { color: lineColor, width: 3, shadowBlur: 16, shadowColor: rgbaHex(lineColor, 0.72) },
-        itemStyle: { color: lineColor, borderColor: '#f2d18d', borderWidth: 1.5, shadowBlur: 14, shadowColor: rgbaHex(lineColor, 0.72) },
-        areaStyle: { color: areaGradient(lineColor, 0.46) },
-        emphasis: { scale: true, scaleSize: 6 }
+        symbolSize: 7,
+        lineStyle: { color: lineColor, width: 1.5 },
+        itemStyle: { color: lineColor, borderColor: '#7feaff', borderWidth: 1 },
+        areaStyle: { color: areaGradient(lineColor, 0.42) },
+        emphasis: { scale: true, scaleSize: 4 }
       }]
     })
   }
@@ -539,6 +596,8 @@ onUnmounted(() => {
 }
 
 .political-cockpit-page .kpi-strip {
+  position: relative;
+  z-index: 50;
   height: 92px;
   flex: 0 0 92px;
   gap: 10px;
@@ -546,8 +605,8 @@ onUnmounted(() => {
 }
 
 .political-cockpit-page .kpi-item { padding: 11px 10px 8px; }
-.political-cockpit-page .kpi-label { margin-bottom: 6px; font-size: 14px; }
-.political-cockpit-page .kpi-value { font-size: 27px; }
+.political-cockpit-page .kpi-label { margin-bottom: 6px; font-size: 24px; }
+.political-cockpit-page .kpi-value { font-size: 24px; }
 .political-cockpit-page .kpi-value-text { font-size: 18px !important; }
 .political-cockpit-page .kpi-sub { margin-top: 4px; font-size: 11px; }
 .dimension-kpi-strip { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -565,15 +624,18 @@ onUnmounted(() => {
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(260px, .78fr) minmax(520px, 1.35fr) minmax(260px, .78fr);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   grid-template-rows: minmax(0, 1fr);
   gap: 10px;
   overflow: hidden;
 }
 
-.political-map-panel { grid-column: 2; grid-row: 1; }
-.political-topic-panel { grid-column: 1; grid-row: 1; }
-.political-dimension-panel { grid-column: 3; grid-row: 1; }
+.political-map-panel { grid-column: 1; grid-row: 1; }
+.political-dimension-panel { grid-column: 2; grid-row: 1; }
+.political-topic-panel:not(.focus-panel--active) { display: none; }
+.political-topic-panel.focus-panel--active { grid-column: 1 / -1; grid-row: 1 / -1; }
+.political-topic-panel .chart-card { height: 100%; margin: 0; overflow: auto; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; background: transparent; }
+.political-topic-panel :deep(.arco-card-body) { padding: 12px; height: 100%; box-sizing: border-box; overflow: auto; }
 
 .political-topic-panel .chart-card,
 .political-dimension-panel .chart-card {
@@ -683,9 +745,46 @@ onUnmounted(() => {
 .dimension-alert-pane { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid rgba(79, 205, 250, .22); border-radius: 10px; background: linear-gradient(145deg, rgba(7, 47, 80, .76), rgba(3, 22, 46, .9)); }
 .dimension-pane-heading { display: flex; min-height: 62px; flex: 0 0 62px; align-items: center; justify-content: space-between; gap: 16px; padding: 9px 13px; border-bottom: 1px solid rgba(80, 202, 245, .18); }
 .dimension-pane-heading span { display: block; color: #61ddff; font-size: 9px; font-weight: 800; letter-spacing: 1.3px; }
-.dimension-pane-heading h3 { margin: 3px 0 0; color: #effbff; font-size: 18px; }
+.dimension-pane-heading h3 { margin: 3px 0 0; color: #effbff; font-size: 20px; }
 .dimension-pane-heading small { max-width: 58%; color: #82adc1; font-size: 10px; line-height: 1.45; text-align: right; }
 .dimension-chart-box { width: 100%; min-height: 0; flex: 1; }
+
+/* ===== 四宫格四维研判布局 ===== */
+.dimension-grid {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.dimension-chart-cell {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(79, 205, 250, .22);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(7, 47, 80, .76), rgba(3, 22, 46, .9));
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.dimension-chart-cell.active {
+  border-color: rgba(93, 223, 255, .65);
+  box-shadow: 0 0 18px rgba(66, 207, 255, .14);
+}
+.dimension-cell-heading {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(80, 202, 245, .18);
+}
+.dimension-cell-heading span { display: block; color: #61ddff; font-size: 9px; font-weight: 800; letter-spacing: 1.3px; }
+.dimension-cell-heading h3 { margin: 2px 0 0; color: #effbff; font-size: 18px; font-weight: 700; }
+.dimension-cell-heading small { max-width: 58%; color: #82adc1; font-size: 10px; line-height: 1.4; text-align: right; }
 .dimension-alert-list { display: grid; min-height: 0; flex: 1; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 7px; padding: 8px; overflow: auto; }
 .dimension-alert-list button { padding: 10px 12px; border: 1px solid rgba(85, 200, 243, .2); border-radius: 8px; color: inherit; text-align: left; background: radial-gradient(circle at 92% 12%, rgba(241, 91, 91, .1), transparent 36%), rgba(7, 42, 71, .72); cursor: pointer; transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease; }
 .dimension-alert-list button:hover { border-color: rgba(93, 223, 255, .65); box-shadow: 0 0 18px rgba(66, 207, 255, .14); transform: translateX(-2px); }
@@ -713,6 +812,111 @@ onUnmounted(() => {
 .dimension-detail-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .dimension-detail-tags i { padding: 4px 8px; border: 1px solid rgba(243, 185, 83, .34); border-radius: 999px; color: #f5cc76; font-size: 10px; font-style: normal; background: rgba(105, 65, 15, .18); }
 
+/* ===== 风险条目点击 → 案件详情模态 ===== */
+.risk-case-modal-body {
+  border: 1px solid rgba(110, 196, 255, 0.32);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(14, 39, 78, 0.96), rgba(7, 23, 40, 0.98));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+.risk-case-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 22px;
+  border-bottom: 1px solid rgba(110, 196, 255, 0.22);
+  background: linear-gradient(90deg, rgba(255, 155, 82, 0.18), transparent 60%);
+}
+.risk-case-title-text { display: flex; flex-direction: column; gap: 4px; }
+.risk-case-eyebrow {
+  color: color-mix(in srgb, #ff9b52 78%, #d9edf4);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+}
+.risk-case-title-bar h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 800;
+}
+.risk-case-close {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  color: #cfe6ff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.risk-case-close:hover { background: rgba(255, 114, 107, 0.22); border-color: rgba(255, 114, 107, 0.6); color: #fff; }
+.risk-case-split {
+  display: grid;
+  grid-template-columns: 1fr 3fr;
+  min-height: 460px;
+  max-height: 70vh;
+}
+.risk-case-list-pane {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(110, 196, 255, 0.18);
+  background: rgba(5, 21, 43, 0.55);
+}
+.risk-case-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(110, 196, 255, 0.16);
+  color: #5edfff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.risk-case-pane-head small { color: rgba(219, 242, 255, 0.62); font-weight: 500; }
+.risk-case-list { display: flex; flex-direction: column; gap: 8px; padding: 10px; overflow-y: auto; }
+.risk-case-list-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid rgba(110, 196, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(7, 32, 56, 0.55);
+  color: #cfe6ff;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.risk-case-list-item:hover { border-color: rgba(255, 155, 82, 0.55); background: rgba(255, 155, 82, 0.08); }
+.risk-case-list-item.active { border-color: rgba(255, 155, 82, 0.78); background: rgba(255, 155, 82, 0.14); box-shadow: 0 0 16px rgba(255, 155, 82, 0.22); }
+.risk-case-list-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.risk-case-list-top span { color: rgba(219, 242, 255, 0.62); font-size: 11px; }
+.risk-case-list-item strong { color: #eaf6ff; font-size: 13px; }
+.risk-case-list-meta { color: rgba(180, 214, 235, 0.72); font-size: 11px; }
+.risk-case-list-item i { padding: 1px 7px; border-radius: 999px; font-size: 10px; font-style: normal; color: #fff; }
+.risk-case-list-item i.risk-高 { background: rgba(255, 114, 107, 0.82); }
+.risk-case-list-item i.risk-中 { background: rgba(242, 200, 111, 0.82); }
+.risk-case-list-item i.risk-低 { background: rgba(120, 198, 121, 0.72); }
+.risk-case-empty { padding: 20px; color: rgba(219, 242, 255, 0.5); font-size: 12px; text-align: center; }
+.risk-case-detail-pane { padding: 16px 20px; overflow-y: auto; }
+.risk-case-detail-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: rgba(219, 242, 255, 0.5);
+  text-align: center;
+}
+.risk-case-detail-empty strong { color: #cfe6ff; font-size: 14px; }
+.risk-case-detail-empty span { font-size: 12px; }
+
 .political-security-page { padding-bottom: 20px; }
 .dashboard-row { margin-top: 16px; margin-bottom: 16px; }
 
@@ -728,7 +932,11 @@ onUnmounted(() => {
   flex: 1;
   min-width: 0;
   position: relative;
-  padding: 22px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 10px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--kpi-accent) 40%, transparent);
   border-radius: 10px;
@@ -749,6 +957,105 @@ onUnmounted(() => {
     inset 0 0 28px color-mix(in srgb, var(--kpi-accent) 10%, transparent),
     0 16px 30px rgba(0, 0, 0, 0.22),
     0 0 22px color-mix(in srgb, var(--kpi-accent) 14%, transparent);
+}
+
+.kpi-item.kpi-risk-host {
+  overflow: visible;
+}
+
+.kpi-risk-bridge {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 14px;
+  z-index: 998;
+}
+
+.kpi-risk-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 999;
+  margin-top: 8px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--kpi-accent) 48%, transparent);
+  background: linear-gradient(180deg, rgba(14, 39, 65, 0.96), rgba(7, 23, 40, 0.98));
+  box-shadow:
+    0 18px 36px rgba(0, 0, 0, 0.42),
+    0 0 22px color-mix(in srgb, var(--kpi-accent) 22%, transparent);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  max-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease, max-height 0.32s ease, visibility 0s linear 0.32s;
+}
+
+.kpi-risk-host:hover .kpi-risk-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  max-height: 360px;
+  pointer-events: auto;
+  transition: opacity 0.22s ease, transform 0.22s ease, max-height 0.32s ease, visibility 0s;
+}
+
+.kpi-risk-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--kpi-accent) 22%, transparent);
+  background: rgba(5, 21, 43, 0.55);
+}
+
+.kpi-risk-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.kpi-risk-name {
+  color: #eaf6ff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.kpi-risk-level {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: #fff;
+  background: color-mix(in srgb, var(--kpi-accent) 60%, rgba(0, 0, 0, 0.25));
+}
+
+.kpi-risk-level[data-level="高"] {
+  background: rgba(255, 114, 107, 0.82);
+}
+
+.kpi-risk-meta {
+  margin-bottom: 4px;
+  color: color-mix(in srgb, var(--kpi-accent) 72%, #d9edf4);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.kpi-risk-summary {
+  color: rgba(219, 242, 255, 0.82);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .kpi-item::before {
@@ -1342,5 +1649,24 @@ onUnmounted(() => {
 @media (min-width: 769px) and (max-width: 1080px) {
   .review-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .review-pod-portrait { grid-column: span 2; }
+}
+.political-security-page :deep(.arco-card:has(canvas)::after) {
+  display: none;
+}
+</style>
+
+<style>
+/* a-modal 被 teleport 到 body，必须用非 scoped 样式覆盖外框 */
+.risk-case-modal.arco-modal {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+.risk-case-modal .arco-modal-header {
+  display: none !important;
+}
+.risk-case-modal .arco-modal-body {
+  padding: 0 !important;
+  background: transparent !important;
 }
 </style>

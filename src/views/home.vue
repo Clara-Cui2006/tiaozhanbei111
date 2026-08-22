@@ -147,21 +147,12 @@
 
       <div class="hero-copy">
         <div class="hero-title-block">
-          <p class="hero-kicker">红墙智检：</p>
-          <h1 class="hero-title">基层法治风险智能研判与治理模型</h1>
+          <p class="hero-kicker">红墙智检</p>
+          <h1 class="hero-title">基层法治风险研判与治理模型</h1>
         </div>
+        <div class="hero-divider"></div>
         <p class="hero-subtitle">数据驱动 · 智能研判 · 精准治理 · 协同联动</p>
 
-        <button
-          v-if="firstAccessibleBusiness"
-          type="button"
-          class="enter-platform-btn"
-          @click="enterPlatform"
-        >
-          <span>进入平台</span>
-          <span class="enter-arrow" aria-hidden="true">→</span>
-        </button>
-        <div v-else class="no-access-inline">暂无可访问模块</div>
       </div>
 
       <div v-if="availableBusinessItems.length" class="feature-strip">
@@ -228,7 +219,6 @@
               <small>{{ item.homeCard?.descriptions[0] }}</small>
               <small>{{ item.homeCard?.descriptions[1] }}</small>
             </span>
-            <span class="feature-arrow" aria-hidden="true">→</span>
           </button>
         </div>
       </div>
@@ -594,6 +584,12 @@ onUnmounted(() => {
 .hero-kicker {
   font-size: clamp(62px, 3.45vw, 68px);
   line-height: 1.05;
+  background: linear-gradient(135deg, #5fe0ff 0%, #3b9bd6 35%, #6ee7c4 70%, #35e0ec 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+  filter: none;
 }
 
 .hero-title {
@@ -604,13 +600,21 @@ onUnmounted(() => {
 }
 
 .hero-subtitle {
-  margin: 27px 0 0;
+  margin: 14px 0 0;
   color: rgba(238, 244, 249, 0.88) !important;
   font-size: clamp(22px, 1.2vw, 24px);
   font-weight: 400;
   line-height: 1.5;
   letter-spacing: 0.025em;
   text-shadow: none;
+}
+
+.hero-divider {
+  width: 800px;
+  height: 5px;
+  margin: 16px 0 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, rgba(95, 223, 255, 0.825), rgba(110, 231, 196, 0.45), transparent);
 }
 
 .enter-platform-btn {
@@ -993,8 +997,11 @@ onUnmounted(() => {
     );
 }
 
-/* 首页大标题在浅色模式仍保持亮白，不再被全局浅色文字规则改成深蓝。 */
-:global(body.theme-light) .hero-kicker,
+/* 首页大标题在浅色模式仍保持渐变发光，不再被全局浅色文字规则改成深蓝。 */
+:global(body.theme-light) .hero-kicker {
+  -webkit-text-fill-color: transparent !important;
+  filter: none !important;
+}
 :global(body.theme-light) .hero-title {
   color: #ffffff !important;
   -webkit-text-fill-color: #ffffff !important;
@@ -1129,7 +1136,10 @@ onUnmounted(() => {
     );
 }
 
-.home-page--light .hero-kicker,
+.home-page--light .hero-kicker {
+  -webkit-text-fill-color: transparent !important;
+  filter: none !important;
+}
 .home-page--light .hero-title {
   color: #f8fdff !important;
   -webkit-text-fill-color: #f8fdff !important;

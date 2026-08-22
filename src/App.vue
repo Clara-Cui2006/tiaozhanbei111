@@ -1,7 +1,5 @@
 <template>
-  <router-view v-if="route.meta.public" />
-
-  <div v-else class="app-container" :class="`theme-${theme}`">
+  <div class="app-container" :class="`theme-${theme}`">
     <a-layout class="layout-shell">
       <a-layout-header class="header">
         <button class="brand nav-link-style" type="button" aria-label="返回首页" @click="goTo('/')">
@@ -65,51 +63,7 @@
           </div>
         </nav>
 
-        <div id="header-account-layer" class="header-account-layer"></div>
       </a-layout-header>
-
-      <Teleport defer :to="accountTeleportTarget">
-        <div
-          class="account-slot"
-          @click.stop
-        >
-          <button
-            type="button"
-            class="account-trigger"
-            :aria-expanded="accountMenuOpen"
-            @click="accountMenuOpen = !accountMenuOpen"
-          >
-            <span class="account-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" focusable="false">
-                <circle cx="12" cy="8" r="3.1" />
-                <path d="M5.5 19c.7-3.5 3-5.4 6.5-5.4s5.8 1.9 6.5 5.4" />
-              </svg>
-            </span>
-            <span class="account-org">{{ organizationLabel }}</span>
-            <span class="account-chevron" :class="{ 'account-chevron--open': accountMenuOpen }">⌄</span>
-          </button>
-
-          <transition name="menu-fade">
-            <div v-if="accountMenuOpen" class="account-menu">
-              <div class="account-profile">
-                <strong>{{ authState.user?.displayName || authState.user?.username }}</strong>
-                <span>{{ roleLabel }}</span>
-                <span v-if="authState.user?.department">{{ authState.user.department }}</span>
-              </div>
-              <div class="account-menu-separator"></div>
-              <div class="account-data-scope">
-                <span>数据范围</span>
-                <strong>院内数据</strong>
-              </div>
-              <button type="button" class="account-menu-item" @click="toggleTheme">
-                {{ theme === 'dark' ? '切换浅色' : '切换深色' }}
-              </button>
-              <button type="button" class="account-menu-item" @click="openPasswordModal">修改密码</button>
-              <button type="button" class="account-menu-item account-menu-item--danger" @click="handleLogout">退出登录</button>
-            </div>
-          </transition>
-        </div>
-      </Teleport>
 
       <a-layout-content class="content" :class="{ 'home-content': isHomeRoute, 'fixed-workspace-content': isFixedWorkspaceRoute }">
         <router-view />
@@ -135,32 +89,18 @@
       </a-layout-footer>
     </a-layout>
 
-    <a-modal
-      v-model:visible="passwordModalVisible"
-      title="修改登录密码"
-      :on-before-ok="changePassword"
-      @cancel="clearPasswordForm"
-    >
-      <a-form :model="{ currentPassword, newPassword }" layout="vertical">
-        <a-form-item label="当前密码"><a-input-password v-model="currentPassword" /></a-form-item>
-        <a-form-item label="新密码"><a-input-password v-model="newPassword" placeholder="至少12位" /></a-form-item>
-      </a-form>
-    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Message } from '@arco-design/web-vue'
 import { fetchSiteFooterInfo } from './api/platform'
-import { http } from './api/http'
 import {
   BUSINESS_WORKSPACES,
   PRIMARY_NAVIGATION_ITEMS,
   SECONDARY_NAVIGATION_ITEMS
 } from './config/navigation'
-import { authState, hasPermissions, logout } from './services/auth'
 import type { SiteFooterInfo } from './types/platform'
 
 const router = useRouter()
@@ -168,7 +108,6 @@ const route = useRoute()
 
 type ThemeMode = 'dark' | 'light'
 const themeStorageKey = 'platform:theme-mode'
-const organizationLabel = '北京市西城区人民检察院'
 
 const getInitialTheme = (): ThemeMode => {
   if (typeof window === 'undefined') return 'dark'
@@ -179,10 +118,6 @@ const getInitialTheme = (): ThemeMode => {
 const theme = ref<ThemeMode>(getInitialTheme())
 provide('appTheme', theme)
 const moreOpen = ref(false)
-const accountMenuOpen = ref(false)
-const passwordModalVisible = ref(false)
-const currentPassword = ref('')
-const newPassword = ref('')
 const footerInfo = ref<SiteFooterInfo>({ recordNo: '备案信息加载中', links: [] })
 
 const isHomeRoute = computed(() => route.path === '/')
@@ -198,23 +133,10 @@ const activeWorkspace = computed(() => BUSINESS_WORKSPACES.find((workspace) => {
   if (workspace.key === '/procuratorate-suggestion') return ['/procuratorate-suggestion', '/alert-push', '/legal-recommend', '/legal-plan', '/effect-stats'].some((path) => route.path.startsWith(path))
   return route.path.startsWith('/petition-litigation')
 }))
-const accountTeleportTarget = computed(() => '#header-account-layer')
 const primaryMenuItems = computed(() =>
-  (isHomeRoute.value ? PRIMARY_NAVIGATION_ITEMS : activeWorkspace.value?.secondary ?? PRIMARY_NAVIGATION_ITEMS)
-    .filter((item) => hasPermissions(item.permissions, item.permissionMode))
+  isHomeRoute.value ? PRIMARY_NAVIGATION_ITEMS : activeWorkspace.value?.secondary ?? PRIMARY_NAVIGATION_ITEMS
 )
-const moreMenuItems = computed(() =>
-  SECONDARY_NAVIGATION_ITEMS.filter((item) => hasPermissions(item.permissions, item.permissionMode))
-)
-
-const roleNames: Record<string, string> = {
-  ordinary: '普通用户',
-  department_supervisor: '部门主任/主管',
-  leadership: '院领导',
-  data_admin: '数据管理员',
-  system_admin: '系统管理员'
-}
-const roleLabel = computed(() => roleNames[authState.user?.role || ''] || '')
+const moreMenuItems = computed(() => SECONDARY_NAVIGATION_ITEMS)
 
 const isNavActive = (key: string) => {
   const path = route.path
@@ -232,7 +154,6 @@ const isNavActive = (key: string) => {
 
 function closeFloatingMenus() {
   moreOpen.value = false
-  accountMenuOpen.value = false
 }
 
 function goTo(path: string) {
@@ -240,51 +161,9 @@ function goTo(path: string) {
   if (route.fullPath !== path) router.push(path)
 }
 
-function clearPasswordForm() {
-  currentPassword.value = ''
-  newPassword.value = ''
-}
-
-function openPasswordModal() {
-  accountMenuOpen.value = false
-  passwordModalVisible.value = true
-}
-
-async function changePassword() {
-  if (!currentPassword.value || newPassword.value.length < 12) {
-    Message.error('请输入当前密码，新密码不得少于12位')
-    return false
-  }
-  try {
-    await http.post('/auth/change-password', {
-      currentPassword: currentPassword.value,
-      newPassword: newPassword.value
-    })
-    Message.success('密码已修改，请重新登录')
-    clearPasswordForm()
-    await logout()
-    await router.replace('/login')
-    return true
-  } catch (error: any) {
-    Message.error(error.response?.data?.detail || '密码修改失败')
-    return false
-  }
-}
-
-async function handleLogout() {
-  accountMenuOpen.value = false
-  await logout()
-  await router.replace('/login')
-}
-
 const applyBodyThemeClass = (mode: ThemeMode) => {
   document.body.classList.remove('theme-dark', 'theme-light')
   document.body.classList.add(`theme-${mode}`)
-}
-
-const toggleTheme = () => {
-  accountMenuOpen.value = false
-  theme.value = theme.value === 'dark' ? 'light' : 'dark'
 }
 
 const onDocumentKeydown = (event: KeyboardEvent) => {

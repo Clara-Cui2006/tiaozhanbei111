@@ -436,7 +436,7 @@
                   <span class="xrm-section-index">06</span>
                   <div>
                     <h4>内部移送线索</h4>
-                    <p>详情依据用户权限控制</p>
+                    <p>点击查看线索详情</p>
                   </div>
                 </div>
                 <div class="xrm-clue-grid">
@@ -449,7 +449,6 @@
                     <strong>{{ detail.transferClues.statusSummary || '暂无数据' }}</strong>
                   </div>
                 </div>
-                <p v-if="!detail.transferClues.canViewDetails" class="xrm-permission-note">仅展示汇总数量，详情按权限控制</p>
               </section>
 
               <section class="xrm-detail-section-card xrm-attention-card">

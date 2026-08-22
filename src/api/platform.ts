@@ -1776,7 +1776,7 @@ const buildStreetMapDetail = (streetName: string, input?: Partial<StreetMapFilte
     transferClues: {
       count: Math.max(0, Math.round(caseCount * 0.025) + eventCount),
       statusSummary: caseCount > 0 ? '核验中、已移送和已反馈事项均按流程记录' : '暂无数据',
-      canViewDetails: false
+      canViewDetails: true
     },
     attentionItems: caseCount > 0 ? [
       `${(point.highIncidenceTypes ?? '').split('、')[0] || '高频案件类型'}相关重复问题的事实变化`,

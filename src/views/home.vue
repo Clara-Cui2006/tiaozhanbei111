@@ -298,8 +298,7 @@
 import { computed, defineAsyncComponent, inject, onMounted, onUnmounted, ref, type Ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchCommunityRiskPoints, fetchLegalRecommendationsV2, fetchPriorityAlerts } from '../api/platform'
-import { HOME_BUSINESS_ITEMS, PERMISSION_RULES } from '../config/navigation'
-import { hasPermissions } from '../services/auth'
+import { HOME_BUSINESS_ITEMS } from '../config/navigation'
 import type { CommunityRiskPoint, LegalRecommendationV2 } from '../types/platform'
 import PriorityTagStrip from '../components/priority-tag-strip.vue'
 import PriorityAlertList from '../components/priority-alert-list.vue'
@@ -322,26 +321,17 @@ let rippleId = 0
 const rippleTimers = new Map<number, ReturnType<typeof setTimeout>>()
 let mapObserver: IntersectionObserver | null = null
 
-const availableBusinessItems = computed(() =>
-  HOME_BUSINESS_ITEMS.filter((item) => hasPermissions(item.permissions, item.permissionMode))
-)
+const availableBusinessItems = computed(() => HOME_BUSINESS_ITEMS)
 const firstAccessibleBusiness = computed(() => availableBusinessItems.value[0])
 
-// 首页数据区和导航/卡片使用同一份权限规则：无权限时既不渲染，也不发请求。
-const canViewRiskMap = computed(() =>
-  hasPermissions(PERMISSION_RULES.dashboardRead.permissions, PERMISSION_RULES.dashboardRead.permissionMode)
-)
-const canViewLegalRecommendations = computed(() =>
-  hasPermissions(PERMISSION_RULES.legalRecommendRead.permissions, PERMISSION_RULES.legalRecommendRead.permissionMode)
-)
-const canViewPriorityAlerts = computed(() =>
-  hasPermissions(PERMISSION_RULES.dashboardRead.permissions, PERMISSION_RULES.dashboardRead.permissionMode)
-)
+const canViewRiskMap = true
+const canViewLegalRecommendations = true
+const canViewPriorityAlerts = true
 
 const loadHomeData = async () => {
   const tasks: Promise<void>[] = []
 
-  if (canViewRiskMap.value) {
+  if (canViewRiskMap) {
     tasks.push(
       fetchCommunityRiskPoints()
         .then((data) => { mapPoints.value = data || [] })
@@ -349,7 +339,7 @@ const loadHomeData = async () => {
     )
   }
 
-  if (canViewPriorityAlerts.value) {
+  if (canViewPriorityAlerts) {
     tasks.push(
       fetchPriorityAlerts()
         .then((data) => { priorityAlerts.value = data || [] })
@@ -357,7 +347,7 @@ const loadHomeData = async () => {
     )
   }
 
-  if (canViewLegalRecommendations.value) {
+  if (canViewLegalRecommendations) {
     tasks.push(
       fetchLegalRecommendationsV2()
         .then((data) => { legalRecommendations.value = data || [] })
@@ -369,7 +359,7 @@ const loadHomeData = async () => {
 }
 
 const setupMapObserver = () => {
-  if (!canViewRiskMap.value || !mapPanelRef.value) return
+  if (!canViewRiskMap || !mapPanelRef.value) return
 
   mapObserver = new IntersectionObserver(
     (entries) => {

@@ -2,23 +2,19 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from .ai import generate, get_runtime_model_settings
-from .auth import (can_read_case, client_ip, get_current_user, permissions_for,
-                   public_user, require_permission)
+from .auth import can_read_case, client_ip, get_current_user, permissions_for, require_permission
 from .config import settings
 from .database import connect, init_database, row_to_dict, utc_now, write_audit
 from .importer import parse_import
-from .schemas import (AIRequest, ChangePasswordRequest, LegalPlanPayload,
-                      LoginRequest, MonthlyReportGenerateRequest,
+from .schemas import (AIRequest, LegalPlanPayload, MonthlyReportGenerateRequest,
                       MonthlyReportTransitionRequest, MonthlyReportUpdateRequest,
                       SettingsPayload, SuggestionPayload)
-from .security import create_token, hash_password, verify_password
 from .reference_materials import suggestion_category_distribution, suggestion_monthly_trend
 from .risk_analysis import (
     GOVERNANCE_CATEGORIES,
@@ -45,62 +41,6 @@ def health() -> dict[str, str]:
     runtime_model = get_runtime_model_settings()
     model_status = "configured" if runtime_model.base_url and runtime_model.model_name else "not_configured"
     return {"status": "ok", "database": "connected", "model": model_status}
-
-
-@app.post("/auth/login")
-def login(payload: LoginRequest, request: Request) -> dict[str, Any]:
-    with connect() as db:
-        user = row_to_dict(db.execute("SELECT * FROM users WHERE username=?", (payload.username,)).fetchone())
-        if user and user.get("locked_until"):
-            try:
-                if datetime.fromisoformat(user["locked_until"]) > datetime.now(timezone.utc):
-                    write_audit(user=user, action="LOGIN", resource_type="session", resource_id=None,
-                                detail={"reason": "locked"}, client_ip=client_ip(request), success=False)
-                    raise HTTPException(status_code=429, detail="登录失败次数过多，请稍后重试")
-            except ValueError:
-                pass
-        if not user or not user["active"] or not verify_password(payload.password, user["password_hash"]):
-            if user:
-                attempts = int(user["failed_attempts"]) + 1
-                locked_until = (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat() if attempts >= 5 else None
-                db.execute("UPDATE users SET failed_attempts=?, locked_until=? WHERE id=?", (0 if locked_until else attempts, locked_until, user["id"]))
-                db.commit()
-            write_audit(user=user, action="LOGIN", resource_type="session", resource_id=None,
-                        detail={"reason": "invalid_credentials"}, client_ip=client_ip(request), success=False)
-            raise HTTPException(status_code=401, detail="用户名或密码错误")
-        db.execute("UPDATE users SET failed_attempts=0, locked_until=NULL WHERE id=?", (user["id"],))
-    token = create_token(int(user["id"]), int(user["session_version"]))
-    write_audit(user=user, action="LOGIN", resource_type="session", resource_id=None,
-                detail={}, client_ip=client_ip(request), success=True)
-    return {"accessToken": token, "tokenType": "bearer", "expiresIn": settings.token_ttl_minutes * 60, "user": public_user(user)}
-
-
-@app.get("/auth/me")
-def me(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
-    return public_user(user)
-
-
-@app.post("/auth/logout")
-def logout(request: Request, user: dict[str, Any] = Depends(get_current_user)) -> dict[str, bool]:
-    with connect() as db:
-        db.execute("UPDATE users SET session_version=session_version+1 WHERE id=?", (user["id"],))
-    write_audit(user=user, action="LOGOUT", resource_type="session", resource_id=None, detail={}, client_ip=client_ip(request), success=True)
-    return {"success": True}
-
-
-@app.post("/auth/change-password")
-def change_password(payload: ChangePasswordRequest, request: Request,
-                    user: dict[str, Any] = Depends(get_current_user)) -> dict[str, bool]:
-    if not verify_password(payload.currentPassword, user["password_hash"]):
-        write_audit(user=user, action="CHANGE_PASSWORD", resource_type="user", resource_id=user["id"],
-                    detail={"reason": "current_password_invalid"}, client_ip=client_ip(request), success=False)
-        raise HTTPException(status_code=400, detail="当前密码不正确")
-    with connect() as db:
-        db.execute("UPDATE users SET password_hash=?,session_version=session_version+1 WHERE id=?",
-                   (hash_password(payload.newPassword), user["id"]))
-    write_audit(user=user, action="CHANGE_PASSWORD", resource_type="user", resource_id=user["id"],
-                detail={}, client_ip=client_ip(request), success=True)
-    return {"success": True}
 
 
 def _case_scope(user: dict[str, Any]) -> tuple[str, tuple[Any, ...]]:
@@ -728,7 +668,7 @@ def street_detail(streetName: str, period: str = "30d", caseType: str = "all", g
         "behaviorBreakdown": _top_counts(cases, "political_behavior_content", "未标注行为")[:6],
         "timeTrend": [{"period": row["month"] or "未填日期", "count": row["count"]} for row in trend_rows],
         "newRisks": [],
-        "transferClues": {"count": sum(r["count"] for r in transfer_rows if r["internal_transfer_status"] != "未形成线索"), "statusSummary": transfer_summary, "canViewDetails": False},
+        "transferClues": {"count": sum(r["count"] for r in transfer_rows if r["internal_transfer_status"] != "未形成线索"), "statusSummary": transfer_summary, "canViewDetails": True},
         "attentionItems": ["高风险识别依据案件分类标签、风险规则匹配和人工复核结果综合确定", "高发风险可按案件数量排序，异常信号需已被标记为政治安全类别"],
         "dataPeriod": _period_label(period, caseType, governanceTheme, locationDimension,
                                     behaviorContent, subjectType, reviewStatusTopic),

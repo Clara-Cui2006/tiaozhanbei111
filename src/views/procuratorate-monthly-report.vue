@@ -12,8 +12,8 @@
           <a-button :loading="generating" @click="regenerate"><IconRefresh /> 重新生成</a-button>
           <a-button @click="toggleEdit"><IconEdit /> {{ editing ? '退出编辑' : '在线编辑' }}</a-button>
           <a-button @click="exportWord"><IconFile /> 导出Word</a-button>
-          <a-button v-if="report?.status === '待审核' && hasPermission('material:publish')" class="review-button" type="primary" @click="confirmPublish"><IconSend /> 确认发布</a-button>
-          <a-button v-if="report?.status === '待审核' && hasPermission('material:publish')" status="warning" @click="rejectReport">审核退回</a-button>
+          <a-button v-if="report?.status === '待审核'" class="review-button" type="primary" @click="confirmPublish"><IconSend /> 确认发布</a-button>
+          <a-button v-if="report?.status === '待审核'" status="warning" @click="rejectReport">审核退回</a-button>
           <a-button v-if="report?.status === '审核退回'" class="review-button" type="primary" @click="submitReview"><IconSend /> 提交审核</a-button>
         </div>
       </header>
@@ -111,7 +111,6 @@ import BackHome from '../components/back-home.vue'
 import { MONTHLY_REPORT_SECTIONS, createMonthlyReportWordHtml, validateMonthlyReportSections, type MonthlyReportSectionKey } from '../features/monthly-report/model'
 import { fetchProcuratorateMonthlyReport, generateProcuratorateMonthlyReport, saveProcuratorateMonthlyReport, transitionProcuratorateMonthlyReport } from '../api/platform'
 import type { ProcuratorateMonthlyReport } from '../types/platform'
-import { hasPermission } from '../services/auth'
 
 const SectionEditor = defineComponent({
   props: { modelValue: { type: Array as () => string[], required: true } }, emits: ['update:modelValue'],

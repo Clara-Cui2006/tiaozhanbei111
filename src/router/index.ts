@@ -17,36 +17,14 @@ import ProcuratorateSuggestionForm from '../views/procuratorate-suggestion-form.
 import ProcuratorateMonthlyReport from '../views/procuratorate-monthly-report.vue'
 import PoliticalSecurity from '../views/political-security.vue'
 import LegalPlanForm from '../views/legal-plan-form.vue'
-import Login from '../views/login.vue'
 import DataManagement from '../views/data-management.vue'
-import AccessManagement from '../views/access-management.vue'
 import PetitionLitigation from '../views/petition-litigation.vue'
-import { authState, hasPermissions, restoreSession } from '../services/auth'
-import { HOME_BUSINESS_ITEMS, PERMISSION_RULES, type PermissionMode } from '../config/navigation'
-
-const permissionMeta = (rule: { permissions?: readonly string[]; permissionMode?: PermissionMode }) => ({
-  permissions: rule.permissions ? [...rule.permissions] : undefined,
-  permissionMode: rule.permissionMode ?? 'any'
-})
 
 const routes = [
   {
-    path: '/login',
-    name: 'Login',
-    component: Login,
-    meta: { public: true }
-  },
-  {
     path: '/data-management',
     name: 'DataManagement',
-    component: DataManagement,
-    meta: permissionMeta(PERMISSION_RULES.dataImport)
-  },
-  {
-    path: '/access-management',
-    name: 'AccessManagement',
-    component: AccessManagement,
-    meta: permissionMeta(PERMISSION_RULES.userManage)
+    component: DataManagement
   },
   {
     path: '/',
@@ -56,104 +34,87 @@ const routes = [
   {
     path: '/dashboard',
     name: 'Dashboard',
-    component: Dashboard,
-    meta: permissionMeta(PERMISSION_RULES.dashboardRead)
+    component: Dashboard
   },
   {
     path: '/risk-analysis',
     name: 'RiskAnalysis',
-    component: RiskAnalysis,
-    meta: permissionMeta(PERMISSION_RULES.caseReadAny)
+    component: RiskAnalysis
   },
   {
     path: '/case-detail/:id',
     name: 'CaseDetail',
-    component: CaseDetail,
-    meta: permissionMeta(PERMISSION_RULES.caseReadAny)
+    component: CaseDetail
   },
   {
     path: '/alert-push',
     name: 'AlertPush',
-    component: AlertPush,
-    meta: permissionMeta(PERMISSION_RULES.dashboardRead)
+    component: AlertPush
   },
   {
     path: '/procuratorate-suggestion',
     name: 'ProcuratorateSuggestion',
-    component: ProcuratorateSuggestion,
-    meta: permissionMeta(PERMISSION_RULES.procuratorateReadAny)
+    component: ProcuratorateSuggestion
   },
   {
     path: '/procuratorate-suggestion/detail/:id',
     name: 'ProcuratorateSuggestionDetail',
-    component: ProcuratorateSuggestionDetail,
-    meta: permissionMeta(PERMISSION_RULES.procuratorateReadAny)
+    component: ProcuratorateSuggestionDetail
   },
   {
     path: '/procuratorate-suggestion/new',
     name: 'ProcuratorateSuggestionNew',
-    component: ProcuratorateSuggestionForm,
-    meta: permissionMeta(PERMISSION_RULES.procuratorateWriteAny)
+    component: ProcuratorateSuggestionForm
   },
   {
     path: '/procuratorate-suggestion/monthly-report',
     name: 'ProcuratorateMonthlyReport',
-    component: ProcuratorateMonthlyReport,
-    meta: permissionMeta(PERMISSION_RULES.procuratorateReadAny)
+    component: ProcuratorateMonthlyReport
   },
   {
     path: '/procuratorate-suggestion/edit/:id',
     name: 'ProcuratorateSuggestionEdit',
-    component: ProcuratorateSuggestionForm,
-    meta: permissionMeta(PERMISSION_RULES.procuratorateWriteAny)
+    component: ProcuratorateSuggestionForm
   },
   {
     path: '/legal-recommend',
     name: 'LegalRecommend',
-    component: LegalRecommend,
-    meta: permissionMeta(PERMISSION_RULES.legalRecommendRead)
+    component: LegalRecommend
   },
   {
     path: '/effect-stats',
     name: 'EffectStats',
-    component: EffectStats,
-    meta: permissionMeta(PERMISSION_RULES.dashboardRead)
+    component: EffectStats
   },
   {
     path: '/system-settings',
     name: 'SystemSettings',
-    component: SystemSettings,
-    meta: permissionMeta(PERMISSION_RULES.systemManage)
+    component: SystemSettings
   },
   {
     path: '/archive',
     name: 'Archive',
-    component: Archive,
-    meta: permissionMeta(PERMISSION_RULES.archiveRead)
+    component: Archive
   },
   {
     path: '/archive-item/:id',
     name: 'ArchiveItem',
-    component: ArchiveItem,
-    meta: permissionMeta(PERMISSION_RULES.archiveRead)
+    component: ArchiveItem
   },
   {
     path: '/official-article/:id',
     name: 'OfficialArticle',
-    component: OfficialArticle,
-    meta: permissionMeta(PERMISSION_RULES.dashboardRead)
+    component: OfficialArticle
   },
   {
     path: '/legal-plan/:id',
     name: 'LegalPlan',
-    component: LegalPlan,
-    meta: permissionMeta(PERMISSION_RULES.legalRecommendRead)
+    component: LegalPlan
   },
   {
     path: '/political-security',
     name: 'PoliticalSecurity',
-    component: PoliticalSecurity,
-    meta: permissionMeta(PERMISSION_RULES.politicalRead)
+    component: PoliticalSecurity
   },
   {
     path: '/petition-litigation',
@@ -162,53 +123,18 @@ const routes = [
   {
     path: '/petition-litigation/:section(overview|clues|reverse-review)',
     name: 'PetitionLitigation',
-    component: PetitionLitigation,
-    meta: permissionMeta(PERMISSION_RULES.caseReadAny)
+    component: PetitionLitigation
   },
   {
     path: '/legal-plan-form',
     name: 'LegalPlanForm',
-    component: LegalPlanForm,
-    meta: permissionMeta(PERMISSION_RULES.materialEdit)
+    component: LegalPlanForm
   }
 ]
 
 const router = createRouter({
   history: createWebHashHistory(),
   routes
-})
-
-const getFirstAccessibleBusinessPath = () =>
-  HOME_BUSINESS_ITEMS.find((item) => hasPermissions(item.permissions, item.permissionMode))?.key
-
-const getRequiredPermissions = (meta: Record<PropertyKey, unknown>) => {
-  if (Array.isArray(meta.permissions)) {
-    return meta.permissions.filter((permission): permission is string => typeof permission === 'string')
-  }
-  return typeof meta.permission === 'string' ? [meta.permission] : undefined
-}
-
-router.beforeEach(async (to) => {
-  if (!authState.ready) await restoreSession()
-
-  if (to.meta.public) {
-    if (!authState.user || to.path !== '/login') return true
-    return '/'
-  }
-
-  if (!authState.user) {
-    return { path: '/login', query: { redirect: to.fullPath } }
-  }
-
-  const permissions = getRequiredPermissions(to.meta)
-  const permissionMode: PermissionMode = to.meta.permissionMode === 'all' ? 'all' : 'any'
-
-  if (!hasPermissions(permissions, permissionMode)) {
-    const fallback = getFirstAccessibleBusinessPath() ?? '/'
-    return fallback === to.path ? '/' : fallback
-  }
-
-  return true
 })
 
 export default router

@@ -157,7 +157,6 @@ export const BUSINESS_WORKSPACES: readonly BusinessWorkspace[] = [
 export const SECONDARY_NAVIGATION_ITEMS: readonly NavigationItem[] = [
   { key: '/effect-stats', label: '效果评估统计', ...PERMISSION_RULES.dashboardRead },
   { key: '/data-management', label: '数据导入', ...PERMISSION_RULES.dataImport },
-  { key: '/access-management', label: '权限审计', ...PERMISSION_RULES.userManage },
   { key: '/system-settings', label: '系统设置', ...PERMISSION_RULES.systemManage },
   { key: '/archive', label: '往期窗口', ...PERMISSION_RULES.archiveRead }
 ]

@@ -191,7 +191,7 @@ const workflowSteps = [
 ]
 const dutyActions = [
   { kicker: '人工复核', title: '人工复核', description: '确认、排除或继续核查' },
-  { kicker: '预警推送', title: '预警推送', description: '按权限推送待关注事项' },
+  { kicker: '预警推送', title: '预警推送', description: '推送待关注事项' },
   { kicker: '检察建议', title: '检察建议', description: '形成待审核建议材料' },
   { kicker: '靶向普法', title: '靶向普法', description: '匹配对象、主题与方案' },
   { kicker: '业务移送', title: '业务移送', description: '保留来源与事项上下文' },

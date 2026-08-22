@@ -1,24 +1,9 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-
-from .database import connect, row_to_dict
-from .security import decode_token
-
-bearer = HTTPBearer(auto_error=False)
-
-ROLE_DEFAULT_PERMISSIONS: dict[str, set[str]] = {
-    "ordinary": {"dashboard:read", "case:read:department", "ai:use"},
-    "department_supervisor": {"dashboard:read", "case:read:department", "ai:use", "material:edit"},
-    "leadership": {"dashboard:read", "case:read:all", "decision:read", "audit:summary"},
-    "data_admin": {"dashboard:read", "data:import", "data:rollback", "case:read:metadata"},
-    "system_admin": {"dashboard:read", "user:manage", "system:manage", "audit:read"},
-}
+from fastapi import Depends, Request
 
 DEV_ALL_PERMISSIONS = {
     "dashboard:read",
@@ -33,6 +18,7 @@ DEV_ALL_PERMISSIONS = {
     "data:rollback",
     "ai:use",
     "material:edit",
+    "material:publish",
     "decision:read",
     "audit:summary",
     "audit:read",
@@ -42,8 +28,7 @@ DEV_ALL_PERMISSIONS = {
 
 
 def permissions_for(user: dict[str, Any]) -> set[str]:
-    extra = json.loads(user.get("permissions") or "[]")
-    return DEV_ALL_PERMISSIONS | ROLE_DEFAULT_PERMISSIONS.get(user["role"], set()) | set(extra)
+    return DEV_ALL_PERMISSIONS
 
 
 def public_user(user: dict[str, Any]) -> dict[str, Any]:
@@ -57,18 +42,20 @@ def public_user(user: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> dict[str, Any]:
-    if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="请先登录")
-    try:
-        claims = decode_token(credentials.credentials)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
-    with connect() as db:
-        user = row_to_dict(db.execute("SELECT * FROM users WHERE id=? AND active=1", (int(claims["sub"]),)).fetchone())
-    if not user or int(user["session_version"]) != int(claims["sv"]):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录凭证已失效")
-    return user
+LOCAL_USER: dict[str, Any] = {
+    "id": 0,
+    "username": "local",
+    "display_name": "本地用户",
+    "role": "system_admin",
+    "department": None,
+    "permissions": "[]",
+    "session_version": 0,
+}
+
+
+def get_current_user() -> dict[str, Any]:
+    """Return the built-in local actor; this deployment intentionally has no login gate."""
+    return LOCAL_USER
 
 
 def require_permission(permission: str) -> Callable[..., dict[str, Any]]:

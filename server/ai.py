@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -34,6 +35,29 @@ class RuntimeModelSettings:
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
+
+
+_REASONING_BLOCK = re.compile(r"<(think|analysis|reasoning)\b[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL)
+_REASONING_OPEN = re.compile(r"<(think|analysis|reasoning)\b[^>]*>", re.IGNORECASE)
+
+
+def extract_final_content(message: dict[str, Any]) -> str:
+    """Return only the final answer, never provider-specific chain-of-thought fields."""
+    value = message.get("content")
+    if isinstance(value, list):
+        value = "\n".join(
+            str(part.get("text") or part.get("content") or "")
+            for part in value
+            if isinstance(part, dict)
+        )
+    text = str(value or "").strip()
+    text = _REASONING_BLOCK.sub("", text).strip()
+    unmatched = _REASONING_OPEN.search(text)
+    if unmatched:
+        text = text[:unmatched.start()].strip()
+    if not text:
+        raise ValueError("模型未返回最终答案")
+    return text
 
 
 def get_runtime_model_settings() -> RuntimeModelSettings:
@@ -112,7 +136,7 @@ async def generate(*, user: dict[str, Any], module: str, prompt: str, case_ids: 
             response = await client.post(chat_url, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
-        content = str(data["choices"][0]["message"]["content"])
+        content = extract_final_content(data["choices"][0]["message"])
         with connect() as db:
             db.execute("UPDATE ai_calls SET output=?, status='待人工审核' WHERE id=?", (content, call_id))
         return {"content": content, "callId": call_id, "reviewStatus": "待人工审核", "notice": "AI辅助生成，未经人工审核"}

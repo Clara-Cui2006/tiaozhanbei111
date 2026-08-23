@@ -58,25 +58,29 @@
               <section :id="'section-highFrequencyIssues'" class="report-card">
                 <h2><IconExclamationCircle /> 二、高发问题 <span class="top-badge">TOP5</span></h2>
                 <SectionEditor v-if="editing" v-model="draft.sections.highFrequencyIssues" />
-                <div v-else class="rank-list"><div v-for="(item, index) in report.metrics.issues" :key="item.name"><b>{{ index + 1 }}</b><span>{{ item.name }}</span><i><em :style="{ width: item.percentage * 2.2 + '%' }"></em></i><small>{{ item.value }}件　{{ item.percentage }}%</small></div></div>
+                <div v-else-if="report.metrics.issues.length" class="rank-list"><div v-for="(item, index) in report.metrics.issues" :key="item.name"><b>{{ index + 1 }}</b><span>{{ item.name }}</span><i><em :style="{ width: item.percentage * 2.2 + '%' }"></em></i><small>{{ item.value }}件　{{ item.percentage }}%</small></div></div>
+                <ul v-else><li v-for="line in report.sections.highFrequencyIssues" :key="line">{{ line }}</li></ul>
               </section>
 
               <section :id="'section-keyStreets'" class="report-card">
                 <h2><IconLocation /> 三、重点街道</h2>
                 <SectionEditor v-if="editing" v-model="draft.sections.keyStreets" />
-                <table v-else><thead><tr><th>街道</th><th>风险事件</th><th>占比</th><th>环比变化</th></tr></thead><tbody><tr v-for="item in report.metrics.streets" :key="item.name"><td>{{ item.name }}</td><td>{{ item.value }}</td><td>{{ item.percentage }}%</td><td :class="item.change && item.change > 0 ? 'rise' : 'fall'">{{ item.change && item.change > 0 ? '↑' : '↓' }} {{ Math.abs(item.change || 0) }}%</td></tr></tbody></table>
+                <table v-else-if="report.metrics.streets.length"><thead><tr><th>街道</th><th>风险事件</th><th>占比</th><th>环比变化</th></tr></thead><tbody><tr v-for="item in report.metrics.streets" :key="item.name"><td>{{ item.name }}</td><td>{{ item.value }}</td><td>{{ item.percentage }}%</td><td :class="item.change && item.change > 0 ? 'rise' : 'fall'">{{ item.change && item.change > 0 ? '↑' : '↓' }} {{ Math.abs(item.change || 0) }}%</td></tr></tbody></table>
+                <ul v-else><li v-for="line in report.sections.keyStreets" :key="line">{{ line }}</li></ul>
               </section>
 
               <section :id="'section-keyGroups'" class="report-card group-card">
                 <h2><IconUserGroup /> 四、重点人群</h2>
                 <SectionEditor v-if="editing" v-model="draft.sections.keyGroups" />
-                <div v-else class="donut-layout"><div class="donut" :style="donutStyle"></div><ul><li v-for="(item,index) in report.metrics.groups" :key="item.name"><i :style="{ background: groupColors[index] }"></i>{{ item.name }} <b>{{ item.percentage }}%</b></li></ul></div>
+                <div v-else-if="report.metrics.groups.length" class="donut-layout"><div class="donut" :style="donutStyle"></div><ul><li v-for="(item,index) in report.metrics.groups" :key="item.name"><i :style="{ background: groupColors[index] }"></i>{{ item.name }} <b>{{ item.percentage }}%</b></li></ul></div>
+                <ul v-else><li v-for="line in report.sections.keyGroups" :key="line">{{ line }}</li></ul>
               </section>
 
               <section :id="'section-keyIndustries'" class="report-card industry-card">
                 <h2><IconApps /> 五、重点行业</h2>
                 <SectionEditor v-if="editing" v-model="draft.sections.keyIndustries" />
-                <div v-else class="industry-list"><div v-for="(item,index) in report.metrics.industries" :key="item.name"><span class="industry-icon"><component :is="industryIcons[index % industryIcons.length]" /></span><b>{{ item.name }}</b><strong>{{ item.percentage }}%</strong></div></div>
+                <div v-else-if="report.metrics.industries.length" class="industry-list"><div v-for="(item,index) in report.metrics.industries" :key="item.name"><span class="industry-icon"><component :is="industryIcons[index % industryIcons.length]" /></span><b>{{ item.name }}</b><strong>{{ item.percentage }}%</strong></div></div>
+                <ul v-else><li v-for="line in report.sections.keyIndustries" :key="line">{{ line }}</li></ul>
               </section>
 
               <section :id="'section-causeAnalysis'" class="report-card">

@@ -888,11 +888,42 @@ MONTHLY_TRANSITIONS = {"生成中": {"待审核"}, "待审核": {"审核退回",
 
 
 def _monthly_report_dict(row: dict[str, Any]) -> dict[str, Any]:
+    raw_sections = json.loads(row["sections"])
+    sections = {key: _monthly_section_lines(raw_sections.get(key)) for key in MONTHLY_SECTION_KEYS}
     return {
         "id": row["id"], "month": row["month"], "title": row["title"], "summary": row["summary"],
-        "sections": json.loads(row["sections"]), "metrics": json.loads(row["metrics"]), "status": row["status"],
+        "sections": sections, "metrics": json.loads(row["metrics"]), "status": row["status"],
         "generatedByAi": bool(row["generated_by_ai"]), "updatedAt": row["updated_at"], "publishedAt": row["published_at"]
     }
+
+
+def _monthly_section_lines(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [line.strip().lstrip("-• ") for line in value.splitlines() if line.strip()]
+    if isinstance(value, list):
+        return [str(line).strip() for line in value if isinstance(line, (str, int, float)) and str(line).strip()]
+    return []
+
+
+def _normalize_monthly_content(parsed: Any, fallback: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("sections"), dict):
+        raise ValueError("月报模型结果不是有效JSON对象")
+    sections = {key: _monthly_section_lines(parsed["sections"].get(key)) for key in MONTHLY_SECTION_KEYS}
+    if any(not lines for lines in sections.values()):
+        raise ValueError("月报模型结果缺少有效章节内容")
+    return {
+        "title": str(parsed.get("title") or fallback["title"]).strip(),
+        "summary": str(parsed.get("summary") or fallback["summary"]).strip(),
+        "sections": sections,
+    }
+
+
+def _parse_model_json(content: str) -> Any:
+    raw = content.strip()
+    start, end = raw.find("{"), raw.rfind("}")
+    if start < 0 or end < start:
+        raise ValueError("模型未返回JSON对象")
+    return json.loads(raw[start:end + 1])
 
 
 def _monthly_aggregate(month: str, user: dict[str, Any]) -> dict[str, Any]:
@@ -954,14 +985,12 @@ async def generate_monthly_report(payload: MonthlyReportGenerateRequest, request
     content = _fallback_monthly_content(payload.month, metrics)
     generated_by_ai = False
     try:
-        prompt = "请根据以下脱敏汇总生成月报JSON，必须包含title、summary和sections；sections必须包含" + ",".join(MONTHLY_SECTION_KEYS) + "。数据：" + json.dumps(metrics, ensure_ascii=False)
+        prompt = "请根据以下脱敏汇总只输出一个JSON对象，不要Markdown代码块、解释或推理过程。必须包含title、summary和sections；sections必须包含" + ",".join(MONTHLY_SECTION_KEYS) + "，且每个章节的值必须是字符串数组。数据：" + json.dumps(metrics, ensure_ascii=False)
         result = await generate(user=user, module="monthlyReport", prompt=prompt, case_ids=[])
-        raw = result["content"].strip().removeprefix("```json").removesuffix("```").strip()
-        parsed = json.loads(raw)
-        if all(key in parsed.get("sections", {}) for key in MONTHLY_SECTION_KEYS):
-            content = parsed
-            generated_by_ai = True
-    except (HTTPException, ValueError, TypeError):
+        parsed = _parse_model_json(result["content"])
+        content = _normalize_monthly_content(parsed, content)
+        generated_by_ai = True
+    except (HTTPException, KeyError, ValueError, TypeError):
         pass
     now = utc_now()
     with connect() as db:

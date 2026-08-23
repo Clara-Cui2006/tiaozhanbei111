@@ -821,6 +821,7 @@ def get_settings(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, 
         "modelName": settings.model_name,
         "modelApiKey": settings.model_api_key,
         "modelTimeoutSeconds": settings.model_timeout_seconds,
+        "modelFrontendTimeoutSeconds": 220,
     }
     if not row:
         return defaults

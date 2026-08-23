@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class LoginRequest(BaseModel):
@@ -37,6 +37,13 @@ class SettingsPayload(BaseModel):
     modelName: str = Field(default="", max_length=200)
     modelApiKey: str = Field(default="", max_length=500)
     modelTimeoutSeconds: float = Field(default=60, ge=1, le=600)
+    modelFrontendTimeoutSeconds: float = Field(default=220, ge=2, le=630)
+
+    @model_validator(mode="after")
+    def validate_model_timeout_order(self) -> "SettingsPayload":
+        if self.modelFrontendTimeoutSeconds <= self.modelTimeoutSeconds:
+            raise ValueError("前端等待时间必须大于后端模型等待时间")
+        return self
 
 
 class SuggestionPayload(BaseModel):

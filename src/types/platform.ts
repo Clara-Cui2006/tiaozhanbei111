@@ -142,6 +142,7 @@ export interface SystemSettings {
   modelName: string
   modelApiKey: string
   modelTimeoutSeconds: number
+  modelFrontendTimeoutSeconds: number
 }
 
 export interface OfficialDynamic {

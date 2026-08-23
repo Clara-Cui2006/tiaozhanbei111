@@ -229,7 +229,8 @@ const mockSettings: SystemSettings = {
   modelChatPath: '/chat/completions',
   modelName: 'qwen36-27b-fp4',
   modelApiKey: '',
-  modelTimeoutSeconds: 60
+  modelTimeoutSeconds: 60,
+  modelFrontendTimeoutSeconds: 220
 }
 
 /* ---------- 真实数据：公告动态（news.json 8 条 — 注意：原始数据新闻正文字段实为日期，发布日期字段实为正文内容） ---------- */

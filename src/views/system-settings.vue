@@ -6,7 +6,7 @@
     </a-page-header>
 
     <div class="settings-summary" aria-label="配置范围">
-      <span><strong>02</strong><small>配置字段</small></span>
+      <span><strong>08</strong><small>配置字段</small></span>
       <span><strong>院内</strong><small>部署边界</small></span>
       <span><strong>受控</strong><small>修改方式</small></span>
     </div>
@@ -57,8 +57,14 @@
             <a-form-item field="modelApiKey" label="API Key">
               <a-input-password v-model="form.modelApiKey" :disabled="loading || saving || loadFailed" placeholder="无鉴权可留空" />
             </a-form-item>
-            <a-form-item field="modelTimeoutSeconds" label="调用超时（秒）">
+            <a-form-item field="modelTimeoutSeconds" label="后端模型等待（秒）">
               <a-input-number v-model="form.modelTimeoutSeconds" :disabled="loading || saving || loadFailed" :min="1" :max="600" />
+            </a-form-item>
+            <a-form-item field="modelFrontendTimeoutSeconds" label="前端等待（秒）">
+              <a-input-number v-model="form.modelFrontendTimeoutSeconds" :disabled="loading || saving || loadFailed" :min="2" :max="630" />
+            </a-form-item>
+            <a-form-item label="网关等待上限（秒）">
+              <a-input-number :model-value="660" disabled />
             </a-form-item>
           </div>
         </section>
@@ -94,7 +100,8 @@ const form = reactive<SystemSettings>({
   modelChatPath: '/chat/completions',
   modelName: '',
   modelApiKey: '',
-  modelTimeoutSeconds: 60
+  modelTimeoutSeconds: 60,
+  modelFrontendTimeoutSeconds: 220
 })
 const loading = ref(true)
 const saving = ref(false)
@@ -108,6 +115,10 @@ const settingsStatus = computed(() => {
 
 const save = async () => {
   if (loading.value || saving.value || loadFailed.value) return
+  if (form.modelFrontendTimeoutSeconds <= form.modelTimeoutSeconds) {
+    Message.warning('前端等待时间必须大于后端模型等待时间')
+    return
+  }
   saving.value = true
   try {
     await saveSystemSettings(form)
@@ -131,6 +142,7 @@ const loadSettings = async () => {
     form.modelName = settings.modelName || ''
     form.modelApiKey = settings.modelApiKey || ''
     form.modelTimeoutSeconds = Number(settings.modelTimeoutSeconds || 60)
+    form.modelFrontendTimeoutSeconds = Number(settings.modelFrontendTimeoutSeconds || 220)
   } catch (error: any) {
     form.name = ''
     form.dataScopeNotice = ''
@@ -139,6 +151,7 @@ const loadSettings = async () => {
     form.modelName = ''
     form.modelApiKey = ''
     form.modelTimeoutSeconds = 60
+    form.modelFrontendTimeoutSeconds = 220
     loadFailed.value = true
     Message.error(error.response?.data?.detail || '系统设置读取失败')
   } finally {

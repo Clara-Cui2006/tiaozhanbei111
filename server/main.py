@@ -934,7 +934,7 @@ def _monthly_aggregate(month: str, user: dict[str, Any]) -> dict[str, Any]:
             (*params, month),
         ).fetchall()]
     total = len(rows)
-    def ranked(field: str, fallback: str) -> list[dict[str, Any]]:
+    def ranked(field: str, fallback: str, limit: int | None = 5) -> list[dict[str, Any]]:
         counts: dict[str, int] = {}
         for row in rows:
             raw = row.get(field)
@@ -945,10 +945,12 @@ def _monthly_aggregate(month: str, user: dict[str, Any]) -> dict[str, Any]:
                     values = parsed if isinstance(parsed, list) else [str(parsed)]
                 except (TypeError, ValueError):
                     values = [item.strip() for item in str(raw).replace("、", ",").split(",") if item.strip()]
-            if not values and field in {"category", "street_name"}: values = [str(raw or fallback)]
+            if field == "key_groups": values = values[:1] or [fallback]
+            elif not values and field in {"category", "street_name", "key_industries"}: values = [str(raw or fallback)]
             for value in values: counts[value] = counts.get(value, 0) + 1
-        return [{"name": name, "value": value, "percentage": round(value * 100 / total, 1) if total else 0} for name, value in sorted(counts.items(), key=lambda item: item[1], reverse=True)[:5]]
-    return {"total": total, "monthOverMonth": 0, "issues": ranked("governance_themes", "其他问题"), "streets": ranked("street_name", "待确认街道"), "groups": ranked("key_groups", "其他人群"), "industries": ranked("key_industries", "其他行业"), "trend": []}
+        result = [{"name": name, "value": value, "percentage": round(value * 100 / total, 1) if total else 0} for name, value in sorted(counts.items(), key=lambda item: item[1], reverse=True)]
+        return result[:limit] if limit is not None else result
+    return {"total": total, "monthOverMonth": 0, "issues": ranked("governance_themes", "其他问题"), "streets": ranked("street_name", "待确认街道"), "groups": ranked("key_groups", "非特定重点群体", None), "industries": ranked("key_industries", "其他行业"), "trend": []}
 
 
 def _fallback_monthly_content(month: str, metrics: dict[str, Any]) -> dict[str, Any]:
@@ -975,6 +977,7 @@ def monthly_report(month: str, user: dict[str, Any] = Depends(get_current_user))
     with connect() as db:
         row = row_to_dict(db.execute("SELECT * FROM monthly_reports WHERE month=?", (month,)).fetchone())
     if not row: raise HTTPException(status_code=404, detail="该月份尚未生成月报")
+    if row["status"] != "已发布": row["metrics"] = json.dumps(_monthly_aggregate(month, user), ensure_ascii=False)
     return _monthly_report_dict(row)
 
 
